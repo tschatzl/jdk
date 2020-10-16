@@ -325,6 +325,18 @@ void HeapRegion::note_self_forwarding_removal_end(size_t marked_bytes) {
          "marked: " SIZE_FORMAT " used: " SIZE_FORMAT, marked_bytes, used());
   _prev_top_at_mark_start = top();
   _prev_marked_bytes = marked_bytes;
+
+  log_warning(gc)("Evac failed region %u %s marked bytes %1.3f%% externally pinned %u",
+                  hrm_index(), get_short_type_str(),
+                  percent_of(marked_bytes, HeapRegion::GrainBytes),
+                  contains_explicitly_pinned_objects());
+  if (_surv_rate_group != NULL) {
+    log_warning(gc)("Evac failed region %u %s age idx %d added %d",
+                    hrm_index(), get_short_type_str(),
+                    _surv_rate_group->age_in_group(_age_index),
+                    _surv_rate_group->num_added());
+
+  }
 }
 
 // Code roots support

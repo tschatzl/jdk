@@ -93,6 +93,10 @@ public:
     return (int)++_num_added_regions;
   }
 
+  int num_added() {
+    return _num_added_regions;
+  }
+
   int age_in_group(int age_index) const {
     int result = (int)(_num_added_regions - age_index);
     assert(is_valid_age_index(result), "invariant" );
