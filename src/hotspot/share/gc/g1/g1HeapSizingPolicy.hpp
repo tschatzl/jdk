@@ -71,7 +71,7 @@ class G1HeapSizingPolicy: public CHeapObj<mtGC> {
   // MinOverThresholdForExpansion/Shrink define the number of actual gc time
   // ratios over the upper and lower thresholds respectively.
   const static int MinOverThresholdForExpansion = 4;
-  const static int MinOverThresholdForShrink = 6;
+  const static int MinOverThresholdForShrink = 10;
 
   const G1CollectedHeap* _g1h;
   const G1Analytics* _analytics;

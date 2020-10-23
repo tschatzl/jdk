@@ -109,6 +109,10 @@
           "Percentage of GCTimeRatio G1 will try to avoid going below.")    \
           range(0, 100)                                                     \
                                                                             \
+  product(int, G1ShortTermShrinkThreshold, 4, EXPERIMENTAL,                 \
+          "Number of short term shrink attempts until actual shrink.")      \
+          range(0, 10)                                                      \
+                                                                            \
   product(size_t, G1UpdateBufferSize, 256,                                  \
           "Size of an update buffer")                                       \
           range(1, NOT_LP64(32*M) LP64_ONLY(1*G))                           \

@@ -53,9 +53,9 @@ G1HeapSizingPolicy::G1HeapSizingPolicy(const G1CollectedHeap* g1h, const G1Analy
          "Initial ratio counter value too high.");
   assert(_ratio_exceeds_threshold > -MinOverThresholdForExpansion,
          "Initial ratio counter value too low.");
-  assert(MinOverThresholdForExpansion < long_term_interval(),
+  assert(MinOverThresholdForExpansion <= long_term_interval(),
          "Expansion threshold count must be less than %u", long_term_interval());
-  assert(MinOverThresholdForShrink < long_term_interval(),
+  assert(MinOverThresholdForShrink <= long_term_interval(),
          "Shrink threshold count must be less than %u", long_term_interval());
 }
 
@@ -272,6 +272,8 @@ size_t G1HeapSizingPolicy::young_collection_resize_amount(bool& expand) {
   // always expects an absolute value. Do that here unconditionally.
   delta = fabsd(delta);
 
+  int ThresholdForShrink = MIN2(G1ShortTermShrinkThreshold, long_term_interval());
+
   if ((_ratio_exceeds_threshold == MinOverThresholdForExpansion) ||
       (use_long_term_delta && (long_term_pause_time_ratio > upper_threshold))) {
 
@@ -290,7 +292,7 @@ size_t G1HeapSizingPolicy::young_collection_resize_amount(bool& expand) {
     expand = true;
 
     reset_ratio_tracking_data();
-  } else if ((_ratio_exceeds_threshold == -MinOverThresholdForShrink) ||
+  } else if ((_ratio_exceeds_threshold == -ThresholdForShrink) ||
              (use_long_term_delta && (long_term_pause_time_ratio < lower_threshold))) {
 
     // Short-cut calculation if already at minimum capacity.
