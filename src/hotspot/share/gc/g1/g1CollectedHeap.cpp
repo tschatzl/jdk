@@ -1157,6 +1157,7 @@ void G1CollectedHeap::resize_heap_if_necessary() {
   } else {
     shrink(resize_amount);
   }
+  uncommit_regions_if_necessary();
 }
 
 HeapWord* G1CollectedHeap::satisfy_failed_allocation_helper(size_t word_size,
@@ -2376,14 +2377,6 @@ size_t G1CollectedHeap::max_capacity() const {
 
 size_t G1CollectedHeap::min_capacity() const {
   return MinHeapSize;
-}
-
-void G1CollectedHeap::deduplicate_string(oop str) {
-  assert(java_lang_String::is_instance(str), "invariant");
-
-  if (G1StringDedup::is_enabled()) {
-    G1StringDedup::deduplicate(str);
-  }
 }
 
 void G1CollectedHeap::prepare_for_verify() {

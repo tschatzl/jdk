@@ -272,7 +272,7 @@ size_t G1HeapSizingPolicy::young_collection_resize_amount(bool& expand) {
   // always expects an absolute value. Do that here unconditionally.
   delta = fabsd(delta);
 
-  int ThresholdForShrink = MIN2(G1ShortTermShrinkThreshold, long_term_interval());
+  int ThresholdForShrink = MIN2(G1ShortTermShrinkThreshold, (int)long_term_interval());
 
   if ((_ratio_exceeds_threshold == MinOverThresholdForExpansion) ||
       (use_long_term_delta && (long_term_pause_time_ratio > upper_threshold))) {
