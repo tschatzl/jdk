@@ -541,6 +541,8 @@ private:
 
   void verify_numa_regions(const char* desc);
 
+  oop pin_object(oop obj);
+  void unpin_object(oop obj);
 public:
   G1ServiceThread* service_thread() const { return _service_thread; }
 
@@ -562,6 +564,10 @@ public:
     assert(_g1mm != NULL, "should have been initialized");
     return _g1mm;
   }
+
+  virtual bool supports_object_pinning() const { return true; }
+  virtual oop pin_object(JavaThread* thread, oop obj) { return pin_object(obj); }
+  virtual void unpin_object(JavaThread* thread, oop obj) { unpin_object(obj); }
 
   void resize_heap_if_necessary();
 
@@ -609,7 +615,7 @@ public:
   // We register a region with the fast "in collection set" test. We
   // simply set to true the array slot corresponding to this region.
   void register_young_region_with_region_attr(HeapRegion* r) {
-    _region_attr.set_in_young(r->hrm_index());
+    _region_attr.set_in_young(r->hrm_index(), r->is_pinned());
   }
   inline void register_region_with_region_attr(HeapRegion* r);
   inline void register_old_region_with_region_attr(HeapRegion* r);

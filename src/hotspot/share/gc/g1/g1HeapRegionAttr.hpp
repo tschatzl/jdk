@@ -44,6 +44,7 @@ public:
 private:
   needs_remset_update_t _needs_remset_update;
   region_type_t _type;
+  bool _is_pinned; // FIXME: check performance
 
 public:
   // Selection of the values for the _type field were driven to micro-optimize the
@@ -62,8 +63,8 @@ public:
   static const region_type_t Old          =   1;    // The region is in the collection set and an old region.
   static const region_type_t Num          =   2;
 
-  G1HeapRegionAttr(region_type_t type = NotInCSet, bool needs_remset_update = false) :
-    _needs_remset_update(needs_remset_update), _type(type) {
+  G1HeapRegionAttr(region_type_t type = NotInCSet, bool needs_remset_update = false, bool is_pinned = false) :
+    _needs_remset_update(needs_remset_update), _type(type), _is_pinned(is_pinned) {
 
     assert(is_valid(), "Invalid type %d", _type);
   }
@@ -83,12 +84,15 @@ public:
 
   bool needs_remset_update() const     { return _needs_remset_update != 0; }
 
+  bool is_pinned() const               { return _is_pinned; }
+
   void set_old()                       { _type = Old; }
   void clear_humongous()               {
     assert(is_humongous() || !is_in_cset(), "must be");
     _type = NotInCSet;
   }
   void set_has_remset(bool value)      { _needs_remset_update = value ? 1 : 0; }
+  void set_is_pinned(bool value)       { _is_pinned = value; }
 
   bool is_in_cset_or_humongous() const { return is_in_cset() || is_humongous(); }
   bool is_in_cset() const              { return type() >= Young; }
@@ -126,10 +130,10 @@ class G1HeapRegionAttrBiasedMappedArray : public G1BiasedMappedArray<G1HeapRegio
     set_by_index(index, G1HeapRegionAttr(G1HeapRegionAttr::Optional, needs_remset_update));
   }
 
-  void set_humongous(uintptr_t index, bool needs_remset_update) {
+  void set_humongous(uintptr_t index, bool needs_remset_update, bool is_pinned) {
     assert(get_by_index(index).is_default(),
            "Region attributes at index " INTPTR_FORMAT " should be default but is %s", index, get_by_index(index).get_type_str());
-    set_by_index(index, G1HeapRegionAttr(G1HeapRegionAttr::Humongous, needs_remset_update));
+    set_by_index(index, G1HeapRegionAttr(G1HeapRegionAttr::Humongous, needs_remset_update, is_pinned));
   }
 
   void clear_humongous(uintptr_t index) {
@@ -140,16 +144,20 @@ class G1HeapRegionAttrBiasedMappedArray : public G1BiasedMappedArray<G1HeapRegio
     get_ref_by_index(index)->set_has_remset(needs_remset_update);
   }
 
-  void set_in_young(uintptr_t index) {
+  void set_is_pinned(uintptr_t index, bool is_pinned) {
+    get_ref_by_index(index)->set_is_pinned(is_pinned);
+  }
+
+  void set_in_young(uintptr_t index, bool is_pinned) {
     assert(get_by_index(index).is_default(),
            "Region attributes at index " INTPTR_FORMAT " should be default but is %s", index, get_by_index(index).get_type_str());
-    set_by_index(index, G1HeapRegionAttr(G1HeapRegionAttr::Young, true));
+    set_by_index(index, G1HeapRegionAttr(G1HeapRegionAttr::Young, true, is_pinned));
   }
 
   void set_in_old(uintptr_t index, bool needs_remset_update) {
     assert(get_by_index(index).is_default(),
            "Region attributes at index " INTPTR_FORMAT " should be default but is %s", index, get_by_index(index).get_type_str());
-    set_by_index(index, G1HeapRegionAttr(G1HeapRegionAttr::Old, needs_remset_update));
+    set_by_index(index, G1HeapRegionAttr(G1HeapRegionAttr::Old, needs_remset_update, false));
   }
 
   bool is_in_cset_or_humongous(HeapWord* addr) const { return at(addr).is_in_cset_or_humongous(); }

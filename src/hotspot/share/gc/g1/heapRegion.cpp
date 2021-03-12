@@ -243,6 +243,7 @@ HeapRegion::HeapRegion(uint hrm_index,
   _par_alloc_lock(Mutex::leaf, "HeapRegion par alloc lock", true),
   _pre_dummy_top(NULL),
   _rem_set(NULL),
+  _pinned_object_count(0),
   _hrm_index(hrm_index),
   _type(),
   _humongous_start_region(NULL),
@@ -277,6 +278,16 @@ void HeapRegion::initialize(bool clear_space, bool mangle_space) {
   reset_bot();
 
   hr_clear(false /*clear_space*/);
+}
+
+void HeapRegion::increment_pinned_object_count() {
+  int count = Atomic::add(&_pinned_object_count, 1, memory_order_relaxed);
+  assert(count > 0, "must be");
+}
+
+void HeapRegion::decrement_pinned_object_count() {
+  int count = Atomic::sub(&_pinned_object_count, 1, memory_order_relaxed);
+  assert(count >= 0, "must be");
 }
 
 void HeapRegion::report_region_type_change(G1HeapRegionTraceType::Type to) {
@@ -481,6 +492,7 @@ void HeapRegion::print_on(outputStream* st) const {
       st->print("|-");
     }
   }
+  st->print("|%3d", this->_pinned_object_count);
   st->print_cr("");
 }
 

@@ -172,11 +172,13 @@ G1HeapRegionAttr G1CollectedHeap::region_attr(uint idx) const {
 }
 
 void G1CollectedHeap::register_humongous_region_with_region_attr(uint index) {
-  _region_attr.set_humongous(index, region_at(index)->rem_set()->is_tracked());
+  HeapRegion* r = region_at(index);
+  _region_attr.set_humongous(index, r->rem_set()->is_tracked(), r->is_pinned());
 }
 
 void G1CollectedHeap::register_region_with_region_attr(HeapRegion* r) {
   _region_attr.set_has_remset(r->hrm_index(), r->rem_set()->is_tracked());
+  _region_attr.set_is_pinned(r->hrm_index(), r->is_pinned());
 }
 
 void G1CollectedHeap::register_old_region_with_region_attr(HeapRegion* r) {
@@ -259,6 +261,21 @@ inline void G1CollectedHeap::reset_evacuation_should_fail() {
   }
 }
 #endif  // #ifndef PRODUCT
+
+inline oop G1CollectedHeap::pin_object(oop obj) {
+  assert(obj != NULL, "obj must not be null");
+  assert(!is_gc_active(), "must not pin objects during a GC");
+  HeapRegion *r = heap_region_containing(obj);
+  r->increment_pinned_object_count();
+  return obj;
+}
+
+inline void G1CollectedHeap::unpin_object(oop obj) {
+  assert(obj != NULL, "obj must not be null");
+  assert(!is_gc_active(), "must not unpin objects during a GC");
+  HeapRegion *r = heap_region_containing(obj);
+  r->decrement_pinned_object_count();
+}
 
 inline bool G1CollectedHeap::is_in_young(const oop obj) {
   if (obj == NULL) {

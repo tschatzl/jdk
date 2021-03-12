@@ -231,7 +231,6 @@ public:
   }
 
   bool do_heap_region(HeapRegion *hr) {
-    assert(!hr->is_pinned(), "Unexpected pinned region at index %u", hr->hrm_index());
     assert(hr->in_collection_set(), "bad CS");
 
     if (hr->evacuation_failed()) {

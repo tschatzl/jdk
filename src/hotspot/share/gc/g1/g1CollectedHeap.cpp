@@ -3991,6 +3991,8 @@ void G1CollectedHeap::free_region(HeapRegion* hr, FreeRegionList* free_list) {
   assert(!hr->is_free(), "the region should not be free");
   assert(!hr->is_empty(), "the region should not be empty");
   assert(_hrm.is_available(hr->hrm_index()), "region should be committed");
+  assert(!hr->contains_explicitly_pinned_objects(),
+         "must not free a region which contains explicitly pinned objects");
 
   if (G1VerifyBitmaps) {
     MemRegion mr(hr->bottom(), hr->end());

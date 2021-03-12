@@ -198,6 +198,9 @@ private:
   // The remembered set for this region.
   HeapRegionRemSet* _rem_set;
 
+  // How many objects in this regions are currently pinned.
+  int _pinned_object_count;
+
   // Cached index of this region in the heap region sequence.
   const uint _hrm_index;
 
@@ -291,6 +294,9 @@ public:
   // The default values for clear_space means that we will do the clearing if
   // there's clearing to be done ourselves. We also always mangle the space.
   void initialize(bool clear_space = false, bool mangle_space = SpaceDecorator::Mangle);
+
+  void increment_pinned_object_count();
+  void decrement_pinned_object_count();
 
   static int    LogOfHRGrainBytes;
   static int    LogOfHRGrainWords;
@@ -404,7 +410,9 @@ public:
 
   // A pinned region contains objects which are not moved by garbage collections.
   // Humongous regions and archive regions are pinned.
-  bool is_pinned() const { return _type.is_pinned(); }
+  bool is_pinned() const { return _type.is_pinned() || contains_explicitly_pinned_objects(); }
+
+  bool contains_explicitly_pinned_objects() const { return _pinned_object_count > 0; }
 
   // An archive region is a pinned region, also tagged as old, which
   // should not be marked during mark/sweep. This allows the address

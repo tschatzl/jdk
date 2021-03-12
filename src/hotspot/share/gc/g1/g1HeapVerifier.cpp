@@ -574,9 +574,7 @@ public:
       assert(hr->containing_set() == _old_set, "Heap region %u is old but not in the old set.", hr->hrm_index());
       _old_count++;
     } else {
-      // There are no other valid region types. Check for one invalid
-      // one we can identify: pinned without old or humongous set.
-      assert(!hr->is_pinned(), "Heap region %u is pinned but not old (archive) or humongous.", hr->hrm_index());
+      // There are no other valid region types.
       ShouldNotReachHere();
     }
     return false;

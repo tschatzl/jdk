@@ -285,6 +285,7 @@ bool G1ConcurrentMark::is_marked_in_next_bitmap(oop p) const {
 inline bool G1ConcurrentMark::do_yield_check() {
   if (SuspendibleThreadSet::should_yield()) {
     SuspendibleThreadSet::yield();
+    log_error(gc)("has_aborted %d", has_aborted());
     return true;
   } else {
     return false;
