@@ -402,6 +402,62 @@ void HeapShared::copy_open_archive_heap_objects(
 
   copy_roots();
 
+////// begin hack
+   if (UseNewCode) {
+     oop obj = Universe::the_empty_class_array();
+     int len = obj->size();
+
+     size_t dummyBytes = 0;
+
+     while (dummyBytes < HeapRegion::GrainBytes) {
+       oop archived_oop = cast_to_oop<HeapWord*>(G1CollectedHeap::heap()->archive_mem_allocate(len));
+       if (archived_oop != NULL) {
+         Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(obj), cast_from_oop<HeapWord*>(archived_oop), len);
+         // Reinitialize markword to remove age/marking/locking/etc.
+         //
+         // We need to retain the identity_hash, because it may have been used by some hashtables
+         // in the shared heap. This also has the side effect of pre-initializing the
+         // identity_hash for all shared objects, so they are less likely to be written
+         // into during run time, increasing the potential of memory sharing.
+         int hash_original = obj->identity_hash();
+         archived_oop->set_mark(markWord::prototype().copy_set_hash(hash_original));
+         assert(archived_oop->mark().is_unlocked(), "sanity");
+
+         dummyBytes += len * BytesPerWord;
+         //tty->print_cr("New dummy object " PTR_FORMAT " %d words total " SIZE_FORMAT " bytes",
+         //              p2i(archived_oop), len, dummyBytes);
+       } else {
+         tty->print_cr("Huh?");
+         break;
+       }
+     }
+   }
+/*
+$ java -Xlog:cds=debug -Xshare:dump -XX:+UseNewCode
+....
+[6.294s][debug][cds] ca0 space:    512000 [  2.3% of total] out of   
+512000 bytes [100.0% used] at 0x00000007bf800000
+[6.294s][debug][cds] oa0 space:    520192 [  2.3% of total] out of   
+520192 bytes [100.0% used] at 0x00000007be800000
+[6.294s][debug][cds] oa1 space:   8388608 [ 37.6% of total] out of  
+8388608 bytes [100.0% used] at 0x00000007bf000000
+.....
+
+The "oa0" space should be all dummy objects. "oa1" contains the regular
+objects, plus a large amount of dummies.
+
+$ java -Xlog:cds -version
+.....
+[0.036s][info][cds] CDS heap data relocation delta = 0 bytes
+[0.036s][info][cds] Trying to map heap data: region[4] at
+0x00000007bf800000, size =   512000 bytes
+[0.036s][info][cds] Trying to map heap data: region[6] at
+0x00000007be800000, size =   520192 bytes << oa0
+[0.036s][info][cds] Trying to map heap data: region[7] at
+0x00000007bf000000, size =  8388608 bytes << oa1
+ */
+//// end hack
+
   G1CollectedHeap::heap()->end_archive_alloc_range(open_archive,
                                                    os::vm_allocation_granularity());
 }
