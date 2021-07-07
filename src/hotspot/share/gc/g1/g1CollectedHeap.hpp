@@ -597,7 +597,7 @@ public:
   // Returns true if the heap was expanded by the requested amount;
   // false otherwise.
   // (Rounds up to a HeapRegion boundary.)
-  bool expand(size_t expand_bytes, WorkGang* pretouch_workers = NULL, double* expand_time_ms = NULL);
+  bool expand(size_t expand_bytes, WorkGang* pretouch_workers = NULL);
   bool expand_single_region(uint node_index);
 
   // Returns the PLAB statistics for a given destination.
@@ -835,7 +835,8 @@ public:
                                     G1RedirtyCardsQueueSet* rdcqs,
                                     G1ParScanThreadStateSet* pss);
 
-  void expand_heap_after_young_collection();
+  void resize_heap_after_young_collection();
+
   // Update object copying statistics.
   void record_obj_copy_mem_stats();
 
@@ -1302,8 +1303,9 @@ public:
   // requires.
   static size_t humongous_obj_size_in_regions(size_t word_size);
 
-  // Print the maximum heap capacity.
+  // Return the maximum heap capacity.
   virtual size_t max_capacity() const;
+  size_t min_capacity() const;
 
   Tickspan time_since_last_collection() const { return Ticks::now() - _collection_pause_end; }
 

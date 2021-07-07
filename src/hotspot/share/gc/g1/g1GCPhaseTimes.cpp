@@ -163,7 +163,7 @@ void G1GCPhaseTimes::reset() {
   _cur_resize_tlab_time_ms = 0.0;
   _cur_post_evacuate_cleanup_1_time_ms = 0.0;
   _cur_post_evacuate_cleanup_2_time_ms = 0.0;
-  _cur_expand_heap_time_ms = 0.0;
+  _cur_resize_heap_time_ms = 0.0;
   _cur_ref_proc_time_ms = 0.0;
   _cur_collection_start_sec = 0.0;
   _root_region_scan_wait_time_ms = 0.0;
@@ -457,7 +457,7 @@ double G1GCPhaseTimes::print_post_evacuate_collection_set() const {
                         _cur_post_evacuate_cleanup_2_time_ms +
                         _recorded_total_rebuild_freelist_time_ms +
                         _recorded_start_new_cset_time_ms +
-                        _cur_expand_heap_time_ms;
+                        _cur_resize_heap_time_ms;
 
   info_time("Post Evacuate Collection Set", sum_ms);
 
@@ -509,7 +509,7 @@ double G1GCPhaseTimes::print_post_evacuate_collection_set() const {
   if (UseTLAB && ResizeTLAB) {
     debug_time("Resize TLABs", _cur_resize_tlab_time_ms);
   }
-  debug_time("Expand Heap After Collection", _cur_expand_heap_time_ms);
+  debug_time("Resize Heap After Collection", _cur_resize_heap_time_ms);
 
   return sum_ms;
 }

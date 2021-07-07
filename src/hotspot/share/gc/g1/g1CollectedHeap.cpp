@@ -1272,16 +1272,18 @@ HeapWord* G1CollectedHeap::expand_and_allocate(size_t word_size) {
   return NULL;
 }
 
-bool G1CollectedHeap::expand(size_t expand_bytes, WorkGang* pretouch_workers, double* expand_time_ms) {
+bool G1CollectedHeap::expand(size_t expand_bytes, WorkGang* pretouch_workers) {
+  assert(expand_bytes > 0, "must be");
+
   size_t aligned_expand_bytes = ReservedSpace::page_align_size_up(expand_bytes);
   aligned_expand_bytes = align_up(aligned_expand_bytes,
-                                       HeapRegion::GrainBytes);
+                                  HeapRegion::GrainBytes);
 
-  log_debug(gc, ergo, heap)("Expand the heap. requested expansion amount: " SIZE_FORMAT "B expansion amount: " SIZE_FORMAT "B",
+  log_debug(gc, ergo, heap)("Heap resize. Requested expansion amount: " SIZE_FORMAT "B aligned expansion amount: " SIZE_FORMAT "B",
                             expand_bytes, aligned_expand_bytes);
 
-  if (is_maximal_no_gc()) {
-    log_debug(gc, ergo, heap)("Did not expand the heap (heap already fully expanded)");
+  if (capacity() == max_capacity()) {
+    log_debug(gc, ergo, heap)("Heap resize. Did not expand the heap (heap already fully expanded)");
     return false;
   }
 
@@ -1290,16 +1292,16 @@ bool G1CollectedHeap::expand(size_t expand_bytes, WorkGang* pretouch_workers, do
   assert(regions_to_expand > 0, "Must expand by at least one region");
 
   uint expanded_by = _hrm.expand_by(regions_to_expand, pretouch_workers);
-  if (expand_time_ms != NULL) {
-    *expand_time_ms = (os::elapsedTime() - expand_heap_start_time_sec) * MILLIUNITS;
-  }
 
   if (expanded_by > 0) {
     size_t actual_expand_bytes = expanded_by * HeapRegion::GrainBytes;
     assert(actual_expand_bytes <= aligned_expand_bytes, "post-condition");
     policy()->record_new_heap_size(num_regions());
+
+    log_debug(gc, ergo, heap)("Heap resize. Requested expansion amount: " SIZE_FORMAT "B actual expansion amount: " SIZE_FORMAT "B",
+                              aligned_expand_bytes, actual_expand_bytes);
   } else {
-    log_debug(gc, ergo, heap)("Did not expand the heap (heap expansion operation failed)");
+    log_debug(gc, ergo, heap)("Heap resize. Did not expand the heap (heap expansion operation failed)");
 
     // The expansion of the virtual storage space was unsuccessful.
     // Let's see if it was because we ran out of swap.
@@ -1326,28 +1328,47 @@ bool G1CollectedHeap::expand_single_region(uint node_index) {
 }
 
 void G1CollectedHeap::shrink_helper(size_t shrink_bytes) {
-  size_t aligned_shrink_bytes =
-    ReservedSpace::page_align_size_down(shrink_bytes);
-  aligned_shrink_bytes = align_down(aligned_shrink_bytes,
-                                         HeapRegion::GrainBytes);
+  assert(shrink_bytes > 0, "must be");
+  assert(is_aligned(shrink_bytes, HeapRegion::GrainBytes),
+         "Shrink request for " SIZE_FORMAT "B not aligned to heap region size " SIZE_FORMAT "B",
+         shrink_bytes, HeapRegion::GrainBytes);
+
   uint num_regions_to_remove = (uint)(shrink_bytes / HeapRegion::GrainBytes);
 
   uint num_regions_removed = _hrm.shrink_by(num_regions_to_remove);
   size_t shrunk_bytes = num_regions_removed * HeapRegion::GrainBytes;
 
-  log_debug(gc, ergo, heap)("Shrink the heap. requested shrinking amount: " SIZE_FORMAT "B aligned shrinking amount: " SIZE_FORMAT "B attempted shrinking amount: " SIZE_FORMAT "B",
-                            shrink_bytes, aligned_shrink_bytes, shrunk_bytes);
+  log_debug(gc, ergo, heap)("Heap resize. Requested shrinking amount: " SIZE_FORMAT "B actual shrinking amount: " SIZE_FORMAT "B",
+                            shrink_bytes, shrunk_bytes);
   if (num_regions_removed > 0) {
     log_debug(gc, heap)("Uncommittable regions after shrink: %u", num_regions_removed);
     policy()->record_new_heap_size(num_regions());
   } else {
-    log_debug(gc, ergo, heap)("Did not expand the heap (heap shrinking operation failed)");
+    log_debug(gc, ergo, heap)("Heap resize. Did not shrink the heap (heap shrinking operation failed)");
   }
 }
 
 void G1CollectedHeap::shrink(size_t shrink_bytes) {
-  _verifier->verify_region_sets_optional();
+  size_t aligned_shrink_bytes = ReservedSpace::page_align_size_down(shrink_bytes);
+  aligned_shrink_bytes = align_down(aligned_shrink_bytes, HeapRegion::GrainBytes);
 
+  aligned_shrink_bytes = capacity() - MAX2(capacity() - aligned_shrink_bytes, min_capacity());
+  assert(is_aligned(aligned_shrink_bytes, HeapRegion::GrainBytes), "Bytes to shrink " SIZE_FORMAT "B not aligned", aligned_shrink_bytes);
+
+  log_debug(gc, ergo, heap)("Heap resize. Requested shrink amount: " SIZE_FORMAT "B expansion amount: " SIZE_FORMAT "B",
+                            shrink_bytes, aligned_shrink_bytes);
+
+  if (aligned_shrink_bytes == 0) {
+    log_debug(gc, ergo, heap)("Heap resize. Did not shrink the heap (shrink request too small)");
+    return;
+  }
+  if (capacity() == min_capacity()) {
+    log_debug(gc, ergo, heap)("Heap resize. Did not shrink the heap (heap already at minimum)");
+    return;
+  }
+  assert(aligned_shrink_bytes > 0, "capacity " SIZE_FORMAT " min_capacity " SIZE_FORMAT, capacity(), min_capacity());
+
+  _verifier->verify_region_sets_optional();
   // We should only reach here at the end of a Full GC or during Remark which
   // means we should not not be holding to any GC alloc regions. The method
   // below will make sure of that and do any remaining clean up.
@@ -1632,7 +1653,7 @@ jint G1CollectedHeap::initialize() {
   }
 
   os::trace_page_sizes("Heap",
-                       MinHeapSize,
+                       min_capacity(),
                        reserved_byte_size,
                        page_size,
                        heap_rs.base(),
@@ -2353,6 +2374,18 @@ size_t G1CollectedHeap::max_capacity() const {
   return max_regions() * HeapRegion::GrainBytes;
 }
 
+size_t G1CollectedHeap::min_capacity() const {
+  return MinHeapSize;
+}
+
+void G1CollectedHeap::deduplicate_string(oop str) {
+  assert(java_lang_String::is_instance(str), "invariant");
+
+  if (G1StringDedup::is_enabled()) {
+    G1StringDedup::deduplicate(str);
+  }
+}
+
 void G1CollectedHeap::prepare_for_verify() {
   _verifier->prepare_for_verify();
 }
@@ -2861,17 +2894,20 @@ void G1CollectedHeap::verify_after_young_collection(G1HeapVerifier::G1VerifyType
   phase_times()->record_verify_after_time_ms((Ticks::now() - start).seconds() * MILLIUNITS);
 }
 
-void G1CollectedHeap::expand_heap_after_young_collection(){
-  size_t expand_bytes = _heap_sizing_policy->young_collection_expansion_amount();
-  if (expand_bytes > 0) {
-    // No need for an ergo logging here,
-    // expansion_amount() does this when it returns a value > 0.
-    double expand_ms = 0.0;
-    if (!expand(expand_bytes, _workers, &expand_ms)) {
-      // We failed to expand the heap. Cannot do anything about it.
+void G1CollectedHeap::resize_heap_after_young_collection() {
+  Ticks start = Ticks::now();
+
+  bool should_expand;
+  size_t resize_bytes = _heap_sizing_policy->young_collection_resize_amount(should_expand);
+  if (resize_bytes != 0) {
+    if (should_expand) {
+      expand(resize_bytes, _workers);
+    } else {
+      shrink(resize_bytes);
     }
-    phase_times()->record_expand_heap_time(expand_ms);
   }
+
+  phase_times()->record_resize_heap_time((Ticks::now() - start).seconds() * 1000.0);
 }
 
 bool G1CollectedHeap::do_collection_pause_at_safepoint(double target_pause_time_ms) {
@@ -3100,7 +3136,7 @@ void G1CollectedHeap::do_collection_pause_at_safepoint_helper(double target_paus
 
         _allocator->init_mutator_alloc_regions();
 
-        expand_heap_after_young_collection();
+        resize_heap_after_young_collection();
 
         // Refine the type of a concurrent mark operation now that we did the
         // evacuation, eventually aborting it.
@@ -3856,6 +3892,11 @@ void G1CollectedHeap::post_evacuate_collection_set(G1EvacuationInfo* evacuation_
 }
 
 void G1CollectedHeap::record_obj_copy_mem_stats() {
+  uint sum = _survivor_evac_stats.regions_filled() + _old_evac_stats.regions_filled();
+  log_debug(gc)("Allocated %u survivor %u old percent total %1.2f%% (" UINTX_FORMAT "%%)",
+                _survivor_evac_stats.regions_filled(), _old_evac_stats.regions_filled(),
+                percent_of(sum, num_regions() - sum),
+                G1ReservePercent);
   policy()->old_gen_alloc_tracker()->
     add_allocated_bytes_since_last_gc(_old_evac_stats.allocated() * HeapWordSize);
 

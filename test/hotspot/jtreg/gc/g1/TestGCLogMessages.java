@@ -136,7 +136,10 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Redirtied Cards", Level.DEBUG),
         // Misc Top-level
         new LogMessageWithLevel("Purge Code Roots", Level.DEBUG),
-        new LogMessageWithLevel("Expand Heap After Collection", Level.DEBUG),
+        new LogMessageWithLevel("String Deduplication", Level.DEBUG),
+        new LogMessageWithLevel("Queue Fixup", Level.DEBUG),
+        new LogMessageWithLevel("Table Fixup", Level.DEBUG),
+        new LogMessageWithLevel("Resize Heap After Collection", Level.DEBUG),
         new LogMessageWithLevel("Region Register", Level.DEBUG),
         new LogMessageWithLevel("Prepare Heap Roots", Level.DEBUG),
         new LogMessageWithLevel("Concatenate Dirty Card Logs", Level.DEBUG),
