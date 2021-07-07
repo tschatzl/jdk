@@ -986,16 +986,18 @@ void G1YoungCollector::post_evacuate_collection_set(G1EvacInfo* evacuation_info,
 
   _g1h->gc_epilogue(false);
 
-  _g1h->expand_heap_after_young_collection();
+  _g1h->resize_heap_after_young_collection(_allocation_size);
 }
 
 bool G1YoungCollector::evacuation_failed() const {
   return _evac_failure_regions.evacuation_failed();
 }
 
-G1YoungCollector::G1YoungCollector(GCCause::Cause gc_cause) :
+G1YoungCollector::G1YoungCollector(GCCause::Cause gc_cause,
+                                   size_t allocation_size) :
   _g1h(G1CollectedHeap::heap()),
   _gc_cause(gc_cause),
+  _allocation_size(allocation_size),
   _concurrent_operation_is_full_mark(false),
   _evac_failure_regions()
 {

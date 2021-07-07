@@ -181,7 +181,21 @@ public class TestGCLogMessages {
         new LogMessageWithLevelC2OrJVMCIOnly("Update Derived Pointers", Level.DEBUG),
         new LogMessageWithLevel("Redirty Logged Cards", Level.DEBUG),
         new LogMessageWithLevel("Redirtied Cards", Level.DEBUG),
+<<<<<<< HEAD
         new LogMessageWithLevel("Resize TLABs", Level.DEBUG),
+||||||| parent of 064e1013cc9 (Initial import)
+=======
+        // Misc Top-level
+        new LogMessageWithLevel("Purge Code Roots", Level.DEBUG),
+        new LogMessageWithLevel("Resize Heap After Collection", Level.DEBUG),
+        new LogMessageWithLevel("Region Register", Level.DEBUG),
+        new LogMessageWithLevel("Prepare Heap Roots", Level.DEBUG),
+        new LogMessageWithLevel("Concatenate Dirty Card Logs", Level.DEBUG),
+        // We do not guarantee a mixed phase in these tests, so this log may not show
+        // up at all.
+        //new LogMessageWithLevel("Sample Collection Set Candidates", Level.DEBUG),
+        // Free CSet
+>>>>>>> 064e1013cc9 (Initial import)
         new LogMessageWithLevel("Free Collection Set", Level.DEBUG),
         new LogMessageWithLevel("Serial Free Collection Set", Level.TRACE),
         new LogMessageWithLevel("Young Free Collection Set", Level.TRACE),
@@ -324,8 +338,7 @@ public class TestGCLogMessages {
                                                                   GCTest.class.getName());
 
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
-        output.shouldContain("Expand the heap. requested expansion amount: ");
-        output.shouldContain("B expansion amount: ");
+        output.shouldContain("Heap resize: ");
         output.shouldHaveExitValue(0);
     }
 

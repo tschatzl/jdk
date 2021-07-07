@@ -85,7 +85,7 @@ public class TestEagerReclaimHumongousRegions {
             "-Xms128M",
             "-Xmx128M",
             "-Xmn16M",
-            "-Xlog:gc",
+            "-Xlog:gc,gc+heap+ergo=trace",
             TestEagerReclaimHumongousRegionsReclaimRegionFast.class.getName());
 
         Pattern p = Pattern.compile("Full GC");
