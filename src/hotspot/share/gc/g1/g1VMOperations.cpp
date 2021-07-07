@@ -139,7 +139,7 @@ void VM_G1CollectForAllocation::doit() {
 
   GCCauseSetter x(g1h, _gc_cause);
   // Try a partial collection of some kind.
-  _gc_succeeded = g1h->do_collection_pause_at_safepoint();
+  _gc_succeeded = g1h->do_collection_pause_at_safepoint(_word_size);
 
   if (_gc_succeeded) {
     if (_word_size > 0) {

@@ -292,5 +292,8 @@ inline bool G1CollectedHeap::is_collection_set_candidate(const HeapRegion* r) co
   const G1CollectionSetCandidates* candidates = collection_set()->candidates();
   return candidates->contains(r);
 }
+inline uint G1CollectedHeap::eden_target_length() const {
+  return _policy->young_list_target_length() - survivor_regions_count();
+}
 
 #endif // SHARE_GC_G1_G1COLLECTEDHEAP_INLINE_HPP

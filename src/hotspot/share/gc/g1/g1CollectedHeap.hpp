@@ -574,7 +574,7 @@ public:
   // Returns true if the heap was expanded by the requested amount;
   // false otherwise.
   // (Rounds up to a HeapRegion boundary.)
-  bool expand(size_t expand_bytes, WorkerThreads* pretouch_workers = nullptr, double* expand_time_ms = nullptr);
+  bool expand(size_t expand_bytes, WorkerThreads* pretouch_workers = NULL);
   bool expand_single_region(uint node_index);
 
   // Returns the PLAB statistics for a given destination.
@@ -753,11 +753,11 @@ private:
   // active, true otherwise.
   // precondition: at safepoint on VM thread
   // precondition: !is_gc_active()
-  bool do_collection_pause_at_safepoint();
+  bool do_collection_pause_at_safepoint(size_t allocation_word_size = 0);
 
   // Helper for do_collection_pause_at_safepoint, containing the guts
   // of the incremental collection pause, executed by the vm thread.
-  void do_collection_pause_at_safepoint_helper();
+  void do_collection_pause_at_safepoint_helper(size_t allocation_word_size);
 
   G1HeapVerifier::G1VerifyType young_collection_verify_type() const;
   void verify_before_young_collection(G1HeapVerifier::G1VerifyType type);
@@ -771,7 +771,8 @@ public:
 
   void retire_tlabs();
 
-  void expand_heap_after_young_collection();
+  void resize_heap_after_young_collection(size_t allocation_word_size);
+
   // Update object copying statistics.
   void record_obj_copy_mem_stats();
 
@@ -1189,6 +1190,7 @@ public:
 
   // Print the maximum heap capacity.
   size_t max_capacity() const override;
+  size_t min_capacity() const;
 
   Tickspan time_since_last_collection() const { return Ticks::now() - _collection_pause_end; }
 
@@ -1203,6 +1205,7 @@ public:
 
   G1SurvivorRegions* survivor() { return &_survivor; }
 
+  uint eden_target_length() const;
   uint eden_regions_count() const { return _eden.length(); }
   uint eden_regions_count(uint node_index) const { return _eden.regions_on_node(node_index); }
   uint survivor_regions_count() const { return _survivor.length(); }
