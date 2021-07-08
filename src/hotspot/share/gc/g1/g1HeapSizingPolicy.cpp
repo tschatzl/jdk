@@ -180,10 +180,11 @@ size_t G1HeapSizingPolicy::young_collection_shrink_amount(double delta) const {
                                                  G1ShrinkByPercentOfAvailable / 100.0);
 
   // We are at the end of GC, so free regions are at maximum. Do not try to shrink
-  // to have less than the reserve.
+  // to have less than the reserve. We limit the scale factor as the first calculation
+  // already gives the maximum number of regions.
   size_t free_regions = _g1h->num_free_regions() * (1 - G1ReservePercent / 100.0);
 
-  size_t resize_bytes = (double)HeapRegion::GrainBytes * scale_factor * free_regions;
+  size_t resize_bytes = (double)HeapRegion::GrainBytes * MIN2(scale_factor, 1.0) * free_regions;
 
   log_trace(gc, ergo, heap)("shrink log: scale factor %1.2f%% free_regions " SIZE_FORMAT " resize_bytes " SSIZE_FORMAT,
                             scale_factor * 100.0, free_regions, resize_bytes);

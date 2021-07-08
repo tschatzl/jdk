@@ -1356,7 +1356,7 @@ void G1CollectedHeap::shrink(size_t shrink_bytes) {
   aligned_shrink_bytes = capacity() - MAX2(capacity() - aligned_shrink_bytes, min_capacity());
   assert(is_aligned(aligned_shrink_bytes, HeapRegion::GrainBytes), "Bytes to shrink " SIZE_FORMAT "B not aligned", aligned_shrink_bytes);
 
-  log_debug(gc, ergo, heap)("Heap resize. Requested shrink amount: " SIZE_FORMAT "B expansion amount: " SIZE_FORMAT "B",
+  log_debug(gc, ergo, heap)("Heap resize. Requested shrink amount: " SIZE_FORMAT "B aligned shrink amount: " SIZE_FORMAT "B",
                             shrink_bytes, aligned_shrink_bytes);
 
   if (aligned_shrink_bytes == 0) {
@@ -1379,7 +1379,7 @@ void G1CollectedHeap::shrink(size_t shrink_bytes) {
   // could instead use the remove_all_pending() method on free_list to
   // remove only the ones that we need to remove.
   _hrm.remove_all_free_regions();
-  shrink_helper(shrink_bytes);
+  shrink_helper(aligned_shrink_bytes);
   rebuild_region_sets(true /* free_list_only */);
 
   _hrm.verify_optional();

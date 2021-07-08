@@ -136,9 +136,6 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Redirtied Cards", Level.DEBUG),
         // Misc Top-level
         new LogMessageWithLevel("Purge Code Roots", Level.DEBUG),
-        new LogMessageWithLevel("String Deduplication", Level.DEBUG),
-        new LogMessageWithLevel("Queue Fixup", Level.DEBUG),
-        new LogMessageWithLevel("Table Fixup", Level.DEBUG),
         new LogMessageWithLevel("Resize Heap After Collection", Level.DEBUG),
         new LogMessageWithLevel("Region Register", Level.DEBUG),
         new LogMessageWithLevel("Prepare Heap Roots", Level.DEBUG),
@@ -297,8 +294,7 @@ public class TestGCLogMessages {
                                                                   GCTest.class.getName());
 
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
-        output.shouldContain("Expand the heap. requested expansion amount: ");
-        output.shouldContain("B expansion amount: ");
+        output.shouldContain("Heap resize: ");
         output.shouldHaveExitValue(0);
     }
 
