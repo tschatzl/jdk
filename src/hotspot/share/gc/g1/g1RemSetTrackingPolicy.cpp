@@ -66,14 +66,12 @@ static void print_before_rebuild(HeapRegion* r, bool selected_for_rebuild, size_
                                   "total_live_bytes %zu "
                                   "selected %s "
                                   "(live_bytes %zu "
-                                  "marked %zu "
                                   "type %s)",
                                   r->hrm_index(),
-                                  p2i(r->top_at_mark_start()),
+                                  p2i(G1CollectedHeap::heap()->concurrent_mark()->top_at_mark_start(r->hrm_index())),
                                   total_live_bytes,
                                   BOOL_TO_STR(selected_for_rebuild),
                                   live_bytes,
-                                  r->marked_bytes(),
                                   r->get_type_str());
 }
 
@@ -102,7 +100,7 @@ bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(HeapRegion* r, bool
   return selected_for_rebuild;
 }
 
-bool G1RemSetTrackingPolicy::update_before_rebuild(HeapRegion* r, size_t live_bytes) {
+bool G1RemSetTrackingPolicy::update_before_rebuild(HeapRegion* r, size_t live_bytes_below_tams, size_t bytes_above_tams) {
   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
   assert(!r->is_humongous(), "Region %u is humongous", r->hrm_index());
 
@@ -114,8 +112,7 @@ bool G1RemSetTrackingPolicy::update_before_rebuild(HeapRegion* r, size_t live_by
 
   assert(!r->rem_set()->is_updating(), "Remembered set of region %u is updating before rebuild", r->hrm_index());
 
-  size_t between_tams_and_top = (r->top() - r->top_at_mark_start()) * HeapWordSize;
-  size_t total_live_bytes = live_bytes + between_tams_and_top;
+  size_t total_live_bytes = live_bytes_below_tams + bytes_above_tams;
 
   bool selected_for_rebuild = false;
   // For old regions, to be of interest for rebuilding the remembered set the following must apply:
@@ -131,7 +128,7 @@ bool G1RemSetTrackingPolicy::update_before_rebuild(HeapRegion* r, size_t live_by
     selected_for_rebuild = true;
   }
 
-  print_before_rebuild(r, selected_for_rebuild, total_live_bytes, live_bytes);
+  print_before_rebuild(r, selected_for_rebuild, total_live_bytes, live_bytes_below_tams);
 
   return selected_for_rebuild;
 }
@@ -166,7 +163,7 @@ void G1RemSetTrackingPolicy::update_after_rebuild(HeapRegion* r) {
                                     "remset occ %zu "
                                     "size %zu)",
                                     r->hrm_index(),
-                                    p2i(r->top_at_mark_start()),
+                                    p2i(cm->top_at_mark_start(r->hrm_index())),
                                     cm->live_bytes(r->hrm_index()),
                                     r->rem_set()->occupied(),
                                     r->rem_set()->mem_size());

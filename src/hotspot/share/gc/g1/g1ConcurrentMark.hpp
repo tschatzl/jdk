@@ -97,8 +97,9 @@ typedef GenericTaskQueueSet<G1CMTaskQueue, mtGC> G1CMTaskQueueSet;
 // reference processor as the _is_alive_non_header field
 class G1CMIsAliveClosure : public BoolObjectClosure {
   G1CollectedHeap* _g1h;
+  G1ConcurrentMark* _cm;
 public:
-  G1CMIsAliveClosure(G1CollectedHeap* g1h) : _g1h(g1h) { }
+  G1CMIsAliveClosure(G1CollectedHeap* g1h);
   bool do_object_b(oop obj);
 };
 
@@ -285,6 +286,7 @@ class G1ConcurrentMark : public CHeapObj<mtGC> {
   friend class G1CMKeepAliveAndDrainClosure;
   friend class G1CMRefProcProxyTask;
   friend class G1CMRemarkTask;
+  friend class G1CMRootRegionScanTask;
   friend class G1CMTask;
   friend class G1ConcurrentMarkThread;
 
@@ -451,6 +453,7 @@ class G1ConcurrentMark : public CHeapObj<mtGC> {
   // true, periodically insert checks to see if this method should exit prematurely.
   void clear_bitmap(WorkerThreads* workers, bool may_yield);
 
+  HeapWord* volatile* _top_at_mark_starts;
   // Region statistics gathered during marking.
   G1RegionMarkStats* _region_mark_stats;
   // Top pointer for each region at the start of the rebuild remembered set process
@@ -470,6 +473,16 @@ public:
   // Returns the liveness value in bytes.
   size_t live_bytes(uint region) const { return live_words(region) * HeapWordSize; }
 
+private:
+  // Update the TAMS for the given region.
+  void update_top_at_mark_start(uint region);
+
+public:
+  // Returns the current TAMS for the given region.
+  HeapWord* top_at_mark_start(uint region) const;
+  // Is this region going to be marked through?
+  bool needs_marking(HeapRegion* r) const;
+
   // Sets the internal top_at_region_start for the given region to current top of the region.
   inline void update_top_at_rebuild_start(HeapRegion* r);
   // TARS for the given region during remembered set rebuilding.
@@ -480,6 +493,8 @@ public:
   void clear_statistics_in_region(uint region_idx);
   // Notification for eagerly reclaimed regions to clean up.
   void humongous_object_eagerly_reclaimed(HeapRegion* r);
+  // Notification for regions that failed evacuation.
+  void region_failed_evacuation(HeapRegion* r);
   // Manipulation of the global mark stack.
   // The push and pop operations are used by tasks for transfers
   // between task-local queues and the global mark stack.
@@ -496,8 +511,6 @@ public:
   size_t mark_stack_size() const                { return _global_mark_stack.size(); }
   size_t partial_mark_stack_size_target() const { return _global_mark_stack.capacity() / 3; }
   bool mark_stack_empty() const                 { return _global_mark_stack.is_empty(); }
-
-  G1CMRootMemRegions* root_regions() { return &_root_regions; }
 
   void concurrent_cycle_start();
   // Abandon current marking iteration due to a Full GC.
@@ -557,6 +570,13 @@ public:
   // Scan all the root regions and mark everything reachable from
   // them.
   void scan_root_regions();
+  bool wait_until_root_region_scan_finished();
+  void add_root_region(HeapRegion* r);
+
+private:
+  G1CMRootMemRegions* root_regions() { return &_root_regions; }
+
+public:
 
   // Scan a single root MemRegion to mark everything reachable from it.
   void scan_root_region(const MemRegion* region, uint worker_id);
@@ -602,13 +622,14 @@ public:
 
   ConcurrentGCTimer* gc_timer_cm() const { return _gc_timer_cm; }
 
+  bool obj_allocated_since_marking_start(oop obj) const;
+
 private:
   // Rebuilds the remembered sets for chosen regions in parallel and concurrently
   // to the application. Also scrubs dead objects to ensure region is parsable.
   void rebuild_and_scrub();
 
   uint needs_remembered_set_rebuild() const { return _needs_remembered_set_rebuild; }
-
 };
 
 // A class representing a marking task.

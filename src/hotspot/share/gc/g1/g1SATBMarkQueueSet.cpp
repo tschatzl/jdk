@@ -85,9 +85,8 @@ static inline bool requires_marking(const void* entry, G1CollectedHeap* g1h) {
   assert(g1h->is_in_reserved(entry),
          "Non-heap pointer in SATB buffer: " PTR_FORMAT, p2i(entry));
 
-  HeapRegion* region = g1h->heap_region_containing(entry);
-  assert(region != NULL, "No region for " PTR_FORMAT, p2i(entry));
-  if (entry >= region->top_at_mark_start()) {
+  uint region_idx = g1h->addr_to_region((HeapWord*)entry);
+  if (entry >= g1h->concurrent_mark()->top_at_mark_start(region_idx)) {
     return false;
   }
 

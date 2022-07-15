@@ -134,16 +134,17 @@ public:
 
     // All objects that failed evacuation has been marked in the bitmap.
     // Use the bitmap to apply the above closure to all failing objects.
-    G1CMBitMap* bitmap = _g1h->concurrent_mark()->mark_bitmap();
+    G1ConcurrentMark* cm = _g1h->concurrent_mark();
+    G1CMBitMap* bitmap = cm->mark_bitmap();
     hr->apply_to_marked_objects(bitmap, &rspc);
     // Need to zap the remainder area of the processed region.
     rspc.zap_remainder();
     // Now clear all the marks to be ready for a new marking cyle.
     if (!during_concurrent_start) {
-      assert(hr->top_at_mark_start() == hr->bottom(), "TAMS must be bottom to make all objects look live");
+      assert(!cm->needs_marking(hr), "Should not be scheduled for marking through");
       _g1h->clear_bitmap_for_region(hr);
     } else {
-      assert(hr->top_at_mark_start() == hr->top(), "TAMS must be top for bitmap to have any value");
+      assert(cm->top_at_mark_start(hr->hrm_index()) == hr->top(), "TAMS must be top for bitmap to have any value");
       // Keep the bits.
     }
     // We never evacuate Old (non-humongous, non-archive) regions during scrubbing
@@ -161,15 +162,15 @@ public:
 
     hr->clear_index_in_opt_cset();
 
-    bool during_concurrent_start = _g1h->collector_state()->in_concurrent_start_gc();
-
-    hr->note_self_forwarding_removal_start(during_concurrent_start);
+    hr->note_self_forwarding_removal_start();
+    _g1h->concurrent_mark()->region_failed_evacuation(hr);
 
     _phase_times->record_or_add_thread_work_item(G1GCPhaseTimes::RestoreRetainedRegions,
                                                    _worker_id,
                                                    1,
                                                    G1GCPhaseTimes::RestoreRetainedRegionsNum);
 
+    bool during_concurrent_start = _g1h->collector_state()->in_concurrent_start_gc();
     size_t live_bytes = remove_self_forward_ptr_by_walking_hr(hr, during_concurrent_start);
 
     hr->rem_set()->clean_code_roots(hr);

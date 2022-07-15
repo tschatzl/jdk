@@ -235,12 +235,6 @@ private:
   HeapRegionSetBase* _containing_set;
 #endif // ASSERT
 
-  // The start of the unmarked area. The unmarked area extends from this
-  // word until the top and/or end of the region, and is the part
-  // of the region for which no marking was done, i.e. objects may
-  // have been allocated in this part since the last mark phase.
-  HeapWord* volatile _top_at_mark_start;
-
   // The area above this limit is fully parsable. This limit
   // is equal to bottom except from Remark and until the region has been
   // scrubbed concurrently. The scrubbing ensures that all dead objects (with
@@ -255,11 +249,10 @@ private:
   // in each heap region.
   size_t _marked_bytes;    // Bytes known to be live via last completed marking.
 
-  void init_top_at_mark_start() {
-    set_top_at_mark_start(bottom());
+  void reset_garbage_info() {
     _parsable_bottom = bottom();
     _garbage_bytes = 0;
-    _marked_bytes = 0;
+    _gc_efficiency = -1.0;
   }
 
   // Data for young region survivor prediction.
@@ -344,8 +337,6 @@ public:
   // up once during initialization time.
   static void setup_heap_region_size(size_t max_heap_size);
 
-  // The number of bytes marked live in the region in the last marking phase.
-  size_t marked_bytes() const { return _marked_bytes; }
   // An upper bound on the number of live bytes in the region.
   size_t live_bytes() const {
     return used() - garbage_bytes();
@@ -364,10 +355,6 @@ public:
     return capacity() - known_live_bytes;
   }
 
-  // Get the start of the unmarked area in this region.
-  HeapWord* top_at_mark_start() const;
-  void set_top_at_mark_start(HeapWord* value);
-
   // Retrieve parsable bottom; since it may be modified concurrently, outside a
   // safepoint the _acquire method must be used.
   HeapWord* parsable_bottom() const;
@@ -382,9 +369,8 @@ public:
   // all fields related to the next marking info.
   inline void note_start_of_marking();
 
-  // Notify the region that concurrent marking has finished. Passes the number of
-  // bytes between bottom and TAMS.
-  inline void note_end_of_marking(size_t marked_bytes);
+  // Notify the region that concurrent marking has finished.
+  inline void note_end_of_marking(HeapWord* top_at_mark_start, size_t marked_bytes_below_tams);
 
   // Notify the region that scrubbing has completed.
   inline void note_end_of_scrubbing();
@@ -521,7 +507,7 @@ public:
 
   // Notify the region that we are about to start processing
   // self-forwarded objects during evac failure handling.
-  void note_self_forwarding_removal_start(bool during_concurrent_start);
+  void note_self_forwarding_removal_start();
 
   // Notify the region that we have finished processing self-forwarded
   // objects during evac failure handling.
@@ -562,10 +548,6 @@ public:
   // Determine if an object is in the parsable or the to-be-scrubbed area.
   inline static bool obj_in_parsable_area(const HeapWord* addr, HeapWord* pb);
   inline static bool obj_in_unparsable_area(oop obj, HeapWord* pb);
-
-  bool obj_allocated_since_marking_start(oop obj) const {
-    return cast_from_oop<HeapWord*>(obj) >= top_at_mark_start();
-  }
 
   // Update the region state after a failed evacuation.
   void handle_evacuation_failure();

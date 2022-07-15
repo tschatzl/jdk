@@ -79,6 +79,8 @@
 #include "utilities/formatBuffer.hpp"
 #include "utilities/growableArray.hpp"
 
+G1CMIsAliveClosure::G1CMIsAliveClosure(G1CollectedHeap* g1h) : _g1h(g1h), _cm(g1h->concurrent_mark()) { }
+
 bool G1CMBitMapClosure::do_addr(HeapWord* const addr) {
   assert(addr < _cm->finger(), "invariant");
   assert(addr >= _task->finger(), "invariant");
@@ -410,6 +412,7 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
   _num_concurrent_workers(0),
   _max_concurrent_workers(0),
 
+  _top_at_mark_starts(NEW_C_HEAP_ARRAY(HeapWord*, _g1h->max_reserved_regions(), mtGC)),
   _region_mark_stats(NEW_C_HEAP_ARRAY(G1RegionMarkStats, _g1h->max_reserved_regions(), mtGC)),
   _top_at_rebuild_starts(NEW_C_HEAP_ARRAY(HeapWord*, _g1h->max_reserved_regions(), mtGC)),
   _needs_remembered_set_rebuild(false)
@@ -468,7 +471,8 @@ void G1ConcurrentMark::reset() {
 
   uint max_reserved_regions = _g1h->max_reserved_regions();
   for (uint i = 0; i < max_reserved_regions; i++) {
-    _top_at_rebuild_starts[i] = NULL;
+    // Do not update _top_at_mark_starts - this will be done in parallel.
+    _top_at_rebuild_starts[i] = nullptr;
     _region_mark_stats[i].clear();
   }
 
@@ -479,7 +483,8 @@ void G1ConcurrentMark::clear_statistics_in_region(uint region_idx) {
   for (uint j = 0; j < _max_num_tasks; ++j) {
     _tasks[j]->clear_mark_stats_cache(region_idx);
   }
-  _top_at_rebuild_starts[region_idx] = NULL;
+  _top_at_rebuild_starts[region_idx] = nullptr;
+  _top_at_mark_starts[region_idx] = _g1h->bottom_addr_for_region(region_idx);
   _region_mark_stats[region_idx].clear();
 }
 
@@ -508,6 +513,21 @@ void G1ConcurrentMark::humongous_object_eagerly_reclaimed(HeapRegion* r) {
 
   // Clear any statistics about the region gathered so far.
   clear_statistics(r);
+}
+
+void G1ConcurrentMark::region_failed_evacuation(HeapRegion* r) {
+  bool during_concurrent_start = _g1h->collector_state()->in_concurrent_start_gc();
+
+  if (during_concurrent_start) {
+    // Self-forwarding marks all objects. Adjust TAMS so that these marks are
+    // below it.
+    update_top_at_mark_start(r->hrm_index());
+  } else {
+    // Outside of the mixed phase all regions that had an evacuation failure must
+    // be young regions, and their TAMS is always the default. Similarly, before the
+    // start of the mixed phase, we cleared the bitmap and made TAMS default.
+    assert(!needs_marking(r), "must be");
+  }
 }
 
 void G1ConcurrentMark::reset_marking_for_restart() {
@@ -567,6 +587,7 @@ void G1ConcurrentMark::reset_at_marking_complete() {
 G1ConcurrentMark::~G1ConcurrentMark() {
   FREE_C_HEAP_ARRAY(HeapWord*, _top_at_rebuild_starts);
   FREE_C_HEAP_ARRAY(G1RegionMarkStats, _region_mark_stats);
+  FREE_C_HEAP_ARRAY(HeapWord*, _top_at_mark_starts);
   // The G1ConcurrentMark instance is never freed.
   ShouldNotReachHere();
 }
@@ -600,16 +621,17 @@ private:
     }
 
     HeapWord* region_clear_limit(HeapRegion* r) {
+      uint region_idx = r->hrm_index();
       // During a Concurrent Undo Mark cycle, the per region top_at_mark_start and
       // live_words data are current wrt to the _mark_bitmap. We use this information
       // to only clear ranges of the bitmap that require clearing.
       if (is_clear_concurrent_undo()) {
         // No need to clear bitmaps for empty regions.
-        if (_cm->live_words(r->hrm_index()) == 0) {
+        if (_cm->live_words(region_idx) == 0) {
           assert(_bitmap->get_next_marked_addr(r->bottom(), r->end()) == r->end(), "Should not have marked bits");
           return r->bottom();
         }
-        assert(_bitmap->get_next_marked_addr(r->top_at_mark_start(), r->end()) == r->end(), "Should not have marked bits above tams");
+        assert(_bitmap->get_next_marked_addr(_cm->top_at_mark_start(region_idx), r->end()) == r->end(), "Should not have marked bits above tams");
       }
       return r->end();
     }
@@ -653,7 +675,7 @@ private:
       }
       assert(cur >= end, "Must have completed iteration over the bitmap for region %u.", r->hrm_index());
 
-      r->note_end_of_clearing();
+      _cm->clear_statistics_in_region(r->hrm_index());
 
       return false;
     }
@@ -944,9 +966,9 @@ void G1ConcurrentMark::scan_root_region(const MemRegion* region, uint worker_id)
 #ifdef ASSERT
   HeapWord* last = region->last();
   HeapRegion* hr = _g1h->heap_region_containing(last);
-  assert(hr->is_old() || hr->top_at_mark_start() == hr->bottom(),
+  assert(hr->is_old() || !needs_marking(hr),
          "Root regions must be old or survivor/eden but region %u is %s", hr->hrm_index(), hr->get_type_str());
-  assert(hr->top_at_mark_start() == region->start(),
+  assert(top_at_mark_start(hr->hrm_index()) == region->start(),
          "MemRegion start should be equal to TAMS");
 #endif
 
@@ -1004,6 +1026,14 @@ void G1ConcurrentMark::scan_root_regions() {
     // mainly used for sanity checking.
     root_regions()->scan_finished();
   }
+}
+
+bool G1ConcurrentMark::wait_until_root_region_scan_finished() {
+  return root_regions()->wait_until_scan_finished();
+}
+
+void G1ConcurrentMark::add_root_region(HeapRegion* r) {
+  root_regions()->add(top_at_mark_start(r->hrm_index()), r->top());
 }
 
 void G1ConcurrentMark::concurrent_cycle_start() {
@@ -1108,8 +1138,9 @@ class G1UpdateRemSetTrackingBeforeRebuildTask : public WorkerTask {
         bool const is_live = _cm->live_words(hr->humongous_start_region()->hrm_index()) > 0;
         selected_for_rebuild = tracking_policy->update_humongous_before_rebuild(hr, is_live);
       } else {
-        size_t const live_bytes = _cm->live_bytes(hr->hrm_index());
-        selected_for_rebuild = tracking_policy->update_before_rebuild(hr, live_bytes);
+        size_t const bytes_below_tams = _cm->live_bytes(hr->hrm_index());
+        size_t const bytes_above_tams = byte_size(_cm->top_at_mark_start(hr->hrm_index()), hr->top());
+        selected_for_rebuild = tracking_policy->update_before_rebuild(hr, bytes_below_tams, bytes_above_tams);
       }
       if (selected_for_rebuild) {
         _num_regions_selected_for_rebuild++;
@@ -1164,7 +1195,8 @@ class G1UpdateRemSetTrackingBeforeRebuildTask : public WorkerTask {
     }
 
     void add_marked_bytes_and_note_end(HeapRegion* hr, size_t marked_bytes) {
-      hr->note_end_of_marking(marked_bytes);
+      HeapWord* tams = _cm->top_at_mark_start(hr->hrm_index());
+      hr->note_end_of_marking(tams, marked_bytes);
       _cl->do_heap_region(hr);
     }
 
@@ -1879,7 +1911,7 @@ void G1ConcurrentMark::flush_all_task_caches() {
 void G1ConcurrentMark::clear_bitmap_for_region(HeapRegion* hr) {
   assert_at_safepoint();
   _mark_bitmap.clear_range(MemRegion(hr->bottom(), hr->end()));
-  hr->note_end_of_clearing();
+  clear_statistics_in_region(hr->hrm_index());
 }
 
 HeapRegion* G1ConcurrentMark::claim_region(uint worker_id) {
@@ -1894,37 +1926,30 @@ HeapRegion* G1ConcurrentMark::claim_region(uint worker_id) {
     OrderAccess::loadload();
     // Above heap_region_containing may return NULL as we always scan claim
     // until the end of the heap. In this case, just jump to the next region.
-    HeapWord* end = curr_region != NULL ? curr_region->end() : finger + HeapRegion::GrainWords;
+    HeapWord* end = (curr_region != nullptr) ? curr_region->end() : finger + HeapRegion::GrainWords;
 
     // Is the gap between reading the finger and doing the CAS too long?
     HeapWord* res = Atomic::cmpxchg(&_finger, finger, end);
-    if (res == finger && curr_region != NULL) {
-      // we succeeded
-      HeapWord* bottom = curr_region->bottom();
-      HeapWord* limit = curr_region->top_at_mark_start();
+    if (res == finger && curr_region != nullptr) {
+      // Success
 
-      // notice that _finger == end cannot be guaranteed here since,
-      // someone else might have moved the finger even further
+      // Notice that _finger == end cannot be guaranteed here since,
+      // someone else might have moved the finger even further.
       assert(_finger >= end, "the finger should have moved forward");
 
-      if (limit > bottom) {
-        assert(!curr_region->is_closed_archive(), "CA regions should be skipped");
+      if (needs_marking(curr_region)) {
         return curr_region;
       } else {
-        assert(limit == bottom,
-               "the region limit should be at bottom");
-        // we return NULL and the caller should try calling
-        // claim_region() again.
-        return NULL;
+        // Return NULL. The caller should try calling claim_region() again.
+        return nullptr;
       }
     } else {
       assert(_finger > finger, "the finger should have moved forward");
-      // read it again
+      // Read it again
       finger = _finger;
     }
   }
-
-  return NULL;
+  return nullptr;
 }
 
 #ifndef PRODUCT
@@ -2018,6 +2043,14 @@ void G1ConcurrentMark::print_stats() {
 }
 
 bool G1ConcurrentMark::concurrent_cycle_abort() {
+  // If we start the compaction before the CM threads finish
+  // scanning the root regions we might trip them over as we'll
+  // be moving objects / updating references. So let's wait until
+  // they are done. By telling them to abort, they should complete
+  // early.
+  root_regions()->abort();
+  root_regions()->wait_until_scan_finished();
+
   // We haven't started a concurrent cycle no need to do anything; we might have
   // aborted the marking because of shutting down though. In this case the marking
   // might have already completed the abort (leading to in_progress() below to
@@ -2120,7 +2153,7 @@ void G1CMTask::setup_for_region(HeapRegion* hr) {
 void G1CMTask::update_region_limit() {
   HeapRegion* hr = _curr_region;
   HeapWord* bottom = hr->bottom();
-  HeapWord* limit = hr->top_at_mark_start();
+  HeapWord* limit = _cm->top_at_mark_start(hr->hrm_index());
 
   if (limit == bottom) {
     // The region was collected underneath our feet.

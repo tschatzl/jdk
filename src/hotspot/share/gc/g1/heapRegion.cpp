@@ -124,10 +124,8 @@ void HeapRegion::hr_clear(bool clear_space) {
 
   rem_set()->clear_locked();
 
-  init_top_at_mark_start();
+  reset_garbage_info();
   if (clear_space) clear(SpaceDecorator::Mangle);
-
-  _gc_efficiency = -1.0;
 }
 
 void HeapRegion::clear_cardtable() {
@@ -235,10 +233,8 @@ HeapRegion::HeapRegion(uint hrm_index,
 #ifdef ASSERT
   _containing_set(NULL),
 #endif
-  _top_at_mark_start(NULL),
   _parsable_bottom(NULL),
   _garbage_bytes(0),
-  _marked_bytes(0),
   _young_index_in_cset(-1),
   _surv_rate_group(NULL), _age_index(G1SurvRateGroup::InvalidAgeIndex), _gc_efficiency(-1.0),
   _node_index(G1NUMA::UnknownNodeIndex)
@@ -271,29 +267,16 @@ void HeapRegion::report_region_type_change(G1HeapRegionTraceType::Type to) {
                                             used());
 }
 
-void HeapRegion::note_self_forwarding_removal_start(bool during_concurrent_start) {
+void HeapRegion::note_self_forwarding_removal_start() {
   // We always scrub the region to make sure the entire region is
   // parsable after the self-forwarding point removal, and update _marked_bytes
   // at the end.
-  _marked_bytes = 0;
   _garbage_bytes = 0;
-
-  if (during_concurrent_start) {
-    // Self-forwarding marks all objects. Adjust TAMS so that these marks are
-    // below it.
-    set_top_at_mark_start(top());
-  } else {
-    // Outside of the mixed phase all regions that had an evacuation failure must
-    // be young regions, and their TAMS is always bottom. Similarly, before the
-    // start of the mixed phase, we scrubbed and reset TAMS to bottom.
-    assert(top_at_mark_start() == bottom(), "must be");
-  }
 }
 
 void HeapRegion::note_self_forwarding_removal_end(size_t marked_bytes) {
   assert(marked_bytes <= used(),
          "marked: " SIZE_FORMAT " used: " SIZE_FORMAT, marked_bytes, used());
-  _marked_bytes = marked_bytes;
   _garbage_bytes = used() - marked_bytes;
 }
 
@@ -453,7 +436,7 @@ void HeapRegion::print_on(outputStream* st) const {
     st->print("|  ");
   }
   st->print("|TAMS " PTR_FORMAT "| PB " PTR_FORMAT "| %s ",
-               p2i(top_at_mark_start()), p2i(parsable_bottom_acquire()), rem_set()->get_state_str());
+            p2i(G1CollectedHeap::heap()->concurrent_mark()->top_at_mark_start(hrm_index())), p2i(parsable_bottom_acquire()), rem_set()->get_state_str());
   if (UseNUMA) {
     G1NUMA* numa = G1NUMA::numa();
     if (node_index() < numa->num_active_nodes()) {

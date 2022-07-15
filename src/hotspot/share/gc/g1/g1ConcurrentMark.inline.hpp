@@ -39,21 +39,22 @@
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/shared/taskqueue.inline.hpp"
 #include "utilities/bitMap.inline.hpp"
+#include "utilities/globalDefinitions.hpp"
 
 inline bool G1CMIsAliveClosure::do_object_b(oop obj) {
   // Check whether the passed in object is null. During discovery the referent
   // may be cleared between the initial check and being passed in here.
-  if (obj == NULL) {
+  if (obj == nullptr) {
     // Return true to avoid discovery when the referent is NULL.
     return true;
   }
 
-  HeapRegion* hr = _g1h->heap_region_containing(cast_from_oop<HeapWord*>(obj));
   // All objects allocated since the start of marking are considered live.
-  if (hr->obj_allocated_since_marking_start(obj)) {
+  if (_cm->obj_allocated_since_marking_start(obj)) {
     return true;
   }
 
+  HeapRegion* hr = _g1h->heap_region_containing(cast_from_oop<HeapWord*>(obj));
   // All objects in closed archive regions are live.
   if (hr->is_closed_archive()) {
     return true;
@@ -75,16 +76,24 @@ inline bool G1CMSubjectToDiscoveryClosure::do_object_b(oop obj) {
   return _g1h->heap_region_containing(obj)->is_old_or_humongous_or_archive();
 }
 
-inline bool G1ConcurrentMark::mark_in_bitmap(uint const worker_id, oop const obj) {
-  HeapRegion* const hr = _g1h->heap_region_containing(obj);
+inline bool G1ConcurrentMark::obj_allocated_since_marking_start(oop obj) const {
+  HeapWord* addr = cast_from_oop<HeapWord*>(obj);
 
-  if (hr->obj_allocated_since_marking_start(obj)) {
+  uint region_idx = _g1h->addr_to_region(addr);
+  return addr >= top_at_mark_start(region_idx);
+}
+
+inline bool G1ConcurrentMark::mark_in_bitmap(uint const worker_id, oop const obj) {
+  if (obj_allocated_since_marking_start(obj)) {
     return false;
   }
 
   // Some callers may have stale objects to mark above TAMS after humongous reclaim.
   // Can't assert that this is a valid object at this point, since it might be in the process of being copied by another thread.
-  assert(!hr->is_continues_humongous(), "Should not try to mark object " PTR_FORMAT " in Humongous continues region %u above TAMS " PTR_FORMAT, p2i(obj), hr->hrm_index(), p2i(hr->top_at_mark_start()));
+  DEBUG_ONLY(HeapRegion* hr = _g1h->heap_region_containing(obj);)
+  assert(!hr->is_continues_humongous(),
+         "Should not try to mark object " PTR_FORMAT " in Humongous continues region %u above TAMS " PTR_FORMAT,
+         p2i(obj), hr->hrm_index(), p2i(top_at_mark_start(hr->hrm_index())));
 
   bool success = _mark_bitmap.par_mark(obj);
   if (success) {
@@ -192,6 +201,27 @@ inline void G1CMTask::process_grey_task_entry(G1TaskQueueEntry task_entry) {
 inline size_t G1CMTask::scan_objArray(objArrayOop obj, MemRegion mr) {
   obj->oop_iterate(_cm_oop_closure, mr);
   return mr.word_size();
+}
+
+inline void G1ConcurrentMark::update_top_at_mark_start(uint region) {
+  HeapRegion* r = _g1h->region_at_or_null(region);
+
+  HeapWord* tams;
+  if (r != nullptr && !r->is_closed_archive()) {
+    tams = r->top();
+  } else {
+    tams = _g1h->bottom_addr_for_region(region);
+  }
+  Atomic::store(&_top_at_mark_starts[region], tams);
+}
+
+inline HeapWord* G1ConcurrentMark::top_at_mark_start(uint region) const {
+  assert(region < _g1h->max_reserved_regions(), "Tried to access TARS for region %u out of bounds", region);
+  return Atomic::load(&_top_at_mark_starts[region]);
+}
+
+inline bool G1ConcurrentMark::needs_marking(HeapRegion* r) const {
+  return top_at_mark_start(r->hrm_index()) != r->bottom();
 }
 
 inline HeapWord* G1ConcurrentMark::top_at_rebuild_start(uint region) const {
