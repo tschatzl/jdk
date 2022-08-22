@@ -31,6 +31,10 @@
 #include "gc/shared/tlab_globals.hpp"
 #include "runtime/flags/debug_globals.hpp"
 #include "runtime/globals.hpp"
+#include "utilities/macros.hpp"
+#if INCLUDE_G1GC
+#include "gc/g1/g1_globals.hpp"
+#endif
 
 // Put LP64/ARCH/JVMCI/COMPILER1/COMPILER2 at the top,
 // as they are processed by jvmFlag.cpp in that order.
@@ -140,6 +144,15 @@
     notproduct,               \
     range,                    \
     constraint)               \
+                              \
+  G1GC_ONLY(GC_G1_FLAGS(      \
+    develop,                  \
+    develop_pd,               \
+    product,                  \
+    product_pd,               \
+    notproduct,               \
+    range,                    \
+    constraint))              \
                               \
   TLAB_FLAGS(                 \
     develop,                  \

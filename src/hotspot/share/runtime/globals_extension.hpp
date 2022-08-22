@@ -25,6 +25,7 @@
 #ifndef SHARE_RUNTIME_GLOBALS_EXTENSION_HPP
 #define SHARE_RUNTIME_GLOBALS_EXTENSION_HPP
 
+#include "gc/g1/g1_globals.hpp"
 #include "runtime/flags/allFlags.hpp"
 #include "runtime/flags/jvmFlag.hpp"
 #include "runtime/flags/jvmFlagAccess.hpp"

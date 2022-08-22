@@ -63,15 +63,6 @@
     range,                                                                  \
     constraint))                                                            \
                                                                             \
-  G1GC_ONLY(GC_G1_FLAGS(                                                    \
-    develop,                                                                \
-    develop_pd,                                                             \
-    product,                                                                \
-    product_pd,                                                             \
-    notproduct,                                                             \
-    range,                                                                  \
-    constraint))                                                            \
-                                                                            \
   PARALLELGC_ONLY(GC_PARALLEL_FLAGS(                                        \
     develop,                                                                \
     develop_pd,                                                             \
