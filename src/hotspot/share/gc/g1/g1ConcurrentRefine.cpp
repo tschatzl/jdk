@@ -342,7 +342,11 @@ void G1ConcurrentRefine::threads_do(ThreadClosure *tc) {
 }
 
 uint G1ConcurrentRefine::max_num_threads() {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   return G1ConcRefinementThreads;
+#else
+  return 0;
+#endif
 }
 
 static size_t calc_new_green_zone(size_t green,
