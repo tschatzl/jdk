@@ -26,9 +26,8 @@
 #define SHARE_GC_G1_G1COLLECTIONSETCHOOSER_HPP
 
 #include "gc/g1/heapRegion.hpp"
-#include "gc/shared/gc_globals.hpp"
+#include "gc/g1/g1_globals.hpp"
 #include "memory/allStatic.hpp"
-#include "runtime/globals.hpp"
 
 class G1CollectionSetCandidates;
 class WorkerThreads;

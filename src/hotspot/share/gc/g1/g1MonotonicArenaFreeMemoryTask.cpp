@@ -30,7 +30,6 @@
 #include "gc/g1/g1MonotonicArenaFreePool.hpp"
 #include "gc/g1/g1_globals.hpp"
 #include "gc/g1/heapRegionRemSet.hpp"
-#include "gc/shared/gc_globals.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "runtime/os.hpp"

@@ -27,7 +27,6 @@
 
 #include "gc/g1/g1RegionsOnNodes.hpp"
 #include "gc/g1/heapRegion.hpp"
-#include "runtime/globals.hpp"
 #include "utilities/debug.hpp"
 
 class G1EdenRegions {

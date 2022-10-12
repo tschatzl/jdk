@@ -26,7 +26,6 @@
 #include "gc/g1/g1NUMA.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "logging/logStream.hpp"
-#include "runtime/globals.hpp"
 #include "runtime/os.hpp"
 
 G1NUMA* G1NUMA::_inst = nullptr;

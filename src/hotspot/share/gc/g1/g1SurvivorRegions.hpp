@@ -26,7 +26,6 @@
 #define SHARE_GC_G1_G1SURVIVORREGIONS_HPP
 
 #include "gc/g1/g1RegionsOnNodes.hpp"
-#include "runtime/globals.hpp"
 
 template <typename T>
 class GrowableArray;

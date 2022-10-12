@@ -30,6 +30,7 @@
 #include "gc/g1/g1CardSetContainers.inline.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1HeapVerifier.hpp"
+#include "gc/g1/g1_globals.hpp"
 #include "gc/g1/heapRegion.hpp"
 #include "gc/g1/heapRegionBounds.inline.hpp"
 #include "gc/g1/heapRegionRemSet.hpp"

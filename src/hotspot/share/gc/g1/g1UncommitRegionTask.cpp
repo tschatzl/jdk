@@ -26,7 +26,6 @@
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1UncommitRegionTask.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
-#include "runtime/globals.hpp"
 #include "utilities/ticks.hpp"
 
 G1UncommitRegionTask* G1UncommitRegionTask::_instance = nullptr;

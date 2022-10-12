@@ -28,9 +28,9 @@
 #include "gc/g1/g1ConcurrentMarkThread.inline.hpp"
 #include "gc/g1/g1GCCounters.hpp"
 #include "gc/g1/g1PeriodicGCTask.hpp"
+#include "gc/g1/g1_globals.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "logging/log.hpp"
-#include "runtime/globals.hpp"
 #include "runtime/os.hpp"
 #include "utilities/globalDefinitions.hpp"
 

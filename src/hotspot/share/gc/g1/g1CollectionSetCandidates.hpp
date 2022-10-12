@@ -30,7 +30,6 @@
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shared/workerThread.hpp"
 #include "memory/allocation.hpp"
-#include "runtime/globals.hpp"
 #include "utilities/bitMap.hpp"
 #include "utilities/growableArray.hpp"
 
