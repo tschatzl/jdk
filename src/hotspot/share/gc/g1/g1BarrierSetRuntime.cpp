@@ -57,7 +57,11 @@ JRT_END
 // G1 post write barrier slowpath
 JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTable::CardValue* card_addr,
                                                                JavaThread* thread))
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   assert(thread == JavaThread::current(), "pre-condition");
   G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thread);
   G1BarrierSet::dirty_card_queue_set().enqueue(queue, card_addr);
+#else
+  guarantee(false, "G1BarrierSetRuntime::write_ref_field_post_entry shall not be called");
+#endif
 JRT_END
