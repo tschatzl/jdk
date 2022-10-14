@@ -352,6 +352,7 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   // Smash zero into card. MUST BE ORDERED WRT TO STORE
   __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   //  Now do the queue work
   __ if_then(index, BoolTest::ne, zeroX); {
 
@@ -365,7 +366,7 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   } __ else_(); {
     __ make_leaf_call(tf, CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), "write_ref_field_post_entry", card_adr, __ thread());
   } __ end_if();
-
+#endif
 }
 
 void G1BarrierSetC2::post_barrier(GraphKit* kit,
