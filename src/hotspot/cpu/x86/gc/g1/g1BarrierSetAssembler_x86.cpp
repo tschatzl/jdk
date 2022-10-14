@@ -560,6 +560,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ movb(Address(card_addr, 0), CardTable::dirty_card_val());
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   const Register tmp = rdx;
   __ push(rdx);
 
@@ -581,6 +582,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ bind(enqueued);
   __ pop(rdx);
+#endif
 
   __ bind(done);
   __ pop(rcx);
