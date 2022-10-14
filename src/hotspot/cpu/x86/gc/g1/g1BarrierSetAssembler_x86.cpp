@@ -275,14 +275,18 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   assert(thread == r15_thread, "must be");
 #endif // _LP64
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   Address queue_index(thread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
   Address buffer(thread, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
+#endif
 
   CardTableBarrierSet* ct =
     barrier_set_cast<CardTableBarrierSet>(BarrierSet::barrier_set());
 
   Label done;
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   Label runtime;
+#endif
 
   // Does store cross heap regions?
 
@@ -321,6 +325,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movb(Address(card_addr, 0), G1CardTable::dirty_card_val());
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   __ movptr(tmp2, queue_index);
   __ testptr(tmp2, tmp2);
   __ jcc(Assembler::zero, runtime);
@@ -336,6 +341,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ push_set(saved);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), card_addr, thread);
   __ pop_set(saved);
+#endif
 
   __ bind(done);
 }
