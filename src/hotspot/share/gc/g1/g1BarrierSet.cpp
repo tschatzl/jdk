@@ -95,9 +95,11 @@ void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
   OrderAccess::storeload();
   if (*byte != G1CardTable::dirty_card_val()) {
     *byte = G1CardTable::dirty_card_val();
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
     Thread* thr = Thread::current();
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
     G1BarrierSet::dirty_card_queue_set().enqueue(queue, byte);
+#endif
   }
 }
 
@@ -113,15 +115,19 @@ void G1BarrierSet::invalidate(MemRegion mr) {
   if (byte <= last_byte) {
     OrderAccess::storeload();
     // Enqueue if necessary.
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
     Thread* thr = Thread::current();
     G1DirtyCardQueueSet& qset = G1BarrierSet::dirty_card_queue_set();
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
+#endif
     for (; byte <= last_byte; byte++) {
       CardValue bv = *byte;
       if ((bv != G1CardTable::g1_young_card_val()) &&
           (bv != G1CardTable::dirty_card_val())) {
         *byte = G1CardTable::dirty_card_val();
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
         qset.enqueue(queue, byte);
+#endif
       }
     }
   }
