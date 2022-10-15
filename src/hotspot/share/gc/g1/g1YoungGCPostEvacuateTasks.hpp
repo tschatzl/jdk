@@ -70,6 +70,9 @@ class G1PostEvacuateCollectionSetCleanupTask2 : public G1BatchedTask {
 #endif
 
   class ClearRetainedRegionBitmaps;
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  class DirtyCardQueueSetTask;
+#endif
   class RedirtyLoggedCardsTask;
   class RestorePreservedMarksTask;
   class FreeCollectionSetTask;
