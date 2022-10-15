@@ -342,6 +342,10 @@ public:
     _evac_failure_regions(evac_failure_regions) { }
 
   void do_card_ptr(CardValue* card_ptr, uint worker_id) {
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    ShouldNotReachHere();
+#endif
+
     HeapRegion* hr = region_for_card(card_ptr);
 
     // Should only dirty cards in regions that won't be freed.
@@ -420,10 +424,16 @@ public:
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);
     const size_t buffer_size = _rdcqs->buffer_size();
     BufferNode* next = Atomic::load(&_nodes);
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    guarantee(next == nullptr, "Expected no completed buffer to be available in redirty cards queue set");
+#endif
     while (next != nullptr) {
       BufferNode* node = next;
       next = Atomic::cmpxchg(&_nodes, node, node->next());
       if (next == node) {
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+        ShouldNotReachHere();
+#endif
         cl.apply_to_buffer(node, buffer_size, worker_id);
         next = node->next();
       }
@@ -431,6 +441,23 @@ public:
     record_work_item(worker_id, 0, cl.num_dirtied());
   }
 };
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+class G1PostEvacuateCollectionSetCleanupTask2::DirtyCardQueueSetTask : public G1AbstractSubTask {
+public:
+  DirtyCardQueueSetTask() :
+    G1AbstractSubTask(G1GCPhaseTimes::DirtyCardQueueSet) {}
+
+  double worker_cost() const override {
+    return 1.0;
+  }
+
+  void do_work(uint worker_id) override {
+    G1BarrierSet::dirty_card_queue_set().concatenate_logs();
+    G1BarrierSet::dirty_card_queue_set().dirty_completed();
+  }
+};
+#endif
 
 // Helper class to keep statistics for the collection set freeing
 class FreeCSetStats {
@@ -721,6 +748,10 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
   if (G1CollectedHeap::heap()->has_humongous_reclaim_candidates()) {
     add_serial_task(new EagerlyReclaimHumongousObjectsTask());
   }
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  add_serial_task(new DirtyCardQueueSetTask());
+#endif
 
   if (evac_failure_regions->evacuation_failed()) {
     add_parallel_task(new RestorePreservedMarksTask(per_thread_states->preserved_marks_set()));
