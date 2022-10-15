@@ -253,6 +253,9 @@ public:
   BufferNodeList take_all_completed_buffers();
 
   void flush_queue(G1DirtyCardQueue& queue);
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  void dirty_completed();
+#endif
 
   using CardValue = G1CardTable::CardValue;
   void enqueue(G1DirtyCardQueue& queue, volatile CardValue* card_ptr);

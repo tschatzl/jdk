@@ -92,6 +92,25 @@ void G1DirtyCardQueueSet::flush_queue(G1DirtyCardQueue& queue) {
   PtrQueueSet::flush_queue(queue);
 }
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+void G1DirtyCardQueueSet::dirty_completed() {
+  for (BufferNode* cur = _completed.first();
+       !_completed.is_end(cur);
+       cur = cur->next()) {
+    void **buffer = BufferNode::make_buffer_from_node(cur);
+    size_t index = cur->index();
+    for (size_t i = index; i < buffer_size(); ++i) {
+      CardValue* card_ptr = static_cast<CardValue*>(buffer[i]);
+      OrderAccess::storeload();
+      CardTable::CardValue card_value = *card_ptr;
+      if (card_value != G1CardTable::dirty_card_val()) {
+        *card_ptr = G1CardTable::dirty_card_val();
+      }
+    }
+  }
+}
+#endif
+
 void G1DirtyCardQueueSet::enqueue(G1DirtyCardQueue& queue,
                                   volatile CardValue* card_ptr) {
   CardValue* value = const_cast<CardValue*>(card_ptr);

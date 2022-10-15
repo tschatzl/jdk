@@ -154,6 +154,10 @@ G1GCPhaseTimes::G1GCPhaseTimes(STWGCTimer* gc_timer, uint max_gc_threads) :
   _gc_par_phases[RedirtyCards] = new WorkerDataArray<double>("RedirtyCards", "Redirty Logged Cards (ms):", max_gc_threads);
   _gc_par_phases[RedirtyCards]->create_thread_work_items("Redirtied Cards:");
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  _gc_par_phases[DirtyCardQueueSet] = new WorkerDataArray<double>("DirtyCardQueueSet", "Dirty Card Queue Set (ms):", max_gc_threads);
+#endif
+
   _gc_par_phases[FreeCollectionSet] = new WorkerDataArray<double>("FreeCSet", "Free Collection Set (ms):", max_gc_threads);
   _gc_par_phases[YoungFreeCSet] = new WorkerDataArray<double>("YoungFreeCSet", "Young Free Collection Set (ms):", max_gc_threads);
   _gc_par_phases[NonYoungFreeCSet] = new WorkerDataArray<double>("NonYoungFreeCSet", "Non-Young Free Collection Set (ms):", max_gc_threads);
@@ -512,6 +516,9 @@ double G1GCPhaseTimes::print_post_evacuate_collection_set(bool evacuation_failed
   }
 
   trace_phase(_gc_par_phases[RedirtyCards]);
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  trace_phase(_gc_par_phases[DirtyCardQueueSet]);
+#endif
   debug_time("Post Evacuate Cleanup 2", _cur_post_evacuate_cleanup_2_time_ms);
   if (evacuation_failed) {
     debug_phase(_gc_par_phases[RecalculateUsed], 1);
@@ -529,6 +536,9 @@ double G1GCPhaseTimes::print_post_evacuate_collection_set(bool evacuation_failed
     debug_phase(_gc_par_phases[SampleCollectionSetCandidates], 1);
   }
   debug_phase(_gc_par_phases[RedirtyCards], 1);
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  debug_phase(_gc_par_phases[DirtyCardQueueSet], 1);
+#endif
   debug_phase(_gc_par_phases[FreeCollectionSet], 1);
   trace_phase(_gc_par_phases[YoungFreeCSet], true, 1);
   trace_phase(_gc_par_phases[NonYoungFreeCSet], true, 1);
