@@ -982,6 +982,10 @@ void G1YoungCollector::post_evacuate_collection_set(G1EvacInfo* evacuation_info,
 
   post_evacuate_cleanup_1(per_thread_states);
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  G1BarrierSet::dirty_card_queue_set().concatenate_logs();
+#endif
+
   post_evacuate_cleanup_2(per_thread_states, evacuation_info);
 
   _evac_failure_regions.post_collection();
