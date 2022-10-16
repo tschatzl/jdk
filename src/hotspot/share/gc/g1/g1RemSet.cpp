@@ -1514,8 +1514,13 @@ inline void check_card_ptr(CardTable::CardValue* card_ptr, G1CardTable* ct) {
 #endif
 }
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr, bool postevac_refine) {
+  assert(postevac_refine || !SafepointSynchronize::is_at_safepoint(), "Only call concurrently");
+#else
 bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   assert(!SafepointSynchronize::is_at_safepoint(), "Only call concurrently");
+#endif
 
   CardValue* card_ptr = *card_ptr_addr;
   // Find the start address represented by the card.
@@ -1619,9 +1624,16 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   return true;
 }
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
+                                        const uint worker_id,
+                                        bool postevac_refine) {
+  assert(postevac_refine || !_g1h->is_gc_active(), "Only call concurrently");
+#else
 void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
                                         const uint worker_id) {
   assert(!_g1h->is_gc_active(), "Only call concurrently");
+#endif
   check_card_ptr(card_ptr, _ct);
 
   // Construct the MemRegion representing the card.
@@ -1647,6 +1659,12 @@ void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
   if (r->oops_on_memregion_seq_iterate_careful<false>(dirty_region, &conc_refine_cl) != NULL) {
     return;
   }
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (postevac_refine) {
+    ShouldNotReachHere();
+  }
+#endif
 
   // If unable to process the card then we encountered an unparsable
   // part of the heap (e.g. a partially allocated object, so only
