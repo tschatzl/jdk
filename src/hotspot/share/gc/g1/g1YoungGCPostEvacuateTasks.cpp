@@ -410,35 +410,41 @@ public:
     _evac_failure_regions(evac_failure_regions) { }
 
   virtual ~RedirtyLoggedCardsTask() {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
     G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
     dcq.merge_bufferlists(_rdcqs);
     _rdcqs->verify_empty();
+#endif
   }
 
   double worker_cost() const override {
     // Needs more investigation.
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
     return G1CollectedHeap::heap()->workers()->active_workers();
+#else
+    return AlmostNoWork;
+#endif
   }
 
   void do_work(uint worker_id) override {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);
     const size_t buffer_size = _rdcqs->buffer_size();
     BufferNode* next = Atomic::load(&_nodes);
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-    guarantee(next == nullptr, "Expected no completed buffer to be available in redirty cards queue set");
-#endif
     while (next != nullptr) {
       BufferNode* node = next;
       next = Atomic::cmpxchg(&_nodes, node, node->next());
       if (next == node) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-        ShouldNotReachHere();
-#endif
         cl.apply_to_buffer(node, buffer_size, worker_id);
         next = node->next();
       }
     }
     record_work_item(worker_id, 0, cl.num_dirtied());
+#else
+    BufferNode* next = Atomic::load(&_nodes);
+    guarantee(next == nullptr, "Expected no completed buffer to be available in redirty cards queue set");
+    record_work_item(worker_id, 0, 0);
+#endif
   }
 };
 
