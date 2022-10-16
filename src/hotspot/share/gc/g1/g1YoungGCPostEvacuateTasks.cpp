@@ -443,18 +443,20 @@ public:
 };
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
-class G1PostEvacuateCollectionSetCleanupTask2::DirtyCardQueueSetTask : public G1AbstractSubTask {
+class G1PostEvacuateCollectionSetCleanupTask2::RefineDirtyCardQueueSetTask : public G1AbstractSubTask {
+  G1ConcurrentRefineStats stats;
+
 public:
-  DirtyCardQueueSetTask() :
-    G1AbstractSubTask(G1GCPhaseTimes::DirtyCardQueueSet) {}
+  RefineDirtyCardQueueSetTask() :
+    G1AbstractSubTask(G1GCPhaseTimes::RefineDirtyCardQueueSet) {}
 
   double worker_cost() const override {
-    return 1.0;
+    return G1CollectedHeap::heap()->workers()->active_workers();
   }
 
   void do_work(uint worker_id) override {
-    G1BarrierSet::dirty_card_queue_set().concatenate_logs();
-    G1BarrierSet::dirty_card_queue_set().dirty_completed();
+    G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
+    while (dcqs.refine_completed_buffer_postevac(worker_id, &stats)) {}
   }
 };
 #endif
@@ -749,10 +751,6 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
     add_serial_task(new EagerlyReclaimHumongousObjectsTask());
   }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-  add_serial_task(new DirtyCardQueueSetTask());
-#endif
-
   if (evac_failure_regions->evacuation_failed()) {
     add_parallel_task(new RestorePreservedMarksTask(per_thread_states->preserved_marks_set()));
     // Keep marks on bitmaps in retained regions during concurrent start - they will all be old.
@@ -760,6 +758,9 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
       add_parallel_task(new ClearRetainedRegionBitmaps(evac_failure_regions));
     }
   }
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  add_parallel_task(new RefineDirtyCardQueueSetTask());
+#endif
   add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
