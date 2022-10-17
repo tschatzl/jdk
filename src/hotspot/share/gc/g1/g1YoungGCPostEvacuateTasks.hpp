@@ -46,9 +46,6 @@ class G1PostEvacuateCollectionSetCleanupTask1 : public G1BatchedTask {
   class RecalculateUsedTask;
   class SampleCollectionSetCandidatesTask;
   class RestoreRetainedRegionsTask;
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-  class ConcatenateDirtyCardQueueSetTask;
-#endif
 
 public:
   G1PostEvacuateCollectionSetCleanupTask1(G1ParScanThreadStateSet* per_thread_states,
