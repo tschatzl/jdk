@@ -1655,7 +1655,7 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   // If the card is no longer dirty, nothing to do.
   // We cannot load the card value before the "r == NULL" check, because G1
   // could uncommit parts of the card table covering uncommitted regions.
-  if (*card_ptr != G1CardTable::dirty_card_val()) {
+  if (*card_ptr != G1CardTable::dirty_card_val() && !postevac_refine) {
     return false;
   }
 
@@ -1679,6 +1679,11 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   // enqueueing of the card and processing it here will have ensured
   // we see the up-to-date region type here.
   if (!r->is_old_or_humongous_or_archive()) {
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    if (postevac_refine) {
+      *card_ptr = G1CardTable::dirty_card_val();
+    }
+#endif
     return false;
   }
 
@@ -1691,7 +1696,7 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   //   * a pointer to a "hot" card that was evicted from the "hot" cache.
   //
 
-  if (G1HotCardCache::use_cache()) {
+  if (G1HotCardCache::use_cache() && !postevac_refine) {
     const CardValue* orig_card_ptr = card_ptr;
     card_ptr = _hot_card_cache->insert(card_ptr);
     if (card_ptr == NULL) {
