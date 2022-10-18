@@ -459,15 +459,6 @@ public:
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   bool refine(bool postevac_refine) {
-    if (postevac_refine) {
-      for (size_t i = _node->index(); i < _node_buffer_size; i++) {
-        volatile CardTable::CardValue *card_ptr = _node_buffer[i];
-        if (*card_ptr != G1CardTable::dirty_card_val()) {
-          *card_ptr = G1CardTable::dirty_card_val();
-        }
-      }
-    }
-
     size_t first_clean_index = clean_cards(postevac_refine);
 #else
   bool refine() {
