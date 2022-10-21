@@ -141,8 +141,13 @@ template <class T> void G1ParScanThreadState::enqueue_card_if_tracked(G1HeapRegi
   // If the card hasn't been added to the buffer, do it.
   if (_last_enqueued_card != card_index) {
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
-    volatile CardTable::CardValue* card_ptr = ct()->byte_for_index(card_index);
-    G1BarrierSet::dirty_card_queue_set().enqueue(G1ThreadLocalData::dirty_card_queue(Thread::current()), card_ptr);
+    if (G1TpRemsetInvestigationDirectUpdate) {
+      // TODO Directly update remsets
+      ShouldNotReachHere();
+    } else {
+      volatile CardTable::CardValue* card_ptr = ct()->byte_for_index(card_index);
+      G1BarrierSet::dirty_card_queue_set().enqueue(G1ThreadLocalData::dirty_card_queue(Thread::current()), card_ptr);
+    }
 #else
     _rdc_local_qset.enqueue(ct()->byte_for_index(card_index));
 #endif

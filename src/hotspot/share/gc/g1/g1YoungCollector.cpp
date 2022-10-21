@@ -997,11 +997,13 @@ void G1YoungCollector::post_evacuate_collection_set(G1EvacInfo* evacuation_info,
   post_evacuate_cleanup_1(per_thread_states);
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
-  G1BarrierSet::dirty_card_queue_set().concatenate_logs();
+  if (!G1TpRemsetInvestigationDirectUpdate) {
+    G1BarrierSet::dirty_card_queue_set().concatenate_logs();
 
-  {
-    RefineDirtyCardQueueSetTask refine_dcqs_task;
-    _g1h->workers()->run_task(&refine_dcqs_task);
+    {
+      RefineDirtyCardQueueSetTask refine_dcqs_task;
+      _g1h->workers()->run_task(&refine_dcqs_task);
+    }
   }
 #endif
 
