@@ -71,9 +71,6 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
     GCWorkerTotal,
     GCWorkerEnd,
     RedirtyCards,
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-    RefineDirtyCardQueueSet,
-#endif
     FreeCollectionSet,
     YoungFreeCSet,
     NonYoungFreeCSet,
