@@ -448,25 +448,6 @@ public:
   }
 };
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-class G1PostEvacuateCollectionSetCleanupTask2::RefineDirtyCardQueueSetTask : public G1AbstractSubTask {
-  G1ConcurrentRefineStats stats;
-
-public:
-  RefineDirtyCardQueueSetTask() :
-    G1AbstractSubTask(G1GCPhaseTimes::RefineDirtyCardQueueSet) {}
-
-  double worker_cost() const override {
-    return G1CollectedHeap::heap()->workers()->active_workers();
-  }
-
-  void do_work(uint worker_id) override {
-    G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
-    while (dcqs.refine_completed_buffer_postevac(worker_id, &stats)) {}
-  }
-};
-#endif
-
 // Helper class to keep statistics for the collection set freeing
 class FreeCSetStats {
   size_t _before_used_bytes;   // Usage in regions successfully evacuate
@@ -764,9 +745,6 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
       add_parallel_task(new ClearRetainedRegionBitmaps(evac_failure_regions));
     }
   }
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-  add_parallel_task(new RefineDirtyCardQueueSetTask());
-#endif
   add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),

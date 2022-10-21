@@ -962,6 +962,20 @@ void G1YoungCollector::post_evacuate_cleanup_2(G1ParScanThreadStateSet* per_thre
   phase_times()->record_post_evacuate_cleanup_task_2_time((Ticks::now() - start).seconds() * 1000.0);
 }
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+class RefineDirtyCardQueueSetTask : public WorkerTask {
+  G1ConcurrentRefineStats stats;
+
+public:
+  RefineDirtyCardQueueSetTask() : WorkerTask("G1 Refine Dirty Card Queue Set Postevac Task") {}
+
+  void work(uint worker_id) override {
+    G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
+    while (dcqs.refine_completed_buffer_postevac(worker_id, &stats)) {}
+  }
+};
+#endif
+
 void G1YoungCollector::post_evacuate_collection_set(G1EvacInfo* evacuation_info,
                                                     G1ParScanThreadStateSet* per_thread_states) {
   G1GCPhaseTimes* p = phase_times();
@@ -984,6 +998,11 @@ void G1YoungCollector::post_evacuate_collection_set(G1EvacInfo* evacuation_info,
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   G1BarrierSet::dirty_card_queue_set().concatenate_logs();
+
+  {
+    RefineDirtyCardQueueSetTask refine_dcqs_task;
+    _g1h->workers()->run_task(&refine_dcqs_task);
+  }
 #endif
 
   post_evacuate_cleanup_2(per_thread_states, evacuation_info);
