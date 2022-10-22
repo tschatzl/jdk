@@ -1983,7 +1983,7 @@ const int ObjectAlignmentInBytes = 8;
              "Mark all threads after a safepoint, and clear on a modify "   \
              "fence. Add cleanliness checks.")                              \
                                                                             \
-  product(bool, G1TpRemsetInvestigationDirectUpdate, false,                 \
+  product(bool, G1TpRemsetInvestigationDirectUpdate, true,                  \
                 "Enable direct remset updates during GC pause")             \
 
 // end of RUNTIME_FLAGS
