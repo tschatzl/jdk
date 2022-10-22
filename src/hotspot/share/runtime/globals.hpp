@@ -1986,7 +1986,7 @@ const int ObjectAlignmentInBytes = 8;
   develop(bool, TraceOptimizedUpcallStubs, false,                           \
                 "Trace optimized upcall stub generation")                   \
                                                                             \
-  product(bool, G1TpRemsetInvestigationDirectUpdate, false,                 \
+  product(bool, G1TpRemsetInvestigationDirectUpdate, true,                 \
                 "Enable direct remset updates during GC pause")             \
 
 // end of RUNTIME_FLAGS
