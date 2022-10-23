@@ -407,27 +407,30 @@ public:
     G1AbstractSubTask(G1GCPhaseTimes::RedirtyCards),
     _rdcqs(rdcqs),
     _nodes(rdcqs->all_completed_buffers()),
-    _evac_failure_regions(evac_failure_regions) { }
+    _evac_failure_regions(evac_failure_regions) {
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    ShouldNotCallThis();
+#endif
+  }
 
   virtual ~RedirtyLoggedCardsTask() {
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
     G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
     dcq.merge_bufferlists(_rdcqs);
     _rdcqs->verify_empty();
-#endif
   }
 
   double worker_cost() const override {
-    // Needs more investigation.
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-    return G1CollectedHeap::heap()->workers()->active_workers();
-#else
-    return AlmostNoWork;
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    ShouldNotCallThis();
 #endif
+    // Needs more investigation.
+    return G1CollectedHeap::heap()->workers()->active_workers();
   }
 
   void do_work(uint worker_id) override {
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    ShouldNotCallThis();
+#endif
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);
     const size_t buffer_size = _rdcqs->buffer_size();
     BufferNode* next = Atomic::load(&_nodes);
@@ -440,11 +443,6 @@ public:
       }
     }
     record_work_item(worker_id, 0, cl.num_dirtied());
-#else
-    BufferNode* next = Atomic::load(&_nodes);
-    guarantee(next == nullptr, "Expected no completed buffer to be available in redirty cards queue set");
-    record_work_item(worker_id, 0, 0);
-#endif
   }
 };
 
@@ -745,7 +743,9 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
       add_parallel_task(new ClearRetainedRegionBitmaps(evac_failure_regions));
     }
   }
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
+#endif
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
                                               evac_failure_regions));
