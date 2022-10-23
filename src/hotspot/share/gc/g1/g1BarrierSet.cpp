@@ -92,7 +92,9 @@ void G1BarrierSet::write_ref_array_pre(narrowOop* dst, size_t count, bool dest_u
 void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
   // In the slow path, we know a card is not young
   assert(*byte != G1CardTable::g1_young_card_val(), "slow path invoked without filtering");
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   OrderAccess::storeload();
+#endif
   if (*byte != G1CardTable::dirty_card_val()) {
     *byte = G1CardTable::dirty_card_val();
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
@@ -113,9 +115,9 @@ void G1BarrierSet::invalidate(MemRegion mr) {
   for (; byte <= last_byte && *byte == G1CardTable::g1_young_card_val(); byte++);
 
   if (byte <= last_byte) {
-    OrderAccess::storeload();
     // Enqueue if necessary.
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
+    OrderAccess::storeload();
     Thread* thr = Thread::current();
     G1DirtyCardQueueSet& qset = G1BarrierSet::dirty_card_queue_set();
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
