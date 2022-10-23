@@ -1579,7 +1579,12 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   //   * a pointer to a "hot" card that was evicted from the "hot" cache.
   //
 
-  if (G1HotCardCache::use_cache() && !postevac_refine) {
+  if (G1HotCardCache::use_cache()) {
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    if (postevac_refine) {
+      *card_ptr = G1CardTable::dirty_card_val();
+    }
+#endif
     const CardValue* orig_card_ptr = card_ptr;
     card_ptr = _hot_card_cache->insert(card_ptr);
     if (card_ptr == NULL) {
