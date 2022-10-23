@@ -60,6 +60,6 @@ JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTa
   G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thread);
   G1BarrierSet::dirty_card_queue_set().enqueue(queue, card_addr);
 #else
-  guarantee(false, "G1BarrierSetRuntime::write_ref_field_post_entry shall not be called");
+  ShouldNotCallThis();
 #endif
 JRT_END
