@@ -1633,6 +1633,7 @@ inline void check_card_ptr(CardTable::CardValue* card_ptr, G1CardTable* ct) {
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
 bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr, bool postevac_refine) {
+  assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
   assert(postevac_refine || !SafepointSynchronize::is_at_safepoint(), "Only call concurrently");
 #else
 bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
@@ -1755,6 +1756,7 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
 void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
                                         const uint worker_id,
                                         bool postevac_refine) {
+  assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
   assert(postevac_refine || !_g1h->is_gc_active(), "Only call concurrently");
 #else
 void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,

@@ -372,6 +372,7 @@ class G1RefineBufferedCards : public StackObj {
   // Returns the index to the first clean card in the buffer.
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   size_t clean_cards(bool postevac_refine) {
+  assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
 #else
   size_t clean_cards() {
 #endif
@@ -420,6 +421,7 @@ class G1RefineBufferedCards : public StackObj {
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   bool refine_cleaned_cards(size_t start_index, bool postevac_refine) {
+    assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
 #else
   bool refine_cleaned_cards(size_t start_index) {
 #endif
@@ -466,6 +468,7 @@ public:
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   bool refine(bool postevac_refine) {
+    assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
     size_t first_clean_index = clean_cards(postevac_refine);
 #else
   bool refine() {
@@ -498,6 +501,7 @@ bool G1DirtyCardQueueSet::refine_buffer(BufferNode* node,
                                         uint worker_id,
                                         G1ConcurrentRefineStats* stats,
                                         bool postevac_refine) {
+  assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
 #else
 bool G1DirtyCardQueueSet::refine_buffer(BufferNode* node,
                                         uint worker_id,
@@ -593,6 +597,7 @@ bool G1DirtyCardQueueSet::refine_completed_buffer_concurrently(uint worker_id,
 bool G1DirtyCardQueueSet::refine_completed_buffer_postevac(uint worker_id,
                                                            G1ConcurrentRefineStats* stats) {
   assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint");
+  assert(!G1TpRemsetInvestigationDirectUpdate, "Post-evacuation refinement shall not be called when direct remset update is enabled");
 
   BufferNode* node = dequeue_completed_buffer();
   if (node == NULL) return false; // Didn't get a buffer to process.
