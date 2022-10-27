@@ -674,8 +674,10 @@ public:
 };
 
 void G1HeapVerifier::verify_dirty_young_regions() {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   G1VerifyDirtyYoungListClosure cl(this);
   _g1h->collection_set()->iterate(&cl);
+#endif
 }
 
 class G1CheckRegionAttrTableClosure : public HeapRegionClosure {
