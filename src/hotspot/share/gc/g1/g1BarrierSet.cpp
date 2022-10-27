@@ -90,9 +90,9 @@ void G1BarrierSet::write_ref_array_pre(narrowOop* dst, size_t count, bool dest_u
 }
 
 void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   // In the slow path, we know a card is not young
   assert(*byte != G1CardTable::g1_young_card_val(), "slow path invoked without filtering");
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   OrderAccess::storeload();
 #endif
   if (*byte != G1CardTable::dirty_card_val()) {
@@ -111,8 +111,10 @@ void G1BarrierSet::invalidate(MemRegion mr) {
   }
   volatile CardValue* byte = _card_table->byte_for(mr.start());
   CardValue* last_byte = _card_table->byte_for(mr.last());
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   // skip initial young cards
   for (; byte <= last_byte && *byte == G1CardTable::g1_young_card_val(); byte++);
+#endif
 
   if (byte <= last_byte) {
     // Enqueue if necessary.
@@ -124,7 +126,11 @@ void G1BarrierSet::invalidate(MemRegion mr) {
 #endif
     for (; byte <= last_byte; byte++) {
       CardValue bv = *byte;
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
       if ((bv != G1CardTable::g1_young_card_val()) &&
+#else
+      if (
+#endif
           (bv != G1CardTable::dirty_card_val())) {
         *byte = G1CardTable::dirty_card_val();
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
