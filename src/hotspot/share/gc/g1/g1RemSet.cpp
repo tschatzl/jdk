@@ -1420,23 +1420,41 @@ void G1RemSet::print_merge_heap_roots_stats() {
 }
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
-class G1DirtyNonCollectionSetRegions : public HeapRegionIndexClosure {
+class G1DirtyNonCollectionSetRegionsTask : public WorkerTask {
  private:
   G1CollectedHeap *_g1h;
   G1RemSetScanState* _scan_state;
+  HeapRegionClaimer _hrclaimer;
 
- public:
-  G1DirtyNonCollectionSetRegions(G1RemSetScanState* scan_state) : _g1h(G1CollectedHeap::heap()), _scan_state(scan_state) {}
+  class DirtyRegionsClosure : public HeapRegionClosure {
+  private:
+    G1CollectedHeap *_g1h;
+    G1RemSetScanState* _scan_state;
 
-  bool do_heap_region_index(uint region_index) override {
-    HeapRegion *region = _g1h->region_at(region_index);
-    if (region->in_collection_set() || !region->is_old_or_humongous_or_archive()) {
+  public:
+    DirtyRegionsClosure(G1CollectedHeap *_g1h, G1RemSetScanState* scan_state) : _g1h(_g1h), _scan_state(scan_state) {}
+
+    bool do_heap_region(HeapRegion* hr) override {
+      if (hr->in_collection_set() || !hr->is_old_or_humongous_or_archive()) {
+        return false;
+      }
+
+      _scan_state->add_dirty_region(hr->hrm_index());
+      _scan_state->set_chunk_range_dirty(hr->hrm_index() * HeapRegion::CardsPerRegion, HeapRegion::CardsPerRegion);
       return false;
     }
+  };
 
-    _scan_state->add_dirty_region(region_index);
-    _scan_state->set_chunk_range_dirty(region_index * HeapRegion::CardsPerRegion, HeapRegion::CardsPerRegion);
-    return false;
+ public:
+  G1DirtyNonCollectionSetRegionsTask(G1RemSetScanState* scan_state)
+    : WorkerTask("G1 Dirty Non-Collection Set Regions Task"),
+      _g1h(G1CollectedHeap::heap()),
+      _scan_state(scan_state),
+      _hrclaimer(_g1h->workers()->active_workers()) {}
+
+  void work(uint worker_id) override {
+    DirtyRegionsClosure cl(_g1h, _scan_state);
+    _g1h->heap_region_par_iterate_from_worker_offset(&cl, &_hrclaimer, worker_id);
   }
 };
 #endif
@@ -1472,9 +1490,9 @@ void G1RemSet::merge_heap_roots(bool initial_evacuation) {
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   {
-    G1DirtyNonCollectionSetRegions cl(_scan_state);
+    G1DirtyNonCollectionSetRegionsTask task(_scan_state);
     log_debug(gc)("Dirty all cards not belonging to collection set regions");
-    g1h->heap_region_iterate(&cl);
+    g1h->workers()->run_task(&task);
   }
 #endif
 
