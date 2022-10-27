@@ -416,7 +416,9 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
   Node* no_base = __ top();
   float likely = PROB_LIKELY_MAG(3);
   float unlikely = PROB_UNLIKELY_MAG(3);
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   Node* young_card = __ ConI((jint)G1CardTable::g1_young_card_val());
+#endif
   Node* dirty_card = __ ConI((jint)G1CardTable::dirty_card_val());
   Node* zeroX = __ ConX(0);
 
@@ -468,7 +470,9 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
         // load the original value of the card
         Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
         __ if_then(card_val, BoolTest::ne, young_card, unlikely); {
+#endif
           kit->sync_kit(ideal);
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
           kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
@@ -479,7 +483,9 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
           __ if_then(card_val_reload, BoolTest::ne, dirty_card); {
             g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
           } __ end_if();
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
         } __ end_if();
+#endif
       } __ end_if();
     } __ end_if();
   } else {
@@ -489,9 +495,13 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
     // are set to 'g1_young_gen' (see G1CardTable::verify_g1_young_region()).
     assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
     Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
     __ if_then(card_val, BoolTest::ne, young_card); {
+#endif
       g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
     } __ end_if();
+#endif
   }
 
   // Final sync IdealKit and GraphKit.
