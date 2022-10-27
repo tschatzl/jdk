@@ -312,10 +312,10 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
   __ addptr(card_addr, cardtable);
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
   __ jcc(Assembler::equal, done);
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
   __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
@@ -550,10 +550,10 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   NOT_LP64(__ get_thread(thread);)
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
   __ jcc(Assembler::equal, done);
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
   __ cmpb(Address(card_addr, 0), CardTable::dirty_card_val());
