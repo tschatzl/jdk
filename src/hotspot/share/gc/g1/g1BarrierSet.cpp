@@ -58,7 +58,12 @@ G1BarrierSet::G1BarrierSet(G1CardTable* card_table) :
   _satb_mark_queue_buffer_allocator("SATB Buffer Allocator", G1SATBBufferSize),
   _dirty_card_queue_buffer_allocator("DC Buffer Allocator", G1UpdateBufferSize),
   _satb_mark_queue_set(&_satb_mark_queue_buffer_allocator),
-  _dirty_card_queue_set(&_dirty_card_queue_buffer_allocator)
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
+  _dirty_card_queue_set(&_dirty_card_queue_buffer_allocator),
+#else
+  _dirty_card_queue_set(&_dirty_card_queue_buffer_allocator),
+  _rem_set(NULL)
+#endif
 {}
 
 template <class T> void
@@ -97,7 +102,11 @@ void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
 #endif
   if (*byte != G1CardTable::dirty_card_val()) {
     *byte = G1CardTable::dirty_card_val();
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+      _rem_set->dirty_region_scan_chunk_table(byte);
+    }
+#else
     Thread* thr = Thread::current();
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
     G1BarrierSet::dirty_card_queue_set().enqueue(queue, byte);
@@ -133,7 +142,11 @@ void G1BarrierSet::invalidate(MemRegion mr) {
 #endif
           (bv != G1CardTable::dirty_card_val())) {
         *byte = G1CardTable::dirty_card_val();
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+        if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+          _rem_set->dirty_region_scan_chunk_table(byte);
+        }
+#else
         qset.enqueue(queue, byte);
 #endif
       }

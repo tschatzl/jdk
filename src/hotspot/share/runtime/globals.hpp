@@ -1985,6 +1985,8 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   product(bool, G1TpRemsetInvestigationDirectUpdate, true,                  \
                 "Enable direct remset updates during GC pause")             \
+  product(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, true,           \
+                "Enable region chunk table dirtying at post-write barrier") \
 
 // end of RUNTIME_FLAGS
 

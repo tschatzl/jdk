@@ -40,6 +40,10 @@
 #include "gc/g1/c1/g1BarrierSetC1.hpp"
 #endif
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#include "gc/g1/g1RemSet.hpp"
+#endif
+
 #define __ masm->
 
 void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm, DecoratorSet decorators,
@@ -327,7 +331,20 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movb(Address(card_addr, 0), G1CardTable::dirty_card_val());
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    G1RemSet* rem_set = G1BarrierSet::rem_set();
+    assert(rem_set != NULL, "expected non-NULL remset");
+    assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
+
+    __ movptr(cardtable, (intptr_t) ct->card_table()->byte_map());
+    __ subptr(card_addr, cardtable);
+    __ shrptr(card_addr, rem_set->region_scan_chunk_table_shift());
+    __ movptr(cardtable, (intptr_t) rem_set->region_scan_chunk_table());
+    __ addptr(card_addr, cardtable);
+    __ movb(Address(card_addr, 0), true);
+  }
+#else
   __ movptr(tmp2, queue_index);
   __ testptr(tmp2, tmp2);
   __ jcc(Assembler::zero, runtime);
@@ -564,7 +581,24 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ movb(Address(card_addr, 0), CardTable::dirty_card_val());
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    G1RemSet* rem_set = G1BarrierSet::rem_set();
+    assert(rem_set != NULL, "expected non-NULL remset");
+    assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
+
+    const Register chunk_addr = rdx;
+    __ push(rdx);
+    __ movptr(chunk_addr, card_addr);
+    __ movptr(cardtable, (intptr_t) ct->card_table()->byte_map());
+    __ subptr(chunk_addr, cardtable);
+    __ shrptr(chunk_addr, rem_set->region_scan_chunk_table_shift());
+    __ movptr(cardtable, (intptr_t) rem_set->region_scan_chunk_table());
+    __ addptr(chunk_addr, cardtable);
+    __ movb(Address(chunk_addr, 0), true);
+    __ pop(rdx);
+  }
+#else
   const Register tmp = rdx;
   __ push(rdx);
 

@@ -239,6 +239,10 @@ public:
   // before the beginning of the actual _byte_map.
   CardValue* byte_map_base() const { return _byte_map_base; }
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  CardValue* byte_map() const { return _byte_map; }
+#endif
+
   virtual bool is_in_young(const void* p) const = 0;
 
   // Print a description of the memory for the card table
