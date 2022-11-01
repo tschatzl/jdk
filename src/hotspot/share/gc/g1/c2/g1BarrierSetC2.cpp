@@ -40,6 +40,10 @@
 #include "opto/type.hpp"
 #include "utilities/macros.hpp"
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#include "gc/g1/g1RemSet.hpp"
+#endif
+
 const TypeFunc *G1BarrierSetC2::write_ref_field_pre_entry_Type() {
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // original field value
@@ -352,7 +356,25 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   // Smash zero into card. MUST BE ORDERED WRT TO STORE
   __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    BarrierSet* bs = BarrierSet::barrier_set();
+    CardTableBarrierSet* ctbs = barrier_set_cast<CardTableBarrierSet>(bs);
+    G1RemSet* rem_set = G1BarrierSet::rem_set();
+    assert(rem_set != NULL, "expected non-NULL remset");
+
+    Node* card_adr_int = kit->gvn().transform(new CastP2XNode(__ ctrl(), card_adr));
+    Node* byte_map = kit->gvn().transform(new CastP2XNode(__ ctrl(),
+      kit->makecon(TypeRawPtr::make((address) ctbs->card_table()->byte_map()))));
+    Node* card_idx = kit->gvn().transform(new SubXNode(card_adr_int, byte_map));
+    Node* chunk_shift = __ ConI(rem_set->region_scan_chunk_table_shift());
+    Node* chunk_idx = __ URShiftX(card_idx, chunk_shift);
+    Node* chunk_table = kit->makecon(TypeRawPtr::make((address) rem_set->region_scan_chunk_table()));
+    Node* chunk_ptr = kit->array_element_address(chunk_table, kit->ConvX2I(chunk_idx), T_BOOLEAN);
+    Node* dirty_chunk = __ ConI(true);
+    __ store(__ ctrl(), chunk_ptr, dirty_chunk, T_BOOLEAN, Compile::AliasIdxRaw, MemNode::unordered);
+  }
+#else
   //  Now do the queue work
   __ if_then(index, BoolTest::ne, zeroX); {
 
