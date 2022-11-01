@@ -150,6 +150,12 @@ public:
 
   // Print accumulated summary info from the last time called.
   void print_periodic_summary_info(const char* header, uint period_count, bool show_thread_times);
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  bool* region_scan_chunk_table();
+  uint8_t region_scan_chunk_table_shift() const;
+  void dirty_region_scan_chunk_table(const volatile CardTable::CardValue*);
+#endif
 };
 
 #endif // SHARE_GC_G1_G1REMSET_HPP

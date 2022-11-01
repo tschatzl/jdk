@@ -464,6 +464,16 @@ public:
   void clear_scan_top(uint region_idx) {
     set_scan_top(region_idx, NULL);
   }
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  bool* region_scan_chunks() {
+    return _region_scan_chunks;
+  }
+
+  uint8_t scan_chunks_shift() const {
+    return _scan_chunks_shift;
+  }
+#endif
 };
 
 G1RemSet::G1RemSet(G1CollectedHeap* g1h,
@@ -1724,6 +1734,9 @@ void G1RemSet::enqueue_for_reprocessing(CardValue* card_ptr) {
   // this card.  Since buffers are processed in FIFO order and we try to
   // keep some in the queue, it is likely that the racing state will have
   // resolved by the time this card comes up for reprocessing.
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  ShouldNotCallThis();
+#endif
   *card_ptr = G1CardTable::dirty_card_val();
   G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
   void** buffer = dcqs.allocate_buffer();
@@ -1759,3 +1772,23 @@ void G1RemSet::print_summary_info() {
     current.print_on(&ls, true /* show_thread_times*/);
   }
 }
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+bool* G1RemSet::region_scan_chunk_table() {
+  return _scan_state->region_scan_chunks();
+}
+
+uint8_t G1RemSet::region_scan_chunk_table_shift() const {
+  return _scan_state->scan_chunks_shift();
+}
+
+void G1RemSet::dirty_region_scan_chunk_table(const volatile CardTable::CardValue* card_ptr) {
+    CardTable::CardValue* const byte_map = _ct->byte_map();
+    bool* const chunk_table = _scan_state->region_scan_chunks();
+    size_t const chunk_table_shift = _scan_state->scan_chunks_shift();
+
+    size_t card_idx = card_ptr - byte_map;
+    size_t chunk_idx = card_idx >> chunk_table_shift;
+    chunk_table[chunk_idx] = true;
+}
+#endif
