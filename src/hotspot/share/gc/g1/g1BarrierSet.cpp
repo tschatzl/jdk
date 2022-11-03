@@ -104,7 +104,7 @@ void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
     *byte = G1CardTable::dirty_card_val();
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
     if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-      _rem_set->dirty_region_scan_chunk_table(byte);
+      _rem_set->dirty_region_scan_chunk_table((CardTable::CardValue*) byte);
     }
 #else
     Thread* thr = Thread::current();
@@ -144,7 +144,7 @@ void G1BarrierSet::invalidate(MemRegion mr) {
         *byte = G1CardTable::dirty_card_val();
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
         if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-          _rem_set->dirty_region_scan_chunk_table(byte);
+          _rem_set->dirty_region_scan_chunk_table((CardTable::CardValue*) byte);
         }
 #else
         qset.enqueue(queue, byte);
