@@ -358,27 +358,21 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    const Type **fields = TypeTuple::fields(1);
-    fields[TypeFunc::Parms+0] = TypeRawPtr::NOTNULL;  // Card addr
-    const TypeTuple *domain = TypeTuple::make(TypeFunc::Parms+1, fields);
-    fields = TypeTuple::fields(0);
-    const TypeTuple *range = TypeTuple::make(TypeFunc::Parms, fields);
-    const TypeFunc* dirty_chunk_post_entry_type = TypeFunc::make(domain, range);
+    BarrierSet *bs = BarrierSet::barrier_set();
+    CardTableBarrierSet* ctbs = barrier_set_cast<CardTableBarrierSet>(bs);
+    G1RemSet* rem_set = G1BarrierSet::rem_set();
+    assert(rem_set != NULL, "expected non-NULL remset");
 
-    // TODO Implement chunk dirtying as compiled code
-    __ make_leaf_call(dirty_chunk_post_entry_type,
-      CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::dirty_chunk_post_entry), "dirty_chunk_post_entry", card_adr);
-
-    // Node* card_adr_int = kit->gvn().transform(new CastP2XNode(__ ctrl(), card_adr));
-    // Node* byte_map = kit->gvn().transform(new CastP2XNode(__ ctrl(),
-    //   kit->makecon(TypeRawPtr::make((address) ctbs->card_table()->byte_map()))));
-    // Node* card_idx = kit->gvn().transform(new SubXNode(card_adr_int, byte_map));
-    // Node* chunk_shift = __ ConI(rem_set->region_scan_chunk_table_shift());
-    // Node* chunk_idx = __ URShiftX(card_idx, chunk_shift);
-    // Node* chunk_table = kit->makecon(TypeRawPtr::make((address) rem_set->region_scan_chunk_table()));
-    // Node* chunk_ptr = kit->array_element_address(chunk_table, kit->ConvX2I(chunk_idx), T_BOOLEAN);
-    // Node* dirty_chunk = __ ConI(true);
-    // __ store(__ ctrl(), chunk_ptr, dirty_chunk, T_BOOLEAN, Compile::AliasIdxRaw, MemNode::unordered);
+    Node* card_adrx = kit->gvn().transform(new CastP2XNode(__ ctrl(), card_adr));
+    Node* byte_map_ptr = kit->makecon(TypeRawPtr::make((address) ctbs->card_table()->byte_map()));
+    Node* byte_mapx = kit->gvn().transform(new CastP2XNode(__ ctrl(), byte_map_ptr));
+    Node* card_idx = kit->gvn().transform(new SubXNode(card_adrx, byte_mapx));
+    Node* chunk_shift = kit->intcon(rem_set->region_scan_chunk_table_shift());
+    Node* chunk_idx = __ URShiftX(card_idx, chunk_shift);
+    Node* chunk_table_ptr = kit->makecon(TypeRawPtr::make((address) rem_set->region_scan_chunk_table()));
+    Node* chunk_ptr = __ AddP(no_base, chunk_table_ptr, chunk_idx);
+    Node* dirty_chunk = kit->intcon(true);
+    __ store(__ ctrl(), chunk_ptr, dirty_chunk, T_BYTE, Compile::AliasIdxRaw, MemNode::release);
   }
 #else
   //  Now do the queue work
