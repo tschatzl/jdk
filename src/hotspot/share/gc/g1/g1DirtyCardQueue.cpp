@@ -443,7 +443,15 @@ class G1RefineBufferedCards : public StackObj {
 
   void redirty_unrefined_cards(size_t start) {
     for ( ; start < _node_buffer_size; ++start) {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
       *_node_buffer[start] = G1CardTable::dirty_card_val();
+#else
+      CardTable::CardValue* card_ptr = _node_buffer[start];
+      *card_ptr = G1CardTable::dirty_card_val();
+      if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+        _g1rs->dirty_region_scan_chunk_table(card_ptr);
+      }
+#endif
     }
   }
 

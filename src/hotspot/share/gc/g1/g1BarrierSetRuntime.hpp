@@ -46,6 +46,9 @@ public:
   // C2 slow-path runtime calls.
   static void write_ref_field_pre_entry(oopDesc* orig, JavaThread *thread);
   static void write_ref_field_post_entry(volatile CardValue* card_addr, JavaThread* thread);
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  static void dirty_chunk_post_entry(CardTable::CardValue*);
+#endif
 };
 
 #endif // SHARE_GC_G1_G1BARRIERSETRUNTIME_HPP

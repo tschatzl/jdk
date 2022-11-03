@@ -29,6 +29,10 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "utilities/macros.hpp"
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#include "gc/g1/g1RemSet.hpp"
+#endif
+
 void G1BarrierSetRuntime::write_ref_array_pre_oop_entry(oop* dst, size_t length) {
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
   bs->write_ref_array_pre(dst, length, false);
@@ -42,6 +46,18 @@ void G1BarrierSetRuntime::write_ref_array_pre_narrow_oop_entry(narrowOop* dst, s
 void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* dst, size_t length) {
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
   bs->G1BarrierSet::write_ref_array(dst, length);
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    HeapWord* end = (HeapWord*) ((char*) dst + (length * heapOopSize));
+    HeapWord* aligned_start = align_down(dst, HeapWordSize);
+    HeapWord* aligned_end   = align_up(end, HeapWordSize);
+
+    CardValue* cur  = bs->card_table()->byte_for(aligned_start);
+    CardValue* last = bs->card_table()->byte_after(aligned_end - 1);
+    bs->rem_set()->dirty_region_scan_chunk_table(cur, last - cur);
+  }
+#endif
 }
 
 // G1 pre write barrier slowpath
@@ -65,3 +81,12 @@ JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTa
   ShouldNotCallThis();
 #endif
 JRT_END
+
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+JRT_LEAF(void, G1BarrierSetRuntime::dirty_chunk_post_entry(G1CardTable::CardValue* card_addr))
+    G1RemSet* rem_set = G1BarrierSet::rem_set();
+    assert(rem_set != NULL, "expected non-NULL remset");
+
+    rem_set->dirty_region_scan_chunk_table(card_addr);
+JRT_END
+#endif
