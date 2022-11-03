@@ -79,12 +79,3 @@ JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTa
   ShouldNotCallThis();
 #endif
 JRT_END
-
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-JRT_LEAF(void, G1BarrierSetRuntime::dirty_chunk_post_entry(G1CardTable::CardValue* card_addr))
-    G1RemSet* rem_set = G1BarrierSet::rem_set();
-    assert(rem_set != NULL, "expected non-NULL remset");
-
-    rem_set->dirty_region_scan_chunk_table(card_addr);
-JRT_END
-#endif
