@@ -154,7 +154,8 @@ public:
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   bool* region_scan_chunk_table();
   uint8_t region_scan_chunk_table_shift() const;
-  void dirty_region_scan_chunk_table(const volatile CardTable::CardValue*);
+  void dirty_region_scan_chunk_table(CardTable::CardValue*);
+  void dirty_region_scan_chunk_table(CardTable::CardValue*, size_t);
 #endif
 };
 

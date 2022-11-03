@@ -248,6 +248,10 @@ private:
     static uint chunk_size() { return M; }
 
     void do_work(uint worker_id) override {
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+      G1CardTable* ct = G1CollectedHeap::heap()->card_table();
+      MemRegion whole_heap = G1CollectedHeap::heap()->reserved();
+#endif
       while (_cur_dirty_regions < _regions->size()) {
         uint next = Atomic::fetch_and_add(&_cur_dirty_regions, _chunk_length);
         uint max = MIN2(next + _chunk_length, _regions->size());
@@ -256,6 +260,20 @@ private:
           HeapRegion* r = _g1h->region_at(_regions->at(i));
           if (!r->is_survivor()) {
             r->clear_cardtable();
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+            if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+              CardTable::CardValue* cur;
+              if (r->bottom() == whole_heap.start()) {
+                cur = ct->byte_for(r->bottom());
+              } else {
+                cur = ct->byte_after(r->bottom() - 1);
+              }
+              CardTable::CardValue* last = ct->byte_after(r->end() - 1);
+
+              size_t const cur_idx = ct->index_for_cardvalue(cur);
+              _scan_state->set_chunk_range_clean(cur_idx, last - cur);
+            }
+#endif
           }
         }
       }
@@ -317,7 +335,13 @@ public:
       _card_table_scan_state[i] = 0;
     }
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    if (!G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+      ::memset(_region_scan_chunks, false, _num_total_scan_chunks * sizeof(*_region_scan_chunks));
+    }
+#else
     ::memset(_region_scan_chunks, false, _num_total_scan_chunks * sizeof(*_region_scan_chunks));
+#endif
   }
 
   void complete_evac_phase(bool merge_dirty_regions) {
@@ -472,6 +496,14 @@ public:
 
   uint8_t scan_chunks_shift() const {
     return _scan_chunks_shift;
+  }
+
+  void set_chunk_range_clean(size_t const region_card_idx, size_t const card_length) {
+    size_t chunk_idx = region_card_idx >> _scan_chunks_shift;
+    size_t const end_chunk = (region_card_idx + card_length - 1) >> _scan_chunks_shift;
+    for (; chunk_idx <= end_chunk; chunk_idx++) {
+      _region_scan_chunks[chunk_idx] = false;
+    }
   }
 #endif
 };
@@ -1450,7 +1482,9 @@ class G1DirtyNonCollectionSetRegionsTask : public WorkerTask {
       }
 
       _scan_state->add_dirty_region(hr->hrm_index());
-      _scan_state->set_chunk_range_dirty(hr->hrm_index() * HeapRegion::CardsPerRegion, HeapRegion::CardsPerRegion);
+      if (!G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+        _scan_state->set_chunk_range_dirty(hr->hrm_index() * HeapRegion::CardsPerRegion, HeapRegion::CardsPerRegion);
+      }
       return false;
     }
   };
@@ -1594,6 +1628,9 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
     if (postevac_refine) {
       *card_ptr = G1CardTable::dirty_card_val();
+      if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+        dirty_region_scan_chunk_table(card_ptr);
+      }
     }
 #endif
     return false;
@@ -1612,6 +1649,9 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
     if (postevac_refine) {
       *card_ptr = G1CardTable::dirty_card_val();
+      if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+        dirty_region_scan_chunk_table(card_ptr);
+      }
     }
 #endif
     const CardValue* orig_card_ptr = card_ptr;
@@ -1782,13 +1822,13 @@ uint8_t G1RemSet::region_scan_chunk_table_shift() const {
   return _scan_state->scan_chunks_shift();
 }
 
-void G1RemSet::dirty_region_scan_chunk_table(const volatile CardTable::CardValue* card_ptr) {
-    CardTable::CardValue* const byte_map = _ct->byte_map();
-    bool* const chunk_table = _scan_state->region_scan_chunks();
-    size_t const chunk_table_shift = _scan_state->scan_chunks_shift();
+void G1RemSet::dirty_region_scan_chunk_table(CardTable::CardValue* card_ptr) {
+    size_t card_idx = _ct->index_for_cardvalue(card_ptr);
+    _scan_state->set_chunk_dirty(card_idx);
+}
 
-    size_t card_idx = card_ptr - byte_map;
-    size_t chunk_idx = card_idx >> chunk_table_shift;
-    chunk_table[chunk_idx] = true;
+void G1RemSet::dirty_region_scan_chunk_table(CardTable::CardValue* card_ptr, size_t length) {
+    size_t card_idx = _ct->index_for_cardvalue(card_ptr);
+    _scan_state->set_chunk_range_dirty(card_idx, length);
 }
 #endif
