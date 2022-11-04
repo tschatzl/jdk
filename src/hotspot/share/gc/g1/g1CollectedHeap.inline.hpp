@@ -141,7 +141,16 @@ G1CollectedHeap::dirty_young_block(HeapWord* start, size_t word_size) {
   assert(containing_hr->is_in(end - 1), "it should also contain end - 1");
 
   MemRegion mr(start, end);
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   card_table()->g1_mark_as_young(mr);
+#else
+  {
+    CardTable::CardValue *const first = card_table()->byte_for(mr.start());
+    CardTable::CardValue *const last = card_table()->byte_after(mr.last());
+    memset_with_concurrent_readers(first, G1CardTable::dirty_card_val(), last - first);
+    rem_set()->dirty_region_scan_chunk_table(first, last - first);
+  }
+#endif
 }
 
 inline G1ScannerTasksQueueSet* G1CollectedHeap::task_queues() const {
