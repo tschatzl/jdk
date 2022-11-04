@@ -37,7 +37,11 @@ void G1CardTable::g1_mark_as_young(const MemRegion& mr) {
 
 #ifndef PRODUCT
 void G1CardTable::verify_g1_young_region(MemRegion mr) {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   verify_region(mr, g1_young_gen,  true);
+#else
+  verify_region(mr, G1CardTable::dirty_card_val(),  true);
+#endif
 }
 #endif
 
