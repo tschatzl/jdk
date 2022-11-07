@@ -1820,6 +1820,13 @@ bool* G1RemSet::region_scan_chunk_table() {
   return _scan_state->region_scan_chunks();
 }
 
+intptr_t G1RemSet::region_scan_chunk_table_base() {
+  intptr_t const heap_start = (intptr_t) G1CollectedHeap::heap()->reserved().start();
+  intptr_t const chunk_table_base = ((intptr_t) _scan_state->region_scan_chunks()) -
+    (heap_start >> (CardTable::card_shift() + _scan_state->scan_chunks_shift()));
+  return chunk_table_base;
+}
+
 uint8_t G1RemSet::region_scan_chunk_table_shift() const {
   return _scan_state->scan_chunks_shift();
 }
