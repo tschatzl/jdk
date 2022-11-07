@@ -1471,10 +1471,11 @@ class G1DirtyNonCollectionSetRegionsTask : public WorkerTask {
   class DirtyRegionsClosure : public HeapRegionClosure {
   private:
     G1CollectedHeap *_g1h;
+    G1CardTable* _ct;
     G1RemSetScanState* _scan_state;
 
   public:
-    DirtyRegionsClosure(G1CollectedHeap *_g1h, G1RemSetScanState* scan_state) : _g1h(_g1h), _scan_state(scan_state) {}
+    DirtyRegionsClosure(G1CollectedHeap *g1h, G1RemSetScanState* scan_state) : _g1h(g1h), _ct(g1h->card_table()), _scan_state(scan_state) {}
 
     bool do_heap_region(HeapRegion* hr) override {
       if (hr->in_collection_set() || !hr->is_old_or_humongous_or_archive()) {
@@ -1483,7 +1484,8 @@ class G1DirtyNonCollectionSetRegionsTask : public WorkerTask {
 
       _scan_state->add_dirty_region(hr->hrm_index());
       if (!G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-        _scan_state->set_chunk_range_dirty(hr->hrm_index() * HeapRegion::CardsPerRegion, HeapRegion::CardsPerRegion);
+        size_t const first_card_idx = _ct->index_for(hr->bottom());
+        _scan_state->set_chunk_range_dirty(first_card_idx, HeapRegion::CardsPerRegion);
       }
       return false;
     }
