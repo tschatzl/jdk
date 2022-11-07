@@ -290,6 +290,8 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   Label done;
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
   Label runtime;
+#else
+  Label stack_cleanup;
 #endif
 
   // Does store cross heap regions?
@@ -311,6 +313,11 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movptr(card_addr, store_addr);
   __ shrptr(card_addr, CardTable::card_shift());
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    __ push(card_addr);
+  }
+#endif
   // Do not use ExternalAddress to load 'byte_map_base', since 'byte_map_base' is NOT
   // a valid address and therefore is not properly handled by the relocation code.
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
@@ -323,7 +330,12 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
   __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
-  __ jcc(Assembler::equal, done);
+  Label& dirty_card_jmp_label =
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+    G1TpRemsetInvestigationDirtyChunkAtBarrier ? stack_cleanup :
+#endif
+    done;
+    __ jcc(Assembler::equal, dirty_card_jmp_label);
 
 
   // storing a region crossing, non-NULL oop, card is clean.
@@ -337,12 +349,15 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
     assert(rem_set != NULL, "expected non-NULL remset");
     assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
 
-    __ movptr(cardtable, (intptr_t) ct->card_table()->byte_map());
-    __ subptr(card_addr, cardtable);
-    __ shrptr(card_addr, rem_set->region_scan_chunk_table_shift());
-    __ movptr(cardtable, (intptr_t) rem_set->region_scan_chunk_table());
+    uint8_t const chunk_shift = rem_set->region_scan_chunk_table_shift();
+    intptr_t const chunk_table_base = rem_set->region_scan_chunk_table_base();
+
+    __ pop(card_addr);
+    __ shrptr(card_addr, chunk_shift);
+    __ movptr(cardtable, chunk_table_base);
     __ addptr(card_addr, cardtable);
     __ movb(Address(card_addr, 0), true);
+    __ jmp(done);
   }
 #else
   __ movptr(tmp2, queue_index);
@@ -362,6 +377,12 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ pop_set(saved);
 #endif
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  __ bind(stack_cleanup);
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    __ pop(card_addr);
+  }
+#endif
   __ bind(done);
 }
 
@@ -554,12 +575,25 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ push(rax);
   __ push(rcx);
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    __ push(rdx);
+  }
+#endif
 
   const Register cardtable = rax;
   const Register card_addr = rcx;
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  const Register chunk_addr = rdx;
+#endif
 
   __ load_parameter(0, card_addr);
   __ shrptr(card_addr, CardTable::card_shift());
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    __ movptr(chunk_addr, card_addr);
+  }
+#endif
   // Do not use ExternalAddress to load 'byte_map_base', since 'byte_map_base' is NOT
   // a valid address and therefore is not properly handled by the relocation code.
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
@@ -587,16 +621,13 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
     assert(rem_set != NULL, "expected non-NULL remset");
     assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
 
-    const Register chunk_addr = rdx;
-    __ push(rdx);
-    __ movptr(chunk_addr, card_addr);
-    __ movptr(cardtable, (intptr_t) ct->card_table()->byte_map());
-    __ subptr(chunk_addr, cardtable);
-    __ shrptr(chunk_addr, rem_set->region_scan_chunk_table_shift());
-    __ movptr(cardtable, (intptr_t) rem_set->region_scan_chunk_table());
+    uint8_t const chunk_shift = rem_set->region_scan_chunk_table_shift();
+    intptr_t const chunk_table_base = rem_set->region_scan_chunk_table_base();
+
+    __ shrptr(chunk_addr, chunk_shift);
+    __ movptr(cardtable, chunk_table_base);
     __ addptr(chunk_addr, cardtable);
     __ movb(Address(chunk_addr, 0), true);
-    __ pop(rdx);
   }
 #else
   const Register tmp = rdx;
@@ -623,6 +654,11 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 #endif
 
   __ bind(done);
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    __ pop(rdx);
+  }
+#endif
   __ pop(rcx);
   __ pop(rax);
 

@@ -160,6 +160,7 @@ public:
 
 #ifndef DISABLE_TP_REMSET_INVESTIGATION
   bool* region_scan_chunk_table();
+  intptr_t region_scan_chunk_table_base();
   uint8_t region_scan_chunk_table_shift() const;
   void dirty_region_scan_chunk_table(CardTable::CardValue*);
   void dirty_region_scan_chunk_table(CardTable::CardValue*, size_t);
