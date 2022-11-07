@@ -363,14 +363,16 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
     G1RemSet* rem_set = G1BarrierSet::rem_set();
     assert(rem_set != NULL, "expected non-NULL remset");
 
-    Node* card_adrx = kit->gvn().transform(new CastP2XNode(__ ctrl(), card_adr));
-    Node* byte_map_ptr = kit->makecon(TypeRawPtr::make((address) ctbs->card_table()->byte_map()));
-    Node* byte_mapx = kit->gvn().transform(new CastP2XNode(__ ctrl(), byte_map_ptr));
-    Node* card_idx = kit->gvn().transform(new SubXNode(card_adrx, byte_mapx));
-    Node* chunk_shift = kit->intcon(rem_set->region_scan_chunk_table_shift());
-    Node* chunk_idx = __ URShiftX(card_idx, chunk_shift);
-    Node* chunk_table_ptr = kit->makecon(TypeRawPtr::make((address) rem_set->region_scan_chunk_table()));
-    Node* chunk_ptr = __ AddP(no_base, chunk_table_ptr, chunk_idx);
+    uint8_t const chunk_table_shift = rem_set->region_scan_chunk_table_shift();
+    intptr_t const card_table_start = (intptr_t) ctbs->card_table()->byte_map();
+    intptr_t const chunk_table_base_ptr = ((intptr_t) rem_set->region_scan_chunk_table()) -
+      (card_table_start >> chunk_table_shift);
+
+    Node* card_adr_x = __ CastPX(__ ctrl(), card_adr);
+    Node* chunk_shift = kit->intcon(chunk_table_shift);
+    Node* chunk_table_base = kit->makecon(TypeRawPtr::make((address) chunk_table_base_ptr));
+    Node* chunk_idx = __ URShiftX(card_adr_x, chunk_shift);
+    Node* chunk_ptr = __ AddP(no_base, chunk_table_base, chunk_idx);
     Node* dirty_chunk = kit->intcon(true);
     __ store(__ ctrl(), chunk_ptr, dirty_chunk, T_BYTE, Compile::AliasIdxRaw, MemNode::release);
   }
