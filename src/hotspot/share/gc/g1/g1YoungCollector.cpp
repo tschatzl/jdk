@@ -990,7 +990,7 @@ void G1YoungCollector::post_evacuate_cleanup_2(G1ParScanThreadStateSet* per_thre
   phase_times()->record_post_evacuate_cleanup_task_2_time((Ticks::now() - start).seconds() * 1000.0);
 }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 class RefineDirtyCardQueueSetTask : public WorkerTask {
   G1ConcurrentRefineStats stats;
 
@@ -1024,7 +1024,7 @@ void G1YoungCollector::post_evacuate_collection_set(G1EvacInfo* evacuation_info,
 
   post_evacuate_cleanup_1(per_thread_states);
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (!G1TpRemsetInvestigationDirectUpdate) {
     G1BarrierSet::dirty_card_queue_set().concatenate_logs();
 

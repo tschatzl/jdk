@@ -363,7 +363,7 @@ class G1RefineBufferedCards : public StackObj {
   }
 
   // Returns the index to the first clean card in the buffer.
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   size_t clean_cards(bool postevac_refine) {
   assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
 #else
@@ -382,14 +382,14 @@ class G1RefineBufferedCards : public StackObj {
     assert(src <= dst, "invariant");
     for ( ; src < dst; ++src) {
       // Search low to high for a card to keep.
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
       if (_g1rs->clean_card_before_refine(src, postevac_refine)) {
 #else
       if (_g1rs->clean_card_before_refine(src)) {
 #endif
         // Found keeper.  Search high to low for a card to discard.
         while (src < --dst) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
           if (!_g1rs->clean_card_before_refine(dst, postevac_refine)) {
 #else
           if (!_g1rs->clean_card_before_refine(dst)) {
@@ -412,7 +412,7 @@ class G1RefineBufferedCards : public StackObj {
     return first_clean;
   }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool refine_cleaned_cards(size_t start_index, bool postevac_refine) {
     assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
 #else
@@ -421,7 +421,7 @@ class G1RefineBufferedCards : public StackObj {
     bool result = true;
     size_t i = start_index;
     for ( ; i < _node_buffer_size; ++i) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
       if (!postevac_refine && SuspendibleThreadSet::should_yield()) {
 #else
       if (SuspendibleThreadSet::should_yield()) {
@@ -430,7 +430,7 @@ class G1RefineBufferedCards : public StackObj {
         result = false;
         break;
       }
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
       _g1rs->refine_card_concurrently(_node_buffer[i], _worker_id, postevac_refine);
 #else
       _g1rs->refine_card_concurrently(_node_buffer[i], _worker_id);
@@ -467,7 +467,7 @@ public:
     _stats(stats),
     _g1rs(G1CollectedHeap::heap()->rem_set()) {}
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool refine(bool postevac_refine) {
     assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
     size_t first_clean_index = clean_cards(postevac_refine);
@@ -489,7 +489,7 @@ public:
     // wrto each other. We need both set, in any order, to proceed.
     OrderAccess::fence();
     sort_cards(first_clean_index);
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     return refine_cleaned_cards(first_clean_index, postevac_refine);
 #else
     return refine_cleaned_cards(first_clean_index);
@@ -497,7 +497,7 @@ public:
   }
 };
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 bool G1DirtyCardQueueSet::refine_buffer(BufferNode* node,
                                         uint worker_id,
                                         G1ConcurrentRefineStats* stats,
@@ -513,7 +513,7 @@ bool G1DirtyCardQueueSet::refine_buffer(BufferNode* node,
                                        buffer_size(),
                                        worker_id,
                                        stats);
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool result = buffered_cards.refine(postevac_refine);
 #else
   bool result = buffered_cards.refine();
@@ -565,7 +565,7 @@ void G1DirtyCardQueueSet::handle_completed_buffer(BufferNode* new_node,
   // Refine cards in buffer.
 
   uint worker_id = _free_ids.claim_par_id(); // temporarily claim an id
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool fully_processed = refine_buffer(node, worker_id, stats, false);
 #else
   bool fully_processed = refine_buffer(node, worker_id, stats);
@@ -585,7 +585,7 @@ bool G1DirtyCardQueueSet::refine_completed_buffer_concurrently(uint worker_id,
   BufferNode* node = get_completed_buffer();
   if (node == NULL) return false; // Didn't get a buffer to process.
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool fully_processed = refine_buffer(node, worker_id, stats, false);
 #else
   bool fully_processed = refine_buffer(node, worker_id, stats);
@@ -594,7 +594,7 @@ bool G1DirtyCardQueueSet::refine_completed_buffer_concurrently(uint worker_id,
   return true;
 }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 bool G1DirtyCardQueueSet::refine_completed_buffer_postevac(uint worker_id,
                                                            G1ConcurrentRefineStats* stats) {
   assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint");

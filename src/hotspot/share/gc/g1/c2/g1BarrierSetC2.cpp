@@ -40,7 +40,7 @@
 #include "opto/type.hpp"
 #include "utilities/macros.hpp"
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 #include "gc/g1/g1RemSet.hpp"
 #endif
 
@@ -356,7 +356,7 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   // Smash zero into card. MUST BE ORDERED WRT TO STORE
   __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     BarrierSet *bs = BarrierSet::barrier_set();
     CardTableBarrierSet* ctbs = barrier_set_cast<CardTableBarrierSet>(bs);

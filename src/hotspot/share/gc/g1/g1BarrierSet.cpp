@@ -58,12 +58,8 @@ G1BarrierSet::G1BarrierSet(G1CardTable* card_table) :
   _satb_mark_queue_buffer_allocator("SATB Buffer Allocator", G1SATBBufferSize),
   _dirty_card_queue_buffer_allocator("DC Buffer Allocator", G1UpdateBufferSize),
   _satb_mark_queue_set(&_satb_mark_queue_buffer_allocator),
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  _dirty_card_queue_set(&_dirty_card_queue_buffer_allocator),
-#else
-  _dirty_card_queue_set(&_dirty_card_queue_buffer_allocator),
-  _rem_set(NULL)
-#endif
+  _dirty_card_queue_set(&_dirty_card_queue_buffer_allocator)
+  TP_REMSET_INVESTIGATION_ONLY(COMMA _rem_set(NULL))
 {}
 
 template <class T> void
@@ -102,7 +98,7 @@ void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
 #endif
   if (*byte != G1CardTable::dirty_card_val()) {
     *byte = G1CardTable::dirty_card_val();
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
       _rem_set->dirty_region_scan_chunk_table((CardTable::CardValue*) byte);
     }
@@ -135,14 +131,10 @@ void G1BarrierSet::invalidate(MemRegion mr) {
 #endif
     for (; byte <= last_byte; byte++) {
       CardValue bv = *byte;
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-      if ((bv != G1CardTable::g1_young_card_val()) &&
-#else
-      if (
-#endif
+      if (NOT_TP_REMSET_INVESTIGATION((bv != G1CardTable::g1_young_card_val()) &&)
           (bv != G1CardTable::dirty_card_val())) {
         *byte = G1CardTable::dirty_card_val();
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
         if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
           _rem_set->dirty_region_scan_chunk_table((CardTable::CardValue*) byte);
         }

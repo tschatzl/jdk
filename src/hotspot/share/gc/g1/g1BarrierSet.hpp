@@ -31,7 +31,7 @@
 #include "gc/shared/cardTableBarrierSet.hpp"
 
 class G1CardTable;
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 class G1RemSet;
 #endif
 
@@ -45,7 +45,7 @@ class G1BarrierSet: public CardTableBarrierSet {
   BufferNode::Allocator _dirty_card_queue_buffer_allocator;
   G1SATBMarkQueueSet _satb_mark_queue_set;
   G1DirtyCardQueueSet _dirty_card_queue_set;
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   G1RemSet* _rem_set;
 #endif
 
@@ -100,7 +100,7 @@ class G1BarrierSet: public CardTableBarrierSet {
     return g1_barrier_set()->_dirty_card_queue_set;
   }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   void set_rem_set(G1RemSet* rem_set) {
     this->_rem_set = rem_set;
   }

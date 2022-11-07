@@ -1645,7 +1645,7 @@ jint G1CollectedHeap::initialize() {
   _rem_set = new G1RemSet(this, _card_table, _hot_card_cache);
   _rem_set->initialize(max_reserved_regions());
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bs->set_rem_set(_rem_set);
 #endif
 

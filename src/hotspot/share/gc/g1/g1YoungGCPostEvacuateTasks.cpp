@@ -342,7 +342,7 @@ public:
     _evac_failure_regions(evac_failure_regions) { }
 
   void do_card_ptr(CardValue* card_ptr, uint worker_id) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     ShouldNotReachHere();
 #endif
 
@@ -408,7 +408,7 @@ public:
     _rdcqs(rdcqs),
     _nodes(rdcqs->all_completed_buffers()),
     _evac_failure_regions(evac_failure_regions) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     ShouldNotCallThis();
 #endif
   }
@@ -420,7 +420,7 @@ public:
   }
 
   double worker_cost() const override {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     ShouldNotCallThis();
 #endif
     // Needs more investigation.
@@ -428,7 +428,7 @@ public:
   }
 
   void do_work(uint worker_id) override {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     ShouldNotCallThis();
 #endif
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);

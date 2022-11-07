@@ -29,7 +29,7 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "utilities/macros.hpp"
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 #include "gc/g1/g1RemSet.hpp"
 #endif
 
@@ -47,7 +47,7 @@ void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* dst, size_t lengt
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
   bs->G1BarrierSet::write_ref_array(dst, length);
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     HeapWord* end = (HeapWord*) ((char*) dst + (length * heapOopSize));
     HeapWord* aligned_start = align_down(dst, HeapWordSize);

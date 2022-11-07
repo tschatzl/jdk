@@ -248,7 +248,7 @@ private:
     static uint chunk_size() { return M; }
 
     void do_work(uint worker_id) override {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
       G1CardTable* ct = G1CollectedHeap::heap()->card_table();
       MemRegion whole_heap = G1CollectedHeap::heap()->reserved();
 #endif
@@ -260,7 +260,7 @@ private:
           HeapRegion* r = _g1h->region_at(_regions->at(i));
           if (!r->is_survivor()) {
             r->clear_cardtable();
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
             if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
               CardTable::CardValue* cur;
               if (r->bottom() == whole_heap.start()) {
@@ -335,7 +335,7 @@ public:
       _card_table_scan_state[i] = 0;
     }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     if (!G1TpRemsetInvestigationDirtyChunkAtBarrier) {
       ::memset(_region_scan_chunks, false, _num_total_scan_chunks * sizeof(*_region_scan_chunks));
     }
@@ -489,7 +489,7 @@ public:
     set_scan_top(region_idx, NULL);
   }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool* region_scan_chunks() {
     return _region_scan_chunks;
   }
@@ -1461,7 +1461,7 @@ void G1RemSet::print_merge_heap_roots_stats() {
   }
 }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 class G1DirtyNonCollectionSetRegionsTask : public WorkerTask {
  private:
   G1CollectedHeap *_g1h;
@@ -1534,7 +1534,7 @@ void G1RemSet::merge_heap_roots(bool initial_evacuation) {
     workers->run_task(&cl, num_workers);
   }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   {
     G1DirtyNonCollectionSetRegionsTask task(_scan_state);
     log_debug(gc)("Dirty all cards not belonging to collection set regions");
@@ -1578,7 +1578,7 @@ inline void check_card_ptr(CardTable::CardValue* card_ptr, G1CardTable* ct) {
 #endif
 }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr, bool postevac_refine) {
   assert(!G1TpRemsetInvestigationDirectUpdate || !postevac_refine, "Post-evacuation refinement shall not be called when direct remset update is enabled");
   assert(postevac_refine || !SafepointSynchronize::is_at_safepoint(), "Only call concurrently");
@@ -1627,7 +1627,7 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   // enqueueing of the card and processing it here will have ensured
   // we see the up-to-date region type here.
   if (!r->is_old_or_humongous_or_archive()) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     if (postevac_refine) {
       *card_ptr = G1CardTable::dirty_card_val();
       if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
@@ -1648,7 +1648,7 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   //
 
   if (G1HotCardCache::use_cache()) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     if (postevac_refine) {
       *card_ptr = G1CardTable::dirty_card_val();
       if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
@@ -1705,7 +1705,7 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   return true;
 }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
                                         const uint worker_id,
                                         bool postevac_refine) {
@@ -1742,7 +1742,7 @@ void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
     return;
   }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (postevac_refine) {
     ShouldNotReachHere();
   }
@@ -1776,7 +1776,7 @@ void G1RemSet::enqueue_for_reprocessing(CardValue* card_ptr) {
   // this card.  Since buffers are processed in FIFO order and we try to
   // keep some in the queue, it is likely that the racing state will have
   // resolved by the time this card comes up for reprocessing.
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   ShouldNotCallThis();
 #endif
   *card_ptr = G1CardTable::dirty_card_val();
@@ -1815,7 +1815,7 @@ void G1RemSet::print_summary_info() {
   }
 }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 bool* G1RemSet::region_scan_chunk_table() {
   return _scan_state->region_scan_chunks();
 }
