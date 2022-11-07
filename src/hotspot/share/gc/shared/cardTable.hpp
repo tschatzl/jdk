@@ -239,7 +239,7 @@ public:
   // before the beginning of the actual _byte_map.
   CardValue* byte_map_base() const { return _byte_map_base; }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   CardValue* byte_map() const { return _byte_map; }
 #endif
 

@@ -128,7 +128,7 @@ public:
   // Cleans the card at "*card_ptr_addr" before refinement, returns true iff the
   // card needs later refinement. Note that "*card_ptr_addr" could be updated to
   // a different card due to use of hot card cache.
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool clean_card_before_refine(CardValue** const card_ptr_addr, bool postevac_refine);
 #else
   bool clean_card_before_refine(CardValue** const card_ptr_addr);
@@ -136,7 +136,7 @@ public:
   // Refine the region corresponding to "card_ptr". Must be called after
   // being filtered by clean_card_before_refine(), and after proper
   // fence/synchronization.
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   void refine_card_concurrently(CardValue* const card_ptr,
                                 const uint worker_id,
                                 bool postevac_refine);
@@ -151,7 +151,7 @@ public:
   // Print accumulated summary info from the last time called.
   void print_periodic_summary_info(const char* header, uint period_count, bool show_thread_times);
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   bool* region_scan_chunk_table();
   intptr_t region_scan_chunk_table_base();
   uint8_t region_scan_chunk_table_shift() const;
