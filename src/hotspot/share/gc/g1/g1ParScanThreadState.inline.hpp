@@ -138,7 +138,7 @@ template <class T> void G1ParScanThreadState::enqueue_card_if_tracked(G1HeapRegi
     return;
   }
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirectUpdate) {
     HeapRegion* hr = _g1h->heap_region_containing(o);
     hr->rem_set()->add_reference(p, _worker_id);
@@ -149,7 +149,7 @@ template <class T> void G1ParScanThreadState::enqueue_card_if_tracked(G1HeapRegi
   size_t card_index = ct()->index_for(p);
   // If the card hasn't been added to the buffer, do it.
   if (_last_enqueued_card != card_index) {
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
     assert(!G1TpRemsetInvestigationDirectUpdate, "sanity check");
     CardTable::CardValue* card_ptr = ct()->byte_for_index(card_index);
     G1BarrierSet::dirty_card_queue_set().enqueue(G1ThreadLocalData::dirty_card_queue(Thread::current()), card_ptr);

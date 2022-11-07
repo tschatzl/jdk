@@ -40,7 +40,7 @@
 #include "gc/g1/c1/g1BarrierSetC1.hpp"
 #endif
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
 #include "gc/g1/g1RemSet.hpp"
 #endif
 
@@ -313,7 +313,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movptr(card_addr, store_addr);
   __ shrptr(card_addr, CardTable::card_shift());
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     __ push(card_addr);
   }
@@ -330,12 +330,8 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
   __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
-  Label& dirty_card_jmp_label =
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
-    G1TpRemsetInvestigationDirtyChunkAtBarrier ? stack_cleanup :
-#endif
-    done;
-    __ jcc(Assembler::equal, dirty_card_jmp_label);
+  Label& dirty_card_jmp_label = TP_REMSET_INVESTIGATION_ONLY(G1TpRemsetInvestigationDirtyChunkAtBarrier ? stack_cleanup :) done;
+  __ jcc(Assembler::equal, dirty_card_jmp_label);
 
 
   // storing a region crossing, non-NULL oop, card is clean.
@@ -343,7 +339,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movb(Address(card_addr, 0), G1CardTable::dirty_card_val());
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     G1RemSet* rem_set = G1BarrierSet::rem_set();
     assert(rem_set != NULL, "expected non-NULL remset");
@@ -377,7 +373,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ pop_set(saved);
 #endif
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   __ bind(stack_cleanup);
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     __ pop(card_addr);
@@ -575,7 +571,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ push(rax);
   __ push(rcx);
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     __ push(rdx);
   }
@@ -583,13 +579,13 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   const Register cardtable = rax;
   const Register card_addr = rcx;
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   const Register chunk_addr = rdx;
 #endif
 
   __ load_parameter(0, card_addr);
   __ shrptr(card_addr, CardTable::card_shift());
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     __ movptr(chunk_addr, card_addr);
   }
@@ -615,7 +611,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ movb(Address(card_addr, 0), CardTable::dirty_card_val());
 
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     G1RemSet* rem_set = G1BarrierSet::rem_set();
     assert(rem_set != NULL, "expected non-NULL remset");
@@ -654,7 +650,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 #endif
 
   __ bind(done);
-#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
     __ pop(rdx);
   }

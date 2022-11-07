@@ -635,4 +635,13 @@
 #define NOT_CDS_JAVA_HEAP_RETURN_(code) { return code; }
 #endif
 
+#ifndef DISABLE_TP_REMSET_INVESTIGATION
+#define TP_REMSET_INVESTIGATION
+#define TP_REMSET_INVESTIGATION_ONLY(code) code
+#define NOT_TP_REMSET_INVESTIGATION(code)
+#else
+#define TP_REMSET_INVESTIGATION_ONLY(code)
+#define NOT_TP_REMSET_INVESTIGATION(code) code
+#endif
+
 #endif // SHARE_UTILITIES_MACROS_HPP
