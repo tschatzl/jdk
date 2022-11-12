@@ -102,6 +102,7 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register tmp) {
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   __ push_call_clobbered_registers(false /* save_fpu */);
 #ifdef _LP64
   if (c_rarg0 == count) { // On win64 c_rarg0 == rcx
@@ -119,6 +120,65 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
                   addr, count);
 #endif
   __ pop_call_clobbered_registers(false /* save_fpu */);
+#else
+
+  G1BarrierSet* const g1bs =
+    barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
+  CardTable* const ct = g1bs->card_table();
+  G1RemSet* const rem_set = g1bs->rem_set();
+
+  intptr_t const card_table_base = (intptr_t) ct->byte_map_base();
+  uint8_t const chunk_table_shift = rem_set->region_scan_chunk_table_shift();
+  intptr_t const card_table_start = (intptr_t) ct->byte_map();
+  intptr_t const chunk_table_base_ptr = ((intptr_t) rem_set->region_scan_chunk_table()) -
+    (card_table_start >> chunk_table_shift);
+
+  Label L_ct_loop, L_chunk_table_loop, L_done;
+  assert_different_registers(addr, count);
+
+  // Test whether count is zero
+  __ testl(count, count);
+  __ jcc(Assembler::zero, L_done); // zero count - nothing to do
+
+  // Calculate first card address and number of cards
+  const Register end = count;
+  __ leaq(end, Address(addr, count, (UseCompressedOops ? Address::times_4 : Address::times_8), 0));  // end == addr+count*oop_size
+  __ subptr(end, BytesPerHeapOop); // end - 1 to make inclusive
+  __ shrptr(addr, CardTable::card_shift());
+  __ shrptr(end, CardTable::card_shift());
+  __ subptr(end, addr); // end --> cards count
+
+  __ mov64(tmp, (intptr_t) card_table_base);
+  __ addptr(addr, tmp);
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    // Preserve number of cards
+    __ mov(tmp, count);
+  }
+
+  // Dirty cards
+  __ bind(L_ct_loop);
+  __ movb(Address(addr, count, Address::times_1), 0);
+  __ decrement(count);
+  __ jcc(Assembler::greaterEqual, L_ct_loop);
+
+  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+    // Calculate first chunk address and number of chunks
+    assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
+    __ leaq(end, Address(addr, tmp, Address::times_1, 0)); // end == card_addr + count
+    __ shrptr(addr, chunk_table_shift);
+    __ shrptr(end, chunk_table_shift);
+    __ subptr(end, addr);
+    __ mov64(tmp, chunk_table_base_ptr);
+    __ addptr(addr, tmp);
+
+    __ bind(L_chunk_table_loop);
+    __ movb(Address(addr, count, Address::times_1), true);
+    __ decrement(count);
+    __ jcc(Assembler::greaterEqual, L_chunk_table_loop);
+  }
+
+  __ bind(L_done);
+#endif
 }
 
 void G1BarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
