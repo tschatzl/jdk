@@ -44,20 +44,12 @@ void G1BarrierSetRuntime::write_ref_array_pre_narrow_oop_entry(narrowOop* dst, s
 }
 
 void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* dst, size_t length) {
+#ifdef TP_REMSET_INVESTIGATION
+  ShouldNotCallThis();
+#endif
+
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
   bs->G1BarrierSet::write_ref_array(dst, length);
-
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    HeapWord* end = (HeapWord*) ((char*) dst + (length * heapOopSize));
-    HeapWord* aligned_start = align_down(dst, HeapWordSize);
-    HeapWord* aligned_end   = align_up(end, HeapWordSize);
-
-    CardValue* cur  = bs->card_table()->byte_for(aligned_start);
-    CardValue* last = bs->card_table()->byte_after(aligned_end - 1);
-    bs->rem_set()->dirty_region_scan_chunk_table(cur, last - cur);
-  }
-#endif
 }
 
 // G1 pre write barrier slowpath
