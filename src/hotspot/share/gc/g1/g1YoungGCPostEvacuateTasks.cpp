@@ -342,15 +342,12 @@ public:
     _evac_failure_regions(evac_failure_regions) { }
 
   void do_card_ptr(CardValue* card_ptr, uint worker_id) {
-#ifdef TP_REMSET_INVESTIGATION
-    ShouldNotReachHere();
-#endif
-
     HeapRegion* hr = region_for_card(card_ptr);
 
     // Should only dirty cards in regions that won't be freed.
     if (!will_become_free(hr)) {
       *card_ptr = G1CardTable::dirty_card_val();
+      _g1h->rem_set()->dirty_region_scan_chunk_table(card_ptr);
       _num_dirtied++;
     }
   }
@@ -407,11 +404,7 @@ public:
     G1AbstractSubTask(G1GCPhaseTimes::RedirtyCards),
     _rdcqs(rdcqs),
     _nodes(rdcqs->all_completed_buffers()),
-    _evac_failure_regions(evac_failure_regions) {
-#ifdef TP_REMSET_INVESTIGATION
-    ShouldNotCallThis();
-#endif
-  }
+    _evac_failure_regions(evac_failure_regions) {}
 
   virtual ~RedirtyLoggedCardsTask() {
     G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
@@ -420,16 +413,13 @@ public:
   }
 
   double worker_cost() const override {
-#ifdef TP_REMSET_INVESTIGATION
-    ShouldNotCallThis();
-#endif
     // Needs more investigation.
     return G1CollectedHeap::heap()->workers()->active_workers();
   }
 
   void do_work(uint worker_id) override {
 #ifdef TP_REMSET_INVESTIGATION
-    ShouldNotCallThis();
+    assert(G1TpRemsetInvestigationDirtyYoungDirectly, "redirtying shall not be called if references to young gen. are not dirtyed directly");
 #endif
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);
     const size_t buffer_size = _rdcqs->buffer_size();
@@ -743,8 +733,12 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
       add_parallel_task(new ClearRetainedRegionBitmaps(evac_failure_regions));
     }
   }
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
+#ifdef TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyYoungDirectly) {
+    add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
+  }
+#else
+    add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
 #endif
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),

@@ -138,15 +138,22 @@ template <class T> void G1ParScanThreadState::enqueue_card_if_tracked(G1HeapRegi
     return;
   }
 
+  size_t card_index = ct()->index_for(p);
 #ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirectUpdate) {
-    HeapRegion* hr = _g1h->heap_region_containing(o);
-    hr->rem_set()->add_reference(p, _worker_id);
+    HeapRegion* const hr = _g1h->heap_region_containing(o);
+    if (G1TpRemsetInvestigationDirtyYoungDirectly && hr->is_young()) {
+      if (_last_enqueued_card != card_index) {
+        _rdc_local_qset.enqueue(ct()->byte_for_index(card_index));
+        _last_enqueued_card = card_index;
+      }
+    } else {
+      hr->rem_set()->add_reference(p, _worker_id);
+    }
     return;
   }
 #endif
 
-  size_t card_index = ct()->index_for(p);
   // If the card hasn't been added to the buffer, do it.
   if (_last_enqueued_card != card_index) {
 #ifdef TP_REMSET_INVESTIGATION
