@@ -1987,6 +1987,9 @@ const int ObjectAlignmentInBytes = 8;
                 "Enable direct remset updates during GC pause")             \
   product(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, true,           \
                 "Enable region chunk table dirtying at post-write barrier") \
+  product(bool, G1TpRemsetInvestigationDirtyYoungDirectly, true,              \
+                "Enable dirtying cards containing references to young gen. "\
+                "regions bypassing remembered sets") \
 
 // end of RUNTIME_FLAGS
 

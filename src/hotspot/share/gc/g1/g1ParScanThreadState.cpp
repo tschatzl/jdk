@@ -112,8 +112,12 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h,
 }
 
 size_t G1ParScanThreadState::flush_stats(size_t* surviving_young_words, uint num_workers) {
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  _rdc_local_qset.flush();
+#ifdef TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationDirtyYoungDirectly) {
+    _rdc_local_qset.flush();
+  }
+#else
+    _rdc_local_qset.flush();
 #endif
   flush_numa_stats();
   // Update allocation statistics.
