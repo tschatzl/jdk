@@ -1548,7 +1548,7 @@ jint G1CollectedHeap::initialize_service_thread() {
 }
 
 jint G1CollectedHeap::initialize() {
-
+  TP_REMSET_INVESTIGATION_ONLY(log_info(gc)("TP Remset investigation build"));
   // Necessary to satisfy locking discipline assertions.
 
   MutexLocker x(Heap_lock);

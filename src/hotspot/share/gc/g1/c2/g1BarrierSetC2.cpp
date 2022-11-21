@@ -491,17 +491,14 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
 
         // Ok must mark the card if not already dirty
 
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
         // load the original value of the card
         Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
         __ if_then(card_val, BoolTest::ne, young_card, unlikely); {
-#endif
           kit->sync_kit(ideal);
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
           kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
-#endif
           __ sync_kit(kit);
+#endif
 
           Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
           __ if_then(card_val_reload, BoolTest::ne, dirty_card); {
