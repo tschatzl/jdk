@@ -1983,6 +1983,9 @@ const int ObjectAlignmentInBytes = 8;
              "Mark all threads after a safepoint, and clear on a modify "   \
              "fence. Add cleanliness checks.")                              \
                                                                             \
+                                                                            \
+  product(bool, G1TpRemsetInvestigationRawParallelBarrier, false,           \
+                "Use raw (actual) parallel gc barrier")                     \
   product(bool, G1TpRemsetInvestigationDirectUpdate, true,                  \
                 "Enable direct remset updates during GC pause")             \
   product(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, true,           \
