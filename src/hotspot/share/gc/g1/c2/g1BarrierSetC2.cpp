@@ -484,45 +484,52 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
     Node* xor_res =  __ URShiftX ( __ XorX( cast,  __ CastPX(__ ctrl(), val)), __ ConI(HeapRegion::LogOfHRGrainBytes));
 
     // if (xor_res == 0) same region so skip
-    __ if_then(xor_res, BoolTest::ne, zeroX, likely); {
+    if (!G1TpRemsetInvestigationRawParallelBarrier) __ if_then(xor_res, BoolTest::ne, zeroX, likely);
 
       // No barrier if we are storing a NULL
-      __ if_then(val, BoolTest::ne, kit->null(), likely); {
+      if (!G1TpRemsetInvestigationRawParallelBarrier) __ if_then(val, BoolTest::ne, kit->null(), likely);
 
         // Ok must mark the card if not already dirty
-
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
         // load the original value of the card
         Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-        __ if_then(card_val, BoolTest::ne, young_card, unlikely); {
+        __ if_then(card_val, BoolTest::ne, young_card, unlikely);
           kit->sync_kit(ideal);
           kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
           __ sync_kit(kit);
 #endif
 
-          Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-          __ if_then(card_val_reload, BoolTest::ne, dirty_card); {
-            g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-          } __ end_if();
+          if (G1TpRemsetInvestigationRawParallelBarrier) {
+            __ store(__ ctrl(), card_adr, dirty_card, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
+          } else {
+            Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+            __ if_then(card_val_reload, BoolTest::ne, dirty_card);
+              g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
+            __ end_if();
+          }
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
-        } __ end_if();
+        __ end_if();
 #endif
-      } __ end_if();
-    } __ end_if();
+      if (!G1TpRemsetInvestigationRawParallelBarrier) __ end_if();
+    if (!G1TpRemsetInvestigationRawParallelBarrier) __ end_if();
   } else {
     // The Object.clone() intrinsic uses this path if !ReduceInitialCardMarks.
     // We don't need a barrier here if the destination is a newly allocated object
     // in Eden. Otherwise, GC verification breaks because we assume that cards in Eden
     // are set to 'g1_young_gen' (see G1CardTable::verify_g1_young_region()).
     assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
-    Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+    if (G1TpRemsetInvestigationRawParallelBarrier) {
+      __ store(__ ctrl(), card_adr, dirty_card, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
+    } else {
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
-    __ if_then(card_val, BoolTest::ne, young_card); {
+      Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+      __ if_then(card_val, BoolTest::ne, young_card); {
 #endif
-      g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
+        g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
-    } __ end_if();
+      } __ end_if();
 #endif
+    }
   }
 
   // Final sync IdealKit and GraphKit.
@@ -748,6 +755,27 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
   if (is_g1_pre_val_load(node)) {
     macro->replace_node(node, macro->zerocon(node->as_Load()->bottom_type()->basic_type()));
   } else {
+    if (G1TpRemsetInvestigationRawParallelBarrier) {
+      assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
+      Node *shift = node->unique_out();
+      Node *addp = shift->unique_out();
+      for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
+        Node *mem = addp->last_out(j);
+        /*// We do not support conditional card marking (UseCondCardMark) in our barrier
+        if (UseCondCardMark && mem->is_Load()) {
+          assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
+          // The load is checking if the card has been written so
+          // replace it with zero to fold the test.
+          macro->replace_node(mem, macro->intcon(0));
+          continue;
+        }*/
+        assert(mem->is_Store(), "store required");
+        macro->replace_node(mem, mem->in(MemNode::Memory));
+      }
+
+      return;
+    }
+
     assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
     assert(node->outcnt() <= 2, "expects 1 or 2 users: Xor and URShift nodes");
     // It could be only one user, URShift node, in Object.clone() intrinsic

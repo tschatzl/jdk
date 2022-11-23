@@ -1986,6 +1986,8 @@ const int ObjectAlignmentInBytes = 8;
   develop(bool, TraceOptimizedUpcallStubs, false,                           \
                 "Trace optimized upcall stub generation")                   \
                                                                             \
+  product(bool, G1TpRemsetInvestigationRawParallelBarrier, false,           \
+                "Use raw (actual) parallel gc barrier")                     \
   product(bool, G1TpRemsetInvestigationDirectUpdate, true,                  \
                 "Enable direct remset updates during GC pause")             \
   product(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, true,           \
