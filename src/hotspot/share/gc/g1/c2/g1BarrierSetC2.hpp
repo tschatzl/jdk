@@ -102,6 +102,11 @@ public:
 #endif
 
   virtual bool escape_add_to_con_graph(ConnectionGraph* conn_graph, PhaseGVN* gvn, Unique_Node_List* delayed_worklist, Node* n, uint opcode) const;
+
+#ifdef TP_REMSET_INVESTIGATION
+private:
+  void dirty_chunk_at_barrier(GraphKit* kit, IdealKit& ideal, Node* card_adr) const;
+#endif
 };
 
 #endif // SHARE_GC_G1_C2_G1BARRIERSETC2_HPP

@@ -66,13 +66,6 @@ void G1Arguments::initialize_alignments() {
   if (FLAG_IS_DEFAULT(G1EagerReclaimRemSetThreshold)) {
     FLAG_SET_ERGO(G1EagerReclaimRemSetThreshold, G1RemSetArrayOfCardsEntries);
   }
-
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationRawParallelBarrier) {
-    log_info(gc)("Raw Parallel GC Barrier enabled, disabled Dirty Chunk At Barrier optimization.");
-    FLAG_SET_ERGO(G1TpRemsetInvestigationDirtyChunkAtBarrier, false);
-  }
-#endif
 }
 
 size_t G1Arguments::conservative_max_heap_alignment() {
