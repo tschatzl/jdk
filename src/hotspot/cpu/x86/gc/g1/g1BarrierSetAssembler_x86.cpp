@@ -354,17 +354,19 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   Label stack_cleanup;
 #endif
 
-  // Does store cross heap regions?
+  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) {
+    // Does store cross heap regions?
 
-  __ movptr(tmp, store_addr);
-  __ xorptr(tmp, new_val);
-  __ shrptr(tmp, HeapRegion::LogOfHRGrainBytes);
-  __ jcc(Assembler::equal, done);
+    __ movptr(tmp, store_addr);
+    __ xorptr(tmp, new_val);
+    __ shrptr(tmp, HeapRegion::LogOfHRGrainBytes);
+    __ jcc(Assembler::equal, done);
 
-  // crosses regions, storing NULL?
+    // crosses regions, storing NULL?
 
-  __ cmpptr(new_val, NULL_WORD);
-  __ jcc(Assembler::equal, done);
+    __ cmpptr(new_val, NULL_WORD);
+    __ jcc(Assembler::equal, done);
+  }
 
   // storing region crossing non-NULL, is card already dirty?
 
