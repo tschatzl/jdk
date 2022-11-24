@@ -103,8 +103,9 @@ public:
 
   virtual bool escape_add_to_con_graph(ConnectionGraph* conn_graph, PhaseGVN* gvn, Unique_Node_List* delayed_worklist, Node* n, uint opcode) const;
 
-#ifdef TP_REMSET_INVESTIGATION
 private:
+  void remove_pre_barrier(PhaseMacroExpand* macro, Node* this_region) const;
+#ifdef TP_REMSET_INVESTIGATION
   void dirty_chunk_at_barrier(GraphKit* kit, IdealKit& ideal, Node* card_adr) const;
 #endif
 };
