@@ -374,7 +374,7 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
     Node* chunk_idx = __ URShiftX(card_adr_x, chunk_shift);
     Node* chunk_ptr = __ AddP(no_base, chunk_table_base, chunk_idx);
     Node* dirty_chunk = kit->intcon(true);
-    __ store(__ ctrl(), chunk_ptr, dirty_chunk, T_BYTE, Compile::AliasIdxRaw, MemNode::release);
+    __ store(__ ctrl(), chunk_ptr, dirty_chunk, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
   }
 #else
   //  Now do the queue work
