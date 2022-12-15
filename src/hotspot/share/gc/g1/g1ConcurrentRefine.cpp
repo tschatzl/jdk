@@ -203,7 +203,11 @@ uint G1ConcurrentRefine::max_num_threads() {
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
   return G1ConcRefinementThreads;
 #else
-  return 0;
+  if (!G1TpRemsetInvestigationDirectUpdate && !G1TpRemsetInvestigationPostevacRefine) {
+    return G1ConcRefinementThreads;
+  } else {
+    return 0;
+  }
 #endif
 }
 

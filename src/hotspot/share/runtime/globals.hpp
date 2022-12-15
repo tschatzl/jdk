@@ -1988,6 +1988,8 @@ const int ObjectAlignmentInBytes = 8;
                 "Use raw (actual) parallel gc barrier")                     \
   product(bool, G1TpRemsetInvestigationDirectUpdate, true,                  \
                 "Enable direct remset updates during GC pause")             \
+  product(bool, G1TpRemsetInvestigationPostevacRefine, false,                \
+                "Enable post-evacuation refinement")                        \
   product(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, true,           \
                 "Enable region chunk table dirtying at post-write barrier") \
   product(bool, G1TpRemsetInvestigationDirtyYoungDirectly, true,              \

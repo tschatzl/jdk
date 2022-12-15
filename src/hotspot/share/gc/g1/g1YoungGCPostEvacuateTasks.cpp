@@ -411,13 +411,18 @@ public:
     G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
     dcq.merge_bufferlists(_rdcqs);
 #else
-    BufferNodeList list = _rdcqs->take_all_completed_buffers();
-    BufferNode* buffers_to_delete = list._head;
-    while (buffers_to_delete != NULL) {
-      BufferNode* bn = buffers_to_delete;
-      buffers_to_delete = bn->next();
-      bn->set_next(NULL);
-      _rdcqs->deallocate_buffer(bn);
+    if (G1TpRemsetInvestigationDirectUpdate) {
+      BufferNodeList list = _rdcqs->take_all_completed_buffers();
+      BufferNode* buffers_to_delete = list._head;
+      while (buffers_to_delete != NULL) {
+        BufferNode* bn = buffers_to_delete;
+        buffers_to_delete = bn->next();
+        bn->set_next(NULL);
+        _rdcqs->deallocate_buffer(bn);
+      }
+    } else {
+      G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
+      dcq.merge_bufferlists(_rdcqs);
     }
 #endif
     _rdcqs->verify_empty();
@@ -430,7 +435,8 @@ public:
 
   void do_work(uint worker_id) override {
 #ifdef TP_REMSET_INVESTIGATION
-    assert(G1TpRemsetInvestigationDirtyYoungDirectly, "redirtying shall not be called if references to young gen. are not dirtyed directly");
+    assert(G1TpRemsetInvestigationDirtyYoungDirectly || (!G1TpRemsetInvestigationDirectUpdate && !G1TpRemsetInvestigationPostevacRefine),
+      "redirtying shall not be called if direct update without young dirtying is enabled");
 #endif
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);
     const size_t buffer_size = _rdcqs->buffer_size();
@@ -745,7 +751,7 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
     }
   }
 #ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyYoungDirectly) {
+  if (G1TpRemsetInvestigationDirtyYoungDirectly || (!G1TpRemsetInvestigationDirectUpdate && !G1TpRemsetInvestigationPostevacRefine)) {
     add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
   }
 #else
