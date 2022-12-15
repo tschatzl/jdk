@@ -808,6 +808,7 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
       Node *addp = shift->unique_out();
       for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
         Node *mem = addp->last_out(j);
+        assert(!UseCondCardMark, "must be");
         /*// We do not support conditional card marking (UseCondCardMark) in our barrier
         if (UseCondCardMark && mem->is_Load()) {
           assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
@@ -862,7 +863,6 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
       macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
 
       this->remove_pre_barrier(macro, this_region);
-      return;
     } else {
       assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
       // This is a G1 post barrier emitted by the Object.clone() intrinsic.
@@ -871,6 +871,15 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
       Node* shift = node->find_out_with(Op_URShiftX);
       assert(shift != NULL, "missing G1 post barrier");
       Node* addp = shift->unique_out();
+#ifdef TP_REMSET_INVESTIGATION
+      // In this path (object.clone) we do not have the cmp node (without UseCondCardMark
+      // which we do not support), but store immediately. Get the store
+      // node and replace it.
+      assert(!UseCondCardMark, "must be");
+      Node* mem = addp->find_out_with(Op_StoreB);
+      assert(mem != NULL, "missing G1 post barrier (tp remset)");
+      macro->replace_node(mem, mem->in(MemNode::Memory));
+#else
       Node* load = addp->find_out_with(Op_LoadB);
       assert(load != NULL, "missing G1 post barrier");
       Node* cmpx = load->unique_out();
@@ -879,6 +888,7 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
           "missing card value check in G1 post barrier");
       macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
       // There is no G1 pre barrier in this case
+#endif
     }
     // Now CastP2X can be removed since it is used only on dead path
     // which currently still alive until igvn optimize it.

@@ -1026,7 +1026,7 @@ void G1YoungCollector::post_evacuate_collection_set(G1EvacInfo* evacuation_info,
 
 #ifdef TP_REMSET_INVESTIGATION
   if (!G1TpRemsetInvestigationDirectUpdate) {
-    G1BarrierSet::dirty_card_queue_set().concatenate_logs();
+    concatenate_dirty_card_logs_and_stats();
 
     {
       RefineDirtyCardQueueSetTask refine_dcqs_task;
