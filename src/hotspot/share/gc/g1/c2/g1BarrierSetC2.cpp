@@ -872,13 +872,19 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
       Node* shift = node->find_out_with(Op_URShiftX);
       assert(shift != NULL, "missing G1 post barrier");
       Node* addp = shift->unique_out();
-      Node* load = addp->find_out_with(Op_LoadB);
-      assert(load != NULL, "missing G1 post barrier");
-      Node* cmpx = load->unique_out();
-      assert(cmpx->is_Cmp() && cmpx->unique_out()->is_Bool() &&
-          cmpx->unique_out()->as_Bool()->_test._test == BoolTest::ne,
-          "missing card value check in G1 post barrier");
-      macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
+#ifdef TP_REMSET_INVESTIGATION
+    Node *storeCM = addp->find_out_with(Op_StoreCM);
+    assert(storeCM != NULL, "missing G1 post barrier");
+    macro->replace_node(storeCM, storeCM->in(MemNode::Memory));
+#else
+    Node* load = addp->find_out_with(Op_LoadB);
+    assert(load != NULL, "missing G1 post barrier");
+    Node* cmpx = load->unique_out();
+    assert(cmpx->is_Cmp() && cmpx->unique_out()->is_Bool() &&
+           cmpx->unique_out()->as_Bool()->_test._test == BoolTest::ne,
+           "missing card value check in G1 post barrier");
+    macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
+#endif
       // There is no G1 pre barrier in this case
     }
     // Now CastP2X can be removed since it is used only on dead path
