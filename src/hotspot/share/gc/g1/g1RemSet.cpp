@@ -194,6 +194,10 @@ private:
         }
       }
     }
+
+    bool contains(uint region) const {
+      return _contains[region];
+    }
   };
 
   // For each region, contains the maximum top() value to be used during this garbage
@@ -504,6 +508,10 @@ public:
     for (; chunk_idx <= end_chunk; chunk_idx++) {
       _region_scan_chunks[chunk_idx] = false;
     }
+  }
+
+  bool all_dirty_regions_contains(uint region) const {
+    return _all_dirty_regions->contains(region) || _next_dirty_regions->contains(region);
   }
 #endif
 };
@@ -1839,5 +1847,9 @@ void G1RemSet::dirty_region_scan_chunk_table(CardTable::CardValue* card_ptr) {
 void G1RemSet::dirty_region_scan_chunk_table(CardTable::CardValue* card_ptr, size_t length) {
     size_t card_idx = _ct->index_for_cardvalue(card_ptr);
     _scan_state->set_chunk_range_dirty(card_idx, length);
+}
+
+bool G1RemSet::region_included_in_cleanup_task(HeapRegion* region) const {
+  return _scan_state->all_dirty_regions_contains(region->hrm_index());
 }
 #endif
