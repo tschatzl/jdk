@@ -248,9 +248,27 @@ void G1Arguments::initialize() {
   }
 
   if (!G1TpRemsetInvestigationDirectUpdate && G1TpRemsetInvestigationDirtyYoungDirectly) {
+#ifdef PRODUCT
+    vm_exit_during_initialization("The flag -XX:-G1TpRemsetInvestigationDirectUpdate can not be combined with -XX:+G1TpRemsetInvestigationDirtyYoungDirectly", NULL);
+#else
     log_info(gc)("Direct update of G1 remebered sets is disabled, disabling direct dirtying of G1 young region card table.");
     FLAG_SET_ERGO(G1TpRemsetInvestigationDirtyYoungDirectly, false);
+#endif
   }
+
+#define BOOLTOSTR(x) ((x) ? "true" : "false")
+  log_info(gc)("TpRemsetInvestigation configuration: "
+               "G1TpRemsetInvestigationRawParallelBarrier=%s; "
+               "G1TpRemsetInvestigationDirectUpdate=%s; "
+               "G1TpRemsetInvestigationPostevacRefine=%s; "
+               "G1TpRemsetInvestigationDirtyChunkAtBarrier=%s; "
+               "G1TpRemsetInvestigationDirtyYoungDirectly=%s",
+               BOOLTOSTR(G1TpRemsetInvestigationRawParallelBarrier),
+               BOOLTOSTR(G1TpRemsetInvestigationDirectUpdate),
+               BOOLTOSTR(G1TpRemsetInvestigationPostevacRefine),
+               BOOLTOSTR(G1TpRemsetInvestigationDirtyChunkAtBarrier),
+               BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectly));
+#undef BOOLTOSTR
 #endif
 
   initialize_mark_stack_size();

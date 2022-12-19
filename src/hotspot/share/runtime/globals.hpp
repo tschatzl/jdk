@@ -1984,15 +1984,15 @@ const int ObjectAlignmentInBytes = 8;
              "fence. Add cleanliness checks.")                              \
                                                                             \
                                                                             \
-  product(bool, G1TpRemsetInvestigationRawParallelBarrier, false,           \
+  develop(bool, G1TpRemsetInvestigationRawParallelBarrier, TP_REMSET_INVESTIGATION_RAW_PARALLE_BARRIER_FLAG,           \
                 "Use raw (actual) parallel gc barrier")                     \
-  product(bool, G1TpRemsetInvestigationDirectUpdate, true,                  \
+  develop(bool, G1TpRemsetInvestigationDirectUpdate, TP_REMSET_INVESTIGATION_DIRECT_UPDATE_FLAG,                  \
                 "Enable direct remset updates during GC pause")             \
-  product(bool, G1TpRemsetInvestigationPostevacRefine, false,                \
+  develop(bool, G1TpRemsetInvestigationPostevacRefine, TP_REMSET_INVESTIGATION_POSTEVAC_REFINE_FLAG,                \
                 "Enable post-evacuation refinement")                        \
-  product(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, true,           \
+  develop(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, TP_REMSET_INVESTIGATION_DIRTY_CHUNK_AT_BARRIER_FLAG,           \
                 "Enable region chunk table dirtying at post-write barrier") \
-  product(bool, G1TpRemsetInvestigationDirtyYoungDirectly, true,              \
+  develop(bool, G1TpRemsetInvestigationDirtyYoungDirectly, TP_REMSET_INVESTIGATION_DIRTY_YOUNG_DIRECTLY_FLAG,              \
                 "Enable dirtying cards containing references to young gen. "\
                 "regions bypassing remembered sets") \
 
