@@ -434,11 +434,10 @@ private:
   // the rest is used to add old regions to the normal CSet.
   double optional_prediction_fraction() {
 #ifdef TP_REMSET_INVESTIGATION
-    if (G1TpRemsetInvestigationDirtyYoungDirectly) {
-      return 0.0;
-    }
-#endif
+    return 0.0;
+#else
     return 0.2;
+#endif
   }
 
 public:
