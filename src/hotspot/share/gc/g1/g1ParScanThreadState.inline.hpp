@@ -144,7 +144,8 @@ template <class T> void G1ParScanThreadState::enqueue_card_if_tracked(G1HeapRegi
     if (G1TpRemsetInvestigationDirtyYoungDirectly && region_attr.is_new_survivor()) {
       HeapRegion * const from_region = _g1h->heap_region_containing(p);
       assert(!from_region->is_survivor(), "expected survivor regions to be filtered out by enqueue caller");
-      if (!_g1h->rem_set()->region_included_in_cleanup_task(from_region)) {
+      if (G1TpRemsetInvestigationDirtyYoungDirectlyOptimization &&
+          !_g1h->rem_set()->region_included_in_cleanup_task(from_region)) {
         CardTable::CardValue* card_ptr = ct()->byte_for_index(card_index);
         *card_ptr = CardTable::dirty_card_val();
         if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {

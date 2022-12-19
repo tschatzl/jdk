@@ -256,18 +256,29 @@ void G1Arguments::initialize() {
 #endif
   }
 
+  if (!G1TpRemsetInvestigationDirtyYoungDirectly && G1TpRemsetInvestigationDirtyYoungDirectlyOptimization) {
+#ifdef PRODUCT
+    vm_exit_during_initialization("The flag -XX:-G1TpRemsetInvestigationDirtyYoungDirectly can not be combined with -XX:+G1TpRemsetInvestigationDirtyYoungDirectlyOptimization", NULL);
+#else
+    log_info(gc)("Direct dirtying of G1 young region card table is disabled, disabling respective optimization.");
+    FLAG_SET_ERGO(G1TpRemsetInvestigationDirtyYoungDirectlyOptimization, false);
+#endif
+  }
+
 #define BOOLTOSTR(x) ((x) ? "true" : "false")
   log_info(gc)("TpRemsetInvestigation configuration: "
                "G1TpRemsetInvestigationRawParallelBarrier=%s; "
                "G1TpRemsetInvestigationDirectUpdate=%s; "
                "G1TpRemsetInvestigationPostevacRefine=%s; "
                "G1TpRemsetInvestigationDirtyChunkAtBarrier=%s; "
-               "G1TpRemsetInvestigationDirtyYoungDirectly=%s",
+               "G1TpRemsetInvestigationDirtyYoungDirectly=%s; "
+               "G1TpRemsetInvestigationDirtyYoungDirectlyOptimization=%s",
                BOOLTOSTR(G1TpRemsetInvestigationRawParallelBarrier),
                BOOLTOSTR(G1TpRemsetInvestigationDirectUpdate),
                BOOLTOSTR(G1TpRemsetInvestigationPostevacRefine),
                BOOLTOSTR(G1TpRemsetInvestigationDirtyChunkAtBarrier),
-               BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectly));
+               BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectly),
+               BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectlyOptimization));
 #undef BOOLTOSTR
 #endif
 

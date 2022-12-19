@@ -1995,6 +1995,8 @@ const int ObjectAlignmentInBytes = 8;
   develop(bool, G1TpRemsetInvestigationDirtyYoungDirectly, TP_REMSET_INVESTIGATION_DIRTY_YOUNG_DIRECTLY_FLAG,              \
                 "Enable dirtying cards containing references to young gen. "\
                 "regions bypassing remembered sets") \
+  develop(bool, G1TpRemsetInvestigationDirtyYoungDirectlyOptimization, TP_REMSET_INVESTIGATION_DIRTY_YOUNG_DIRECTLY_OPTIMIZATION_FLAG,              \
+                "Apply direct young gen. card dirtying optimization") \
 
 // end of RUNTIME_FLAGS
 
