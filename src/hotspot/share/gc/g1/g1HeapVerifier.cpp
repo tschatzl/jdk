@@ -655,7 +655,7 @@ public:
   virtual bool do_heap_region(HeapRegion* r) {
     if (r->is_survivor()) {
       _verifier->verify_dirty_region(r);
-    } else TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationDirtyYoungDirectly)) {
+    } else TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationDirtyYoungDirectlyOptimization)) {
       _verifier->verify_not_dirty_region(r);
     }
     return false;
