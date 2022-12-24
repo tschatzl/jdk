@@ -433,7 +433,11 @@ private:
   // the CSet. This fraction of the available time is used for optional regions,
   // the rest is used to add old regions to the normal CSet.
   double optional_prediction_fraction() {
+#ifdef TP_REMSET_INVESTIGATION
+    return 0.0;
+#else
     return 0.2;
+#endif
   }
 
 public:
