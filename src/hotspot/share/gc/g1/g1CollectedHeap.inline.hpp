@@ -148,7 +148,9 @@ G1CollectedHeap::dirty_young_block(HeapWord* start, size_t word_size) {
     CardTable::CardValue *const first = card_table()->byte_for(mr.start());
     CardTable::CardValue *const last = card_table()->byte_after(mr.last());
     memset_with_concurrent_readers(first, G1CardTable::dirty_card_val(), last - first);
-    rem_set()->dirty_region_scan_chunk_table(first, last - first);
+    if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+      rem_set()->dirty_region_scan_chunk_table(first, last - first);
+    }
   }
 #endif
 }

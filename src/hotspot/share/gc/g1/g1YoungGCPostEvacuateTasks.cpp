@@ -347,7 +347,11 @@ public:
     // Should only dirty cards in regions that won't be freed.
     if (!will_become_free(hr)) {
       *card_ptr = G1CardTable::dirty_card_val();
-      _g1h->rem_set()->dirty_region_scan_chunk_table(card_ptr);
+#ifdef TP_REMSET_INVESTIGATION
+      if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+        _g1h->rem_set()->dirty_region_scan_chunk_table(card_ptr);
+      }
+#endif
       _num_dirtied++;
     }
   }
