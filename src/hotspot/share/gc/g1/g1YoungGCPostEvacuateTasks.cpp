@@ -439,8 +439,8 @@ public:
 
   void do_work(uint worker_id) override {
 #ifdef TP_REMSET_INVESTIGATION
-    assert(G1TpRemsetInvestigationDirtyYoungDirectly || (!G1TpRemsetInvestigationDirectUpdate && !G1TpRemsetInvestigationPostevacRefine),
-      "redirtying shall not be called if direct update without young dirtying is enabled");
+    assert(!G1TpRemsetInvestigationPostevacRefine,
+      "redirtying shall not be called if post-evacuation refinement is enabled");
 #endif
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);
     const size_t buffer_size = _rdcqs->buffer_size();
@@ -754,13 +754,10 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
       add_parallel_task(new ClearRetainedRegionBitmaps(evac_failure_regions));
     }
   }
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyYoungDirectly || (!G1TpRemsetInvestigationDirectUpdate && !G1TpRemsetInvestigationPostevacRefine)) {
+
+  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationPostevacRefine)) {
     add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
   }
-#else
-    add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
-#endif
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
                                               evac_failure_regions));

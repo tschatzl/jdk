@@ -432,14 +432,7 @@ private:
   // Fraction used when predicting how many optional regions to include in
   // the CSet. This fraction of the available time is used for optional regions,
   // the rest is used to add old regions to the normal CSet.
-  double optional_prediction_fraction() {
-#ifdef TP_REMSET_INVESTIGATION
-    if (G1TpRemsetInvestigationDirtyYoungDirectly) {
-      return 0.0;
-    }
-#endif
-    return 0.2;
-  }
+  double optional_prediction_fraction() { return 0.2; }
 
 public:
   // Fraction used when evacuating the optional regions. This fraction of the

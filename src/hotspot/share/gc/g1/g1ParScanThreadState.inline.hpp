@@ -142,31 +142,29 @@ template <class T> void G1ParScanThreadState::enqueue_card_if_tracked(G1HeapRegi
 #ifdef TP_REMSET_INVESTIGATION
   if (G1TpRemsetInvestigationDirectUpdate) {
     if (G1TpRemsetInvestigationDirtyYoungDirectly && region_attr.is_new_survivor()) {
-      HeapRegion * const from_region = _g1h->heap_region_containing(p);
-      assert(!from_region->is_survivor(), "expected survivor regions to be filtered out by enqueue caller");
-      if (G1TpRemsetInvestigationDirtyYoungDirectlyOptimization &&
-          !_g1h->rem_set()->region_included_in_cleanup_task(from_region)) {
-        CardTable::CardValue* card_ptr = ct()->byte_for_index(card_index);
-        *card_ptr = CardTable::dirty_card_val();
-        if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-          _g1h->rem_set()->dirty_region_scan_chunk_table(card_ptr);
+      if (G1TpRemsetInvestigationDirtyYoungDirectlyOptimization) {
+        HeapRegion * const from_region = _g1h->heap_region_containing(p);
+        assert(!from_region->is_survivor(), "expected survivor regions to be filtered out by enqueue caller");
+        if (!_g1h->rem_set()->region_included_in_cleanup_task(from_region)) {
+          CardTable::CardValue* card_ptr = ct()->byte_for_index(card_index);
+          *card_ptr = CardTable::dirty_card_val();
+          if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
+            _g1h->rem_set()->dirty_region_scan_chunk_table(card_ptr);
+          }
+          return;
         }
-      } else if (_last_enqueued_card != card_index) {
-        _rdc_local_qset.enqueue(ct()->byte_for_index(card_index));
-        _last_enqueued_card = card_index;
       }
-    } else {
+    } else if (!region_attr.is_optional()) {
       HeapRegion* const hr = _g1h->heap_region_containing(o);
       hr->rem_set()->add_reference(p, _worker_id);
+      return;
     }
-    return;
   }
 #endif
 
   // If the card hasn't been added to the buffer, do it.
   if (_last_enqueued_card != card_index) {
 #ifdef TP_REMSET_INVESTIGATION
-    assert(!G1TpRemsetInvestigationDirectUpdate, "sanity check");
     if (G1TpRemsetInvestigationPostevacRefine) {
       CardTable::CardValue* card_ptr = ct()->byte_for_index(card_index);
       G1BarrierSet::dirty_card_queue_set().enqueue(G1ThreadLocalData::dirty_card_queue(Thread::current()), card_ptr);
