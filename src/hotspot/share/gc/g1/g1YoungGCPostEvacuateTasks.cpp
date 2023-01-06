@@ -415,7 +415,7 @@ public:
     G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
     dcq.merge_bufferlists(_rdcqs);
 #else
-    if (G1TpRemsetInvestigationDirectUpdate) {
+    if (!G1TpRemsetInvestigationConcurrentRefine) {
       BufferNodeList list = _rdcqs->take_all_completed_buffers();
       BufferNode* buffers_to_delete = list._head;
       while (buffers_to_delete != NULL) {

@@ -1990,6 +1990,8 @@ const int ObjectAlignmentInBytes = 8;
                 "Enable direct remset updates during GC pause")             \
   develop(bool, G1TpRemsetInvestigationPostevacRefine, TP_REMSET_INVESTIGATION_POSTEVAC_REFINE_FLAG,                \
                 "Enable post-evacuation refinement")                        \
+  develop(bool, G1TpRemsetInvestigationConcurrentRefine, TP_REMSET_INVESTIGATION_CONCURRENT_REFINE_FLAG,                \
+                "Enable concurrent refinement")                             \
   develop(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, TP_REMSET_INVESTIGATION_DIRTY_CHUNK_AT_BARRIER_FLAG,           \
                 "Enable region chunk table dirtying at post-write barrier") \
   develop(bool, G1TpRemsetInvestigationDirtyYoungDirectly, TP_REMSET_INVESTIGATION_DIRTY_YOUNG_DIRECTLY_FLAG,              \
