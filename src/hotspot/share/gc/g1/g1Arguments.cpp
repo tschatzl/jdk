@@ -243,10 +243,6 @@ void G1Arguments::initialize() {
 #endif
 
 #ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationPostevacRefine && G1TpRemsetInvestigationDirectUpdate) {
-    vm_exit_during_initialization("The flag -XX:+G1TpRemsetInvestigationPostevacRefine can not be combined with -XX:+G1TpRemsetInvestigationDirectUpdate", NULL);
-  }
-
   if (!G1TpRemsetInvestigationDirectUpdate && G1TpRemsetInvestigationDirtyYoungDirectly) {
 #ifdef PRODUCT
     vm_exit_during_initialization("The flag -XX:-G1TpRemsetInvestigationDirectUpdate can not be combined with -XX:+G1TpRemsetInvestigationDirtyYoungDirectly", NULL);
