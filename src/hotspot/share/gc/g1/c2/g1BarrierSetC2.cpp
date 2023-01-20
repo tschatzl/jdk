@@ -380,8 +380,17 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   Node* zeroX = __ ConX(0);
   Node* no_base = __ top();
   BasicType card_bt = T_BYTE;
-  // Smash zero into card. MUST BE ORDERED WRT TO STORE
-  __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
+
+#ifdef TP_REMSET_INVESTIGATION
+  if (G1TpRemsetInvestigationRawParallelBarrier) {
+      __ store(__ ctrl(), card_adr, zero, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
+  } else
+#endif
+
+  {
+    // Smash zero into card. MUST BE ORDERED WRT TO STORE
+    __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
+  }
 
 #ifdef TP_REMSET_INVESTIGATION
   this->dirty_chunk_at_barrier(kit, ideal, card_adr);
@@ -506,44 +515,30 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
           kit->sync_kit(ideal);
           kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
           __ sync_kit(kit);
-#else
-          if (G1TpRemsetInvestigationRawParallelBarrier) {
-            __ store(__ ctrl(), card_adr, dirty_card, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
-            this->dirty_chunk_at_barrier(kit, ideal, card_adr);
-          } else {
 #endif
-            Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-            __ if_then(card_val_reload, BoolTest::ne, dirty_card);
+            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) {
+                Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+              __ if_then(card_val_reload, BoolTest::ne, dirty_card);
+            }
               g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-            __ end_if();
-#ifdef TP_REMSET_INVESTIGATION
-          }
-      if (!G1TpRemsetInvestigationRawParallelBarrier) __ end_if();
-    if (!G1TpRemsetInvestigationRawParallelBarrier) __ end_if();
-#else
-        __ end_if();
-      __ end_if();
-    __ end_if();
-#endif
+            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ end_if();
+
+        NOT_TP_REMSET_INVESTIGATION(__ end_if());
+      TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ end_if();
+    TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ end_if();
   } else {
     // The Object.clone() intrinsic uses this path if !ReduceInitialCardMarks.
     // We don't need a barrier here if the destination is a newly allocated object
     // in Eden. Otherwise, GC verification breaks because we assume that cards in Eden
     // are set to 'g1_young_gen' (see G1CardTable::verify_g1_young_region()).
     assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
-#ifdef TP_REMSET_INVESTIGATION
-    if (G1TpRemsetInvestigationRawParallelBarrier) {
-      __ store(__ ctrl(), card_adr, dirty_card, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
-    } else {
-#else
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
       Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
       __ if_then(card_val, BoolTest::ne, young_card); {
 #endif
         g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
       } __ end_if();
-#else
-    }
 #endif
   }
 
