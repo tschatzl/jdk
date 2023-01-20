@@ -391,9 +391,11 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
-  __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
-  Label& dirty_card_jmp_label = TP_REMSET_INVESTIGATION_ONLY(G1TpRemsetInvestigationDirtyChunkAtBarrier ? stack_cleanup :) done;
-  __ jcc(Assembler::equal, dirty_card_jmp_label);
+  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) {
+    __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
+    Label& dirty_card_jmp_label = TP_REMSET_INVESTIGATION_ONLY(G1TpRemsetInvestigationDirtyChunkAtBarrier ? stack_cleanup :) done;
+    __ jcc(Assembler::equal, dirty_card_jmp_label);
+  }
 
 
   // storing a region crossing, non-NULL oop, card is clean.
@@ -665,8 +667,10 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
-  __ cmpb(Address(card_addr, 0), CardTable::dirty_card_val());
-  __ jcc(Assembler::equal, done);
+  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) {
+    __ cmpb(Address(card_addr, 0), CardTable::dirty_card_val());
+    __ jcc(Assembler::equal, done);
+  }
 
   // storing region crossing non-NULL, card is clean.
   // dirty card and log.
