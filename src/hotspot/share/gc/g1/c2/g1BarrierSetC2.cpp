@@ -516,12 +516,12 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
           kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
           __ sync_kit(kit);
 #endif
-            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) {
+            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) {
                 Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
               __ if_then(card_val_reload, BoolTest::ne, dirty_card);
             }
               g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ end_if();
+            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) __ end_if();
 
         NOT_TP_REMSET_INVESTIGATION(__ end_if());
       TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ end_if();
@@ -808,14 +808,14 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
       Node *addp = shift->unique_out();
       for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
         Node *mem = addp->last_out(j);
-        /*// We do not support conditional card marking (UseCondCardMark) in our barrier
         if (UseCondCardMark && mem->is_Load()) {
           assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
           // The load is checking if the card has been written so
           // replace it with zero to fold the test.
           macro->replace_node(mem, macro->intcon(0));
           continue;
-        }*/
+        }
+
         if (mem->Opcode() == Op_CastP2X) {
           assert(G1TpRemsetInvestigationDirtyChunkAtBarrier, "unexpected code shape");
           Node* chunk_shift = mem->unique_out();
