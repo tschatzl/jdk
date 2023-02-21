@@ -1312,6 +1312,18 @@ public:
   G1HeapSummary create_g1_heap_summary();
   G1EvacSummary create_g1_evac_summary(G1EvacStats* stats);
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+private:
+  bool throughput_barrier_enabled;
+
+public:
+  bool is_throughput_barrier_enabled() const {
+    return this->throughput_barrier_enabled;
+  }
+
+  void set_throughput_barrier_enabled(bool);
+#endif
+
   // Printing
 private:
   void print_heap_regions() const;

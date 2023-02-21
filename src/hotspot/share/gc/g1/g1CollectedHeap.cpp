@@ -117,6 +117,10 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/stack.inline.hpp"
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+#include "runtime/deoptimization.hpp"
+#endif
+
 size_t G1CollectedHeap::_humongous_object_threshold_in_words = 0;
 
 // INVARIANTS/NOTES
@@ -1568,6 +1572,18 @@ jint G1CollectedHeap::initialize() {
   Universe::check_alignment(reserved_byte_size, HeapRegion::GrainBytes, "g1 heap");
   Universe::check_alignment(reserved_byte_size, HeapAlignment, "g1 heap");
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+  switch (static_cast<G1ThroughputBarrierModes>(G1ThroughputBarrierMode)) {
+    case G1ThroughputBarrierModes::Disabled:
+    case G1ThroughputBarrierModes::DynamicSwitch:
+      this->throughput_barrier_enabled = false;
+      break;
+
+    case G1ThroughputBarrierModes::Enabled:
+      this->throughput_barrier_enabled = true;
+  }
+#endif
+
   // Reserve the maximum.
 
   // When compressed oops are enabled, the preferred heap base
@@ -2423,6 +2439,21 @@ bool G1CollectedHeap::is_obj_dead_cond(const oop obj,
   }
   return false; // keep some compilers happy
 }
+
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+void G1CollectedHeap::set_throughput_barrier_enabled(bool enable) {
+  assert(SafepointSynchronize::is_at_safepoint(), "throughput barrier switch is only possible at safepoint");
+  assert(static_cast<G1ThroughputBarrierModes>(G1ThroughputBarrierMode) == G1ThroughputBarrierModes::DynamicSwitch,
+    "throughput barrier switch is not allowed in current mode");
+
+  CodeCache::mark_all_nmethods_for_deoptimization();
+  Deoptimization::deoptimize_all_marked();
+  this->throughput_barrier_enabled = enable;
+
+  log_info(gc, ergo)("G1 throughtput barrier is %s; deoptimization done",
+    (enable ? "enabled" : "disabled"));
+}
+#endif
 
 void G1CollectedHeap::print_heap_regions() const {
   LogTarget(Trace, gc, heap, region) lt;
