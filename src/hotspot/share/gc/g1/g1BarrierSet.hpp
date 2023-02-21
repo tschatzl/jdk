@@ -32,6 +32,14 @@
 
 class G1CardTable;
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+enum class G1ThroughputBarrierModes : uint {
+  Disabled = 0,
+  DynamicSwitch = 1,
+  Enabled = 2
+};
+#endif
+
 // This barrier is specialized to use a logging barrier to support
 // snapshot-at-the-beginning marking.
 

@@ -252,6 +252,26 @@ void G1Arguments::initialize() {
   if (max_parallel_refinement_threads > UINT_MAX / divisor) {
     vm_exit_during_initialization("Too large parallelism for remembered sets.");
   }
+
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+  switch (G1ThroughputBarrierMode) {
+    case static_cast<uint>(G1ThroughputBarrierModes::Disabled):
+      log_info(gc, ergo)("TpRemsetInvestigation: G1ThroughputBarrierMode is disabled");
+      break;
+
+    case static_cast<uint>(G1ThroughputBarrierModes::DynamicSwitch):
+      log_info(gc, ergo)("TpRemsetInvestigation: G1ThroughputBarrierMode is dynamic switch");
+      break;
+
+    case static_cast<uint>(G1ThroughputBarrierModes::Enabled):
+      log_info(gc, ergo)("TpRemsetInvestigation: G1ThroughputBarrierMode is enabled");
+      break;
+
+    default:
+      vm_exit_during_initialization("Invalid -XX:G1ThroughputBarrierMode value; valid values are 0 (disabled), 1 (dynamic switch), 2 (enabled)");
+      break;
+  }
+#endif
 }
 
 void G1Arguments::initialize_heap_flags_and_sizes() {

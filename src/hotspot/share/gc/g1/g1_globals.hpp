@@ -352,6 +352,10 @@
           "related prediction sample. That sample must involve the same or "\
           "more than that number of cards to be used.")                     \
                                                                             \
+  product(uint, G1ThroughputBarrierMode, 0,                                 \
+               "Throughput-oriented barrier for G1: 0 - disabled, "         \
+               "1 - dynamic switch, 2 - enabled")                           \
+                                                                            \
   GC_G1_EVACUATION_FAILURE_FLAGS(develop,                                   \
                     develop_pd,                                             \
                     product,                                                \
