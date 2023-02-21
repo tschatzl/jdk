@@ -406,7 +406,7 @@ public:
     _evac_failure_regions(evac_failure_regions) {}
 
   virtual ~RedirtyLoggedCardsTask() {
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
       G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
       dcq.merge_bufferlists(_rdcqs);
     } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {

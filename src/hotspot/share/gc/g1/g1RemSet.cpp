@@ -1495,7 +1495,7 @@ void G1RemSet::merge_heap_roots(bool initial_evacuation) {
     workers->run_task(&cl, num_workers);
   }
 
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     G1DirtyNonCollectionSetRegionsTask task(_scan_state);
     log_debug(gc)("Dirty all cards not belonging to collection set regions");
     g1h->workers()->run_task(&task);
@@ -1699,7 +1699,7 @@ void G1RemSet::enqueue_for_reprocessing(CardValue* card_ptr) {
   // this card.  Since buffers are processed in FIFO order and we try to
   // keep some in the queue, it is likely that the racing state will have
   // resolved by the time this card comes up for reprocessing.
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     ShouldNotCallThis();
   }
   *card_ptr = G1CardTable::dirty_card_val();

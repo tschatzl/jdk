@@ -44,7 +44,7 @@ void G1BarrierSetRuntime::write_ref_array_pre_narrow_oop_entry(narrowOop* dst, s
 }
 
 void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* dst, size_t length) {
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     ShouldNotCallThis();
   }
 
@@ -65,7 +65,7 @@ JRT_END
 // G1 post write barrier slowpath
 JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTable::CardValue* card_addr,
                                                                JavaThread* thread))
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     assert(thread == JavaThread::current(), "pre-condition");
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thread);
     G1BarrierSet::dirty_card_queue_set().enqueue(queue, card_addr);

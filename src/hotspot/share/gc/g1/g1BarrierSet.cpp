@@ -90,7 +90,7 @@ void G1BarrierSet::write_ref_array_pre(narrowOop* dst, size_t count, bool dest_u
 }
 
 void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     // In the slow path, we know a card is not young
     assert(*byte != G1CardTable::g1_young_card_val(), "slow path invoked without filtering");
     OrderAccess::storeload();
@@ -98,7 +98,7 @@ void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
 
   if (*byte != G1CardTable::dirty_card_val()) {
     *byte = G1CardTable::dirty_card_val();
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
       Thread* thr = Thread::current();
       G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
       G1BarrierSet::dirty_card_queue_set().enqueue(queue, byte);
@@ -112,14 +112,14 @@ void G1BarrierSet::invalidate(MemRegion mr) {
   }
   volatile CardValue* byte = _card_table->byte_for(mr.start());
   CardValue* last_byte = _card_table->byte_for(mr.last());
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     // skip initial young cards
     for (; byte <= last_byte && *byte == G1CardTable::g1_young_card_val(); byte++);
   }
 
   if (byte <= last_byte) {
     // Enqueue if necessary.
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
       OrderAccess::storeload();
     }
 
@@ -128,7 +128,7 @@ void G1BarrierSet::invalidate(MemRegion mr) {
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
     for (; byte <= last_byte; byte++) {
       CardValue bv = *byte;
-      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
         if ((bv != G1CardTable::g1_young_card_val()) &&
             (bv != G1CardTable::dirty_card_val())) {
           *byte = G1CardTable::dirty_card_val();

@@ -37,7 +37,7 @@ void G1CardTable::g1_mark_as_young(const MemRegion& mr) {
 
 #ifndef PRODUCT
 void G1CardTable::verify_g1_young_region(MemRegion mr) {
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     verify_region(mr, g1_young_gen,  true);
   } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
     verify_region(mr, G1CardTable::dirty_card_val(),  true);

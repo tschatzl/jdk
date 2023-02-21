@@ -354,7 +354,7 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   Node* no_base = __ top();
   BasicType card_bt = T_BYTE;
 
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     __ store(__ ctrl(), card_adr, zero, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
   } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_ENABLE {
     // Smash zero into card. MUST BE ORDERED WRT TO STORE
@@ -465,13 +465,13 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
     Node* xor_res =  __ URShiftX ( __ XorX( cast,  __ CastPX(__ ctrl(), val)), __ ConI(HeapRegion::LogOfHRGrainBytes));
 
     // if (xor_res == 0) same region so skip
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ if_then(xor_res, BoolTest::ne, zeroX, likely);
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) __ if_then(xor_res, BoolTest::ne, zeroX, likely);
 
       // No barrier if we are storing a NULL
-      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ if_then(val, BoolTest::ne, kit->null(), likely);
+      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) __ if_then(val, BoolTest::ne, kit->null(), likely);
 
         // Ok must mark the card if not already dirty
-        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
           // load the original value of the card
           Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
           __ if_then(card_val, BoolTest::ne, young_card, unlikely);
@@ -479,28 +479,28 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
             kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
             __ sync_kit(kit);
         }
-            TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER || UseCondCardMark) {
+            TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled() || UseCondCardMark) {
                 Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
               __ if_then(card_val_reload, BoolTest::ne, dirty_card);
             }
               g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-            TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER || UseCondCardMark) __ end_if();
+            TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled() || UseCondCardMark) __ end_if();
 
-        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
-      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
+        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) __ end_if();
+      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) __ end_if();
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) __ end_if();
   } else {
     // The Object.clone() intrinsic uses this path if !ReduceInitialCardMarks.
     // We don't need a barrier here if the destination is a newly allocated object
     // in Eden. Otherwise, GC verification breaks because we assume that cards in Eden
     // are set to 'g1_young_gen' (see G1CardTable::verify_g1_young_region()).
     assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
         Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
         __ if_then(card_val, BoolTest::ne, young_card);
     }
           g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) __ end_if();
   }
 
   // Final sync IdealKit and GraphKit.
@@ -762,7 +762,7 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
     Node* this_region = node->in(0);
     assert(this_region != NULL, "");
 
-    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
       assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
       Node *shift = node->unique_out();
       Node *addp = shift->unique_out();
@@ -815,7 +815,7 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
         Node* shift = node->find_out_with(Op_URShiftX);
         assert(shift != NULL, "missing G1 post barrier");
         Node* addp = shift->unique_out();
-        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
           Node *storeCM = addp->find_out_with(Op_StoreCM);
           assert(storeCM != NULL, "missing G1 post barrier");
           macro->replace_node(storeCM, storeCM->in(MemNode::Memory));

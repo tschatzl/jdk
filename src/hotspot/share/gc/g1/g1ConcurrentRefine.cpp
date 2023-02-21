@@ -200,7 +200,7 @@ void G1ConcurrentRefine::threads_do(ThreadClosure *tc) {
 }
 
 uint G1ConcurrentRefine::max_num_threads() {
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     return G1ConcRefinementThreads;
   } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
     return 0;

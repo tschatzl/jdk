@@ -141,7 +141,7 @@ G1CollectedHeap::dirty_young_block(HeapWord* start, size_t word_size) {
   assert(containing_hr->is_in(end - 1), "it should also contain end - 1");
 
   MemRegion mr(start, end);
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     card_table()->g1_mark_as_young(mr);
   } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
     CardTable::CardValue *const first = card_table()->byte_for(mr.start());

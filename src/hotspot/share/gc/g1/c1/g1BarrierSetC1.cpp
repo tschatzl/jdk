@@ -155,7 +155,7 @@ void G1BarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_v
   }
   assert(addr->is_register(), "must be a register at this point");
 
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     LIR_Opr xor_res = gen->new_pointer_register();
     LIR_Opr xor_shift_res = gen->new_pointer_register();
     if (TwoOperandLIRForm) {
@@ -178,7 +178,7 @@ void G1BarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_v
   }
 
   CodeStub* slow = new G1PostBarrierStub(addr, new_val);
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
     __ jump(slow);
   } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_ENABLE {
     __ branch(lir_cond_notEqual, slow);
