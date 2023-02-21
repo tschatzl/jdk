@@ -246,10 +246,8 @@ void G1Arguments::initialize() {
 #define BOOLTOSTR(x) ((x) ? "true" : "false")
   log_info(gc)("TpRemsetInvestigation configuration: "
                "G1TpRemsetInvestigationRawParallelBarrier=%s; "
-               "G1TpRemsetInvestigationDirectUpdate=%s; "
                "G1TpRemsetInvestigationConcurrentRefine=%s; ",
                BOOLTOSTR(G1TpRemsetInvestigationRawParallelBarrier),
-               BOOLTOSTR(G1TpRemsetInvestigationDirectUpdate),
                BOOLTOSTR(G1TpRemsetInvestigationConcurrentRefine));
 #undef BOOLTOSTR
 #endif
