@@ -243,10 +243,6 @@ void G1Arguments::initialize() {
 #endif
 
 #ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationConcurrentRefine && G1TpRemsetInvestigationPostevacRefine) {
-    vm_exit_during_initialization("The flag -XX:+G1TpRemsetInvestigationConcurrentRefine can not be combined with -XX:+G1TpRemsetInvestigationPostevacRefine", NULL);
-  }
-
   if (!G1TpRemsetInvestigationDirectUpdate && G1TpRemsetInvestigationDirtyYoungDirectly) {
 #ifdef PRODUCT
     vm_exit_during_initialization("The flag -XX:-G1TpRemsetInvestigationDirectUpdate can not be combined with -XX:+G1TpRemsetInvestigationDirtyYoungDirectly", NULL);
@@ -269,14 +265,12 @@ void G1Arguments::initialize() {
   log_info(gc)("TpRemsetInvestigation configuration: "
                "G1TpRemsetInvestigationRawParallelBarrier=%s; "
                "G1TpRemsetInvestigationDirectUpdate=%s; "
-               "G1TpRemsetInvestigationPostevacRefine=%s; "
                "G1TpRemsetInvestigationConcurrentRefine=%s; "
                "G1TpRemsetInvestigationDirtyChunkAtBarrier=%s; "
                "G1TpRemsetInvestigationDirtyYoungDirectly=%s; "
                "G1TpRemsetInvestigationDirtyYoungDirectlyOptimization=%s",
                BOOLTOSTR(G1TpRemsetInvestigationRawParallelBarrier),
                BOOLTOSTR(G1TpRemsetInvestigationDirectUpdate),
-               BOOLTOSTR(G1TpRemsetInvestigationPostevacRefine),
                BOOLTOSTR(G1TpRemsetInvestigationConcurrentRefine),
                BOOLTOSTR(G1TpRemsetInvestigationDirtyChunkAtBarrier),
                BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectly),

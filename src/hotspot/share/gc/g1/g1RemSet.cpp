@@ -1586,14 +1586,8 @@ inline void check_card_ptr(CardTable::CardValue* card_ptr, G1CardTable* ct) {
 #endif
 }
 
-#ifdef TP_REMSET_INVESTIGATION
-bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr, bool postevac_refine) {
-  assert(G1TpRemsetInvestigationPostevacRefine || !postevac_refine, "Post-evacuation refinement shall not be called when respective flag is not enabled");
-  assert(postevac_refine || !SafepointSynchronize::is_at_safepoint(), "Only call concurrently");
-#else
 bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   assert(!SafepointSynchronize::is_at_safepoint(), "Only call concurrently");
-#endif
 
   CardValue* card_ptr = *card_ptr_addr;
   // Find the start address represented by the card.
@@ -1611,7 +1605,7 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   // If the card is no longer dirty, nothing to do.
   // We cannot load the card value before the "r == NULL" check, because G1
   // could uncommit parts of the card table covering uncommitted regions.
-  if (*card_ptr != G1CardTable::dirty_card_val() && !postevac_refine) {
+  if (*card_ptr != G1CardTable::dirty_card_val()) {
     return false;
   }
 
@@ -1635,14 +1629,6 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   // enqueueing of the card and processing it here will have ensured
   // we see the up-to-date region type here.
   if (!r->is_old_or_humongous_or_archive()) {
-#ifdef TP_REMSET_INVESTIGATION
-    if (postevac_refine) {
-      *card_ptr = G1CardTable::dirty_card_val();
-      if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-        dirty_region_scan_chunk_table(card_ptr);
-      }
-    }
-#endif
     return false;
   }
 
@@ -1656,14 +1642,6 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   //
 
   if (G1HotCardCache::use_cache()) {
-#ifdef TP_REMSET_INVESTIGATION
-    if (postevac_refine) {
-      *card_ptr = G1CardTable::dirty_card_val();
-      if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-        dirty_region_scan_chunk_table(card_ptr);
-      }
-    }
-#endif
     const CardValue* orig_card_ptr = card_ptr;
     card_ptr = _hot_card_cache->insert(card_ptr);
     if (card_ptr == NULL) {
@@ -1713,17 +1691,9 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
   return true;
 }
 
-#ifdef TP_REMSET_INVESTIGATION
-void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
-                                        const uint worker_id,
-                                        bool postevac_refine) {
-  assert(G1TpRemsetInvestigationPostevacRefine || !postevac_refine, "Post-evacuation refinement shall not be called when respective flag is not enabled");
-  assert(postevac_refine || !_g1h->is_gc_active(), "Only call concurrently");
-#else
 void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
                                         const uint worker_id) {
   assert(!_g1h->is_gc_active(), "Only call concurrently");
-#endif
   check_card_ptr(card_ptr, _ct);
 
   // Construct the MemRegion representing the card.
@@ -1749,12 +1719,6 @@ void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
   if (r->oops_on_memregion_seq_iterate_careful<false>(dirty_region, &conc_refine_cl) != NULL) {
     return;
   }
-
-#ifdef TP_REMSET_INVESTIGATION
-  if (postevac_refine) {
-    ShouldNotReachHere();
-  }
-#endif
 
   // If unable to process the card then we encountered an unparsable
   // part of the heap (e.g. a partially allocated object, so only

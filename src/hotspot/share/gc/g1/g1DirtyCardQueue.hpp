@@ -201,16 +201,9 @@ class G1DirtyCardQueueSet: public PtrQueueSet {
   // the processed elements, e.g. up to the element before processing
   // stopped, or one past the last element if the entire buffer was
   // processed. Updates stats.
-#ifdef TP_REMSET_INVESTIGATION
-  bool refine_buffer(BufferNode* node,
-                     uint worker_id,
-                     G1ConcurrentRefineStats* stats,
-                     bool postevac_refine);
-#else
   bool refine_buffer(BufferNode* node,
                      uint worker_id,
                      G1ConcurrentRefineStats* stats);
-#endif
 
   // Deal with buffer after a call to refine_buffer.  If fully processed,
   // deallocate the buffer.  Otherwise, record it as paused.
@@ -274,10 +267,6 @@ public:
   bool refine_completed_buffer_concurrently(uint worker_id,
                                             size_t stop_at,
                                             G1ConcurrentRefineStats* stats);
-#ifdef TP_REMSET_INVESTIGATION
-  bool refine_completed_buffer_postevac(uint worker_id,
-                                        G1ConcurrentRefineStats* stats);
-#endif
 
   // If a full collection is happening, reset per-thread refinement stats and
   // partial logs, and release completed logs. The full collection will make

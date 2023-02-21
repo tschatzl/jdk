@@ -1988,8 +1988,6 @@ const int ObjectAlignmentInBytes = 8;
                 "Use raw (actual) parallel gc barrier")                     \
   develop(bool, G1TpRemsetInvestigationDirectUpdate, TP_REMSET_INVESTIGATION_DIRECT_UPDATE_FLAG,                  \
                 "Enable direct remset updates during GC pause")             \
-  develop(bool, G1TpRemsetInvestigationPostevacRefine, TP_REMSET_INVESTIGATION_POSTEVAC_REFINE_FLAG,                \
-                "Enable post-evacuation refinement")                        \
   develop(bool, G1TpRemsetInvestigationConcurrentRefine, TP_REMSET_INVESTIGATION_CONCURRENT_REFINE_FLAG,                \
                 "Enable concurrent refinement")                             \
   develop(bool, G1TpRemsetInvestigationDirtyChunkAtBarrier, TP_REMSET_INVESTIGATION_DIRTY_CHUNK_AT_BARRIER_FLAG,           \

@@ -438,10 +438,6 @@ public:
   }
 
   void do_work(uint worker_id) override {
-#ifdef TP_REMSET_INVESTIGATION
-    assert(!G1TpRemsetInvestigationPostevacRefine,
-      "redirtying shall not be called if post-evacuation refinement is enabled");
-#endif
     RedirtyLoggedCardTableEntryClosure cl(G1CollectedHeap::heap(), _evac_failure_regions);
     const size_t buffer_size = _rdcqs->buffer_size();
     BufferNode* next = Atomic::load(&_nodes);
@@ -755,9 +751,7 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
     }
   }
 
-  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationPostevacRefine)) {
-    add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
-  }
+  add_parallel_task(new RedirtyLoggedCardsTask(per_thread_states->rdcqs(), evac_failure_regions));
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
                                               evac_failure_regions));
