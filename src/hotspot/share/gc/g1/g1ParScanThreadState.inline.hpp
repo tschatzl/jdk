@@ -140,13 +140,10 @@ template <class T> void G1ParScanThreadState::enqueue_card_if_tracked(G1HeapRegi
 
   size_t card_index = ct()->index_for(p);
 #ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirectUpdate) {
-    if (G1TpRemsetInvestigationDirtyYoungDirectly && region_attr.is_new_survivor()) {
-    } else if (!region_attr.is_optional()) {
-      HeapRegion* const hr = _g1h->heap_region_containing(o);
-      hr->rem_set()->add_reference(p, _worker_id);
-      return;
-    }
+  if (G1TpRemsetInvestigationDirectUpdate && !region_attr.is_optional()) {
+    HeapRegion* const hr = _g1h->heap_region_containing(o);
+    hr->rem_set()->add_reference(p, _worker_id);
+    return;
   }
 #endif
 

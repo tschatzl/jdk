@@ -1990,9 +1990,6 @@ const int ObjectAlignmentInBytes = 8;
                 "Enable direct remset updates during GC pause")             \
   develop(bool, G1TpRemsetInvestigationConcurrentRefine, TP_REMSET_INVESTIGATION_CONCURRENT_REFINE_FLAG,                \
                 "Enable concurrent refinement")                             \
-  develop(bool, G1TpRemsetInvestigationDirtyYoungDirectly, TP_REMSET_INVESTIGATION_DIRTY_YOUNG_DIRECTLY_FLAG,              \
-                "Enable dirtying cards containing references to young gen. "\
-                "regions bypassing remembered sets") \
 
 // end of RUNTIME_FLAGS
 

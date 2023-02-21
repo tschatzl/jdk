@@ -243,25 +243,14 @@ void G1Arguments::initialize() {
 #endif
 
 #ifdef TP_REMSET_INVESTIGATION
-  if (!G1TpRemsetInvestigationDirectUpdate && G1TpRemsetInvestigationDirtyYoungDirectly) {
-#ifdef PRODUCT
-    vm_exit_during_initialization("The flag -XX:-G1TpRemsetInvestigationDirectUpdate can not be combined with -XX:+G1TpRemsetInvestigationDirtyYoungDirectly", NULL);
-#else
-    log_info(gc)("Direct update of G1 remebered sets is disabled, disabling direct dirtying of G1 young region card table.");
-    FLAG_SET_ERGO(G1TpRemsetInvestigationDirtyYoungDirectly, false);
-#endif
-  }
-
 #define BOOLTOSTR(x) ((x) ? "true" : "false")
   log_info(gc)("TpRemsetInvestigation configuration: "
                "G1TpRemsetInvestigationRawParallelBarrier=%s; "
                "G1TpRemsetInvestigationDirectUpdate=%s; "
-               "G1TpRemsetInvestigationConcurrentRefine=%s; "
-               "G1TpRemsetInvestigationDirtyYoungDirectly=%s; ",
+               "G1TpRemsetInvestigationConcurrentRefine=%s; ",
                BOOLTOSTR(G1TpRemsetInvestigationRawParallelBarrier),
                BOOLTOSTR(G1TpRemsetInvestigationDirectUpdate),
-               BOOLTOSTR(G1TpRemsetInvestigationConcurrentRefine),
-               BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectly));
+               BOOLTOSTR(G1TpRemsetInvestigationConcurrentRefine));
 #undef BOOLTOSTR
 #endif
 
