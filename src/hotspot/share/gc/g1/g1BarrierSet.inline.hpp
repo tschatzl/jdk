@@ -34,6 +34,10 @@
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.hpp"
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+#include "gc/g1/g1CollectedHeap.hpp"
+#endif
+
 inline void G1BarrierSet::enqueue_preloaded(oop pre_val) {
   // Nulls should have been already filtered.
   assert(oopDesc::is_oop(pre_val, true), "Error");

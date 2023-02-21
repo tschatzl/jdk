@@ -40,6 +40,10 @@
 #include "opto/type.hpp"
 #include "utilities/macros.hpp"
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+#include "gc/g1/g1CollectedHeap.hpp"
+#endif
+
 const TypeFunc *G1BarrierSetC2::write_ref_field_pre_entry_Type() {
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // original field value

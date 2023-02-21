@@ -40,6 +40,10 @@
 #include "gc/g1/c1/g1BarrierSetC1.hpp"
 #endif
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+#include "gc/g1/g1CollectedHeap.hpp"
+#endif
+
 #define __ masm->
 
 void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm, DecoratorSet decorators,

@@ -29,6 +29,10 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "utilities/macros.hpp"
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+#include "gc/g1/g1CollectedHeap.hpp"
+#endif
+
 void G1BarrierSetRuntime::write_ref_array_pre_oop_entry(oop* dst, size_t length) {
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
   bs->write_ref_array_pre(dst, length, false);

@@ -32,6 +32,10 @@
 #include "gc/g1/heapRegion.hpp"
 #include "utilities/macros.hpp"
 
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+#include "gc/g1/g1CollectedHeap.hpp"
+#endif
+
 #ifdef ASSERT
 #define __ gen->lir(__FILE__, __LINE__)->
 #else
