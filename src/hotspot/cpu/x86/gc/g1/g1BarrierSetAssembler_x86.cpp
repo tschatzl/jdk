@@ -327,21 +327,19 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   Label done;
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
   Label runtime;
+
+  // Does store cross heap regions?
+
+  __ movptr(tmp, store_addr);
+  __ xorptr(tmp, new_val);
+  __ shrptr(tmp, HeapRegion::LogOfHRGrainBytes);
+  __ jcc(Assembler::equal, done);
+
+  // crosses regions, storing NULL?
+
+  __ cmpptr(new_val, NULL_WORD);
+  __ jcc(Assembler::equal, done);
 #endif
-
-  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) {
-    // Does store cross heap regions?
-
-    __ movptr(tmp, store_addr);
-    __ xorptr(tmp, new_val);
-    __ shrptr(tmp, HeapRegion::LogOfHRGrainBytes);
-    __ jcc(Assembler::equal, done);
-
-    // crosses regions, storing NULL?
-
-    __ cmpptr(new_val, NULL_WORD);
-    __ jcc(Assembler::equal, done);
-  }
 
   // storing region crossing non-NULL, is card already dirty?
 
@@ -362,7 +360,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
-  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) {
+  TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) {
     __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
     __ jcc(Assembler::equal, done);
   }
@@ -602,7 +600,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
 #endif
-  TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) {
+  TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) {
     __ cmpb(Address(card_addr, 0), CardTable::dirty_card_val());
     __ jcc(Assembler::equal, done);
   }

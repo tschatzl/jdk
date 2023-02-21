@@ -242,14 +242,6 @@ void G1Arguments::initialize() {
   }
 #endif
 
-#ifdef TP_REMSET_INVESTIGATION
-#define BOOLTOSTR(x) ((x) ? "true" : "false")
-  log_info(gc)("TpRemsetInvestigation configuration: "
-               "G1TpRemsetInvestigationRawParallelBarrier=%s; ",
-               BOOLTOSTR(G1TpRemsetInvestigationRawParallelBarrier));
-#undef BOOLTOSTR
-#endif
-
   initialize_mark_stack_size();
   initialize_verification_types();
 

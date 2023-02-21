@@ -1984,8 +1984,6 @@ const int ObjectAlignmentInBytes = 8;
              "fence. Add cleanliness checks.")                              \
                                                                             \
                                                                             \
-  develop(bool, G1TpRemsetInvestigationRawParallelBarrier, TP_REMSET_INVESTIGATION_RAW_PARALLEL_BARRIER_FLAG,           \
-                "Use raw (actual) parallel gc barrier")                     \
 
 // end of RUNTIME_FLAGS
 

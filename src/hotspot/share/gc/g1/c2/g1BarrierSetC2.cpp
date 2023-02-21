@@ -355,17 +355,11 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   BasicType card_bt = T_BYTE;
 
 #ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationRawParallelBarrier) {
-      __ store(__ ctrl(), card_adr, zero, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
-  } else
-#endif
+  __ store(__ ctrl(), card_adr, zero, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
+#else
+  // Smash zero into card. MUST BE ORDERED WRT TO STORE
+  __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
-  {
-    // Smash zero into card. MUST BE ORDERED WRT TO STORE
-    __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
-  }
-
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   //  Now do the queue work
   __ if_then(index, BoolTest::ne, zeroX); {
 
@@ -473,10 +467,10 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
     Node* xor_res =  __ URShiftX ( __ XorX( cast,  __ CastPX(__ ctrl(), val)), __ ConI(HeapRegion::LogOfHRGrainBytes));
 
     // if (xor_res == 0) same region so skip
-    TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ if_then(xor_res, BoolTest::ne, zeroX, likely);
+    NOT_TP_REMSET_INVESTIGATION(__ if_then(xor_res, BoolTest::ne, zeroX, likely));
 
       // No barrier if we are storing a NULL
-      TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ if_then(val, BoolTest::ne, kit->null(), likely);
+      NOT_TP_REMSET_INVESTIGATION(__ if_then(val, BoolTest::ne, kit->null(), likely));
 
         // Ok must mark the card if not already dirty
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
@@ -487,16 +481,16 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
           kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
           __ sync_kit(kit);
 #endif
-            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) {
+            TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) {
                 Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
               __ if_then(card_val_reload, BoolTest::ne, dirty_card);
             }
               g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-            TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) __ end_if();
+            TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) __ end_if();
 
         NOT_TP_REMSET_INVESTIGATION(__ end_if());
-      TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ end_if();
-    TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) __ end_if();
+      NOT_TP_REMSET_INVESTIGATION(__ end_if());
+    NOT_TP_REMSET_INVESTIGATION(__ end_if());
   } else {
     // The Object.clone() intrinsic uses this path if !ReduceInitialCardMarks.
     // We don't need a barrier here if the destination is a newly allocated object
@@ -773,29 +767,25 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
     assert(this_region != NULL, "");
 
 #ifdef TP_REMSET_INVESTIGATION
-    if (G1TpRemsetInvestigationRawParallelBarrier) {
-      assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
-      Node *shift = node->unique_out();
-      Node *addp = shift->unique_out();
-      for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
-        Node *mem = addp->last_out(j);
-        if (UseCondCardMark && mem->is_Load()) {
-          assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
-          // The load is checking if the card has been written so
-          // replace it with zero to fold the test.
-          macro->replace_node(mem, macro->intcon(0));
-          continue;
-        }
-
-        assert(mem->is_Store(), "store required");
-        macro->replace_node(mem, mem->in(MemNode::Memory));
+    assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
+    Node *shift = node->unique_out();
+    Node *addp = shift->unique_out();
+    for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
+      Node *mem = addp->last_out(j);
+      if (UseCondCardMark && mem->is_Load()) {
+        assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
+        // The load is checking if the card has been written so
+        // replace it with zero to fold the test.
+        macro->replace_node(mem, macro->intcon(0));
+        continue;
       }
 
-      this->remove_pre_barrier(macro, this_region);
-      return;
+      assert(mem->is_Store(), "store required");
+      macro->replace_node(mem, mem->in(MemNode::Memory));
     }
-#endif
 
+    this->remove_pre_barrier(macro, this_region);
+#else
     assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
     assert(node->outcnt() <= 2, "expects 1 or 2 users: Xor and URShift nodes");
     // It could be only one user, URShift node, in Object.clone() intrinsic
@@ -848,6 +838,7 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
     // which currently still alive until igvn optimize it.
     assert(node->outcnt() == 0 || node->unique_out()->Opcode() == Op_URShiftX, "");
     macro->replace_node(node, macro->top());
+#endif
   }
 }
 
