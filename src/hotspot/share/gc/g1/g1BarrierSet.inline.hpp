@@ -70,14 +70,10 @@ inline void G1BarrierSet::write_ref_field_pre(T* field) {
 template <DecoratorSet decorators, typename T>
 inline void G1BarrierSet::write_ref_field_post(T* field, oop new_val) {
   volatile CardValue* byte = _card_table->byte_for(field);
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  if (*byte != G1CardTable::g1_young_card_val()) {
+  if (TP_REMSET_INVESTIGATION_ONLY(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER ||) *byte != G1CardTable::g1_young_card_val()) {
     // Take a slow path for cards in old
-#endif
     write_ref_field_post_slow(byte);
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   }
-#endif
 }
 
 inline void G1BarrierSet::enqueue_preloaded_if_weak(DecoratorSet decorators, oop value) {

@@ -31,9 +31,6 @@
 #include "gc/shared/cardTableBarrierSet.hpp"
 
 class G1CardTable;
-#ifdef TP_REMSET_INVESTIGATION
-class G1RemSet;
-#endif
 
 // This barrier is specialized to use a logging barrier to support
 // snapshot-at-the-beginning marking.
@@ -45,9 +42,6 @@ class G1BarrierSet: public CardTableBarrierSet {
   BufferNode::Allocator _dirty_card_queue_buffer_allocator;
   G1SATBMarkQueueSet _satb_mark_queue_set;
   G1DirtyCardQueueSet _dirty_card_queue_set;
-#ifdef TP_REMSET_INVESTIGATION
-  G1RemSet* _rem_set;
-#endif
 
   static G1BarrierSet* g1_barrier_set() {
     return barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
@@ -99,16 +93,6 @@ class G1BarrierSet: public CardTableBarrierSet {
   static G1DirtyCardQueueSet& dirty_card_queue_set() {
     return g1_barrier_set()->_dirty_card_queue_set;
   }
-
-#ifdef TP_REMSET_INVESTIGATION
-  void set_rem_set(G1RemSet* rem_set) {
-    this->_rem_set = rem_set;
-  }
-
-  static G1RemSet* rem_set() {
-    return g1_barrier_set()->_rem_set;
-  }
-#endif
 
   // Callbacks for runtime accesses.
   template <DecoratorSet decorators, typename BarrierSetT = G1BarrierSet>

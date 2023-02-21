@@ -200,11 +200,11 @@ void G1ConcurrentRefine::threads_do(ThreadClosure *tc) {
 }
 
 uint G1ConcurrentRefine::max_num_threads() {
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  return G1ConcRefinementThreads;
-#else
-  return 0;
-#endif
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    return G1ConcRefinementThreads;
+  } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
+    return 0;
+  }
 }
 
 void G1ConcurrentRefine::update_pending_cards_target(double logged_cards_time_ms,

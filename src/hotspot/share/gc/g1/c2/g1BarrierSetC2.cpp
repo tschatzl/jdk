@@ -40,10 +40,6 @@
 #include "opto/type.hpp"
 #include "utilities/macros.hpp"
 
-#ifdef TP_REMSET_INVESTIGATION
-#include "gc/g1/g1RemSet.hpp"
-#endif
-
 const TypeFunc *G1BarrierSetC2::write_ref_field_pre_entry_Type() {
   const Type **fields = TypeTuple::fields(2);
   fields[TypeFunc::Parms+0] = TypeInstPtr::NOTNULL; // original field value
@@ -354,26 +350,26 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   Node* no_base = __ top();
   BasicType card_bt = T_BYTE;
 
-#ifdef TP_REMSET_INVESTIGATION
-  __ store(__ ctrl(), card_adr, zero, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
-#else
-  // Smash zero into card. MUST BE ORDERED WRT TO STORE
-  __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    __ store(__ ctrl(), card_adr, zero, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
+  } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_ENABLE {
+    // Smash zero into card. MUST BE ORDERED WRT TO STORE
+    __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
-  //  Now do the queue work
-  __ if_then(index, BoolTest::ne, zeroX); {
+    //  Now do the queue work
+    __ if_then(index, BoolTest::ne, zeroX); {
 
-    Node* next_index = kit->gvn().transform(new SubXNode(index, __ ConX(sizeof(intptr_t))));
-    Node* log_addr = __ AddP(no_base, buffer, next_index);
+      Node* next_index = kit->gvn().transform(new SubXNode(index, __ ConX(sizeof(intptr_t))));
+      Node* log_addr = __ AddP(no_base, buffer, next_index);
 
-    // Order, see storeCM.
-    __ store(__ ctrl(), log_addr, card_adr, T_ADDRESS, Compile::AliasIdxRaw, MemNode::unordered);
-    __ store(__ ctrl(), index_adr, next_index, TypeX_X->basic_type(), Compile::AliasIdxRaw, MemNode::unordered);
+      // Order, see storeCM.
+      __ store(__ ctrl(), log_addr, card_adr, T_ADDRESS, Compile::AliasIdxRaw, MemNode::unordered);
+      __ store(__ ctrl(), index_adr, next_index, TypeX_X->basic_type(), Compile::AliasIdxRaw, MemNode::unordered);
 
-  } __ else_(); {
-    __ make_leaf_call(tf, CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), "write_ref_field_post_entry", card_adr, __ thread());
-  } __ end_if();
-#endif
+    } __ else_(); {
+      __ make_leaf_call(tf, CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), "write_ref_field_post_entry", card_adr, __ thread());
+    } __ end_if();
+  }
 }
 
 void G1BarrierSetC2::post_barrier(GraphKit* kit,
@@ -423,9 +419,7 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
   Node* no_base = __ top();
   float likely = PROB_LIKELY_MAG(3);
   float unlikely = PROB_UNLIKELY_MAG(3);
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   Node* young_card = __ ConI((jint)G1CardTable::g1_young_card_val());
-#endif
   Node* dirty_card = __ ConI((jint)G1CardTable::dirty_card_val());
   Node* zeroX = __ ConX(0);
 
@@ -467,44 +461,42 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
     Node* xor_res =  __ URShiftX ( __ XorX( cast,  __ CastPX(__ ctrl(), val)), __ ConI(HeapRegion::LogOfHRGrainBytes));
 
     // if (xor_res == 0) same region so skip
-    NOT_TP_REMSET_INVESTIGATION(__ if_then(xor_res, BoolTest::ne, zeroX, likely));
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ if_then(xor_res, BoolTest::ne, zeroX, likely);
 
       // No barrier if we are storing a NULL
-      NOT_TP_REMSET_INVESTIGATION(__ if_then(val, BoolTest::ne, kit->null(), likely));
+      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ if_then(val, BoolTest::ne, kit->null(), likely);
 
         // Ok must mark the card if not already dirty
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-        // load the original value of the card
-        Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-        __ if_then(card_val, BoolTest::ne, young_card, unlikely);
-          kit->sync_kit(ideal);
-          kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
-          __ sync_kit(kit);
-#endif
-            TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) {
+        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+          // load the original value of the card
+          Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+          __ if_then(card_val, BoolTest::ne, young_card, unlikely);
+            kit->sync_kit(ideal);
+            kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
+            __ sync_kit(kit);
+        }
+            TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER || UseCondCardMark) {
                 Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
               __ if_then(card_val_reload, BoolTest::ne, dirty_card);
             }
               g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-            TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) __ end_if();
+            TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER || UseCondCardMark) __ end_if();
 
-        NOT_TP_REMSET_INVESTIGATION(__ end_if());
-      NOT_TP_REMSET_INVESTIGATION(__ end_if());
-    NOT_TP_REMSET_INVESTIGATION(__ end_if());
+        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
+      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
   } else {
     // The Object.clone() intrinsic uses this path if !ReduceInitialCardMarks.
     // We don't need a barrier here if the destination is a newly allocated object
     // in Eden. Otherwise, GC verification breaks because we assume that cards in Eden
     // are set to 'g1_young_gen' (see G1CardTable::verify_g1_young_region()).
     assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-      Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-      __ if_then(card_val, BoolTest::ne, young_card); {
-#endif
-        g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-      } __ end_if();
-#endif
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+        Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+        __ if_then(card_val, BoolTest::ne, young_card);
+    }
+          g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) __ end_if();
   }
 
   // Final sync IdealKit and GraphKit.
@@ -766,79 +758,79 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
     Node* this_region = node->in(0);
     assert(this_region != NULL, "");
 
-#ifdef TP_REMSET_INVESTIGATION
-    assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
-    Node *shift = node->unique_out();
-    Node *addp = shift->unique_out();
-    for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
-      Node *mem = addp->last_out(j);
-      if (UseCondCardMark && mem->is_Load()) {
-        assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
-        // The load is checking if the card has been written so
-        // replace it with zero to fold the test.
-        macro->replace_node(mem, macro->intcon(0));
-        continue;
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+      assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
+      Node *shift = node->unique_out();
+      Node *addp = shift->unique_out();
+      for (DUIterator_Last jmin, j = addp->last_outs(jmin); j >= jmin; --j) {
+        Node *mem = addp->last_out(j);
+        if (UseCondCardMark && mem->is_Load()) {
+          assert(mem->Opcode() == Op_LoadB, "unexpected code shape");
+          // The load is checking if the card has been written so
+          // replace it with zero to fold the test.
+          macro->replace_node(mem, macro->intcon(0));
+          continue;
+        }
+
+        assert(mem->is_Store(), "store required");
+        macro->replace_node(mem, mem->in(MemNode::Memory));
       }
 
-      assert(mem->is_Store(), "store required");
-      macro->replace_node(mem, mem->in(MemNode::Memory));
-    }
-
-    this->remove_pre_barrier(macro, this_region);
-#else
-    assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
-    assert(node->outcnt() <= 2, "expects 1 or 2 users: Xor and URShift nodes");
-    // It could be only one user, URShift node, in Object.clone() intrinsic
-    // but the new allocation is passed to arraycopy stub and it could not
-    // be scalar replaced. So we don't check the case.
-
-    // An other case of only one user (Xor) is when the value check for NULL
-    // in G1 post barrier is folded after CCP so the code which used URShift
-    // is removed.
-
-    // Remove G1 post barrier.
-
-    // Search for CastP2X->Xor->URShift->Cmp path which
-    // checks if the store done to a different from the value's region.
-    // And replace Cmp with #0 (false) to collapse G1 post barrier.
-    Node* xorx = node->find_out_with(Op_XorX);
-    if (xorx != NULL) {
-      Node* shift = xorx->unique_out();
-      Node* cmpx = shift->unique_out();
-      assert(cmpx->is_Cmp() && cmpx->unique_out()->is_Bool() &&
-          cmpx->unique_out()->as_Bool()->_test._test == BoolTest::ne,
-          "missing region check in G1 post barrier");
-      macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
-
       this->remove_pre_barrier(macro, this_region);
-    } else {
-      assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
-      // This is a G1 post barrier emitted by the Object.clone() intrinsic.
-      // Search for the CastP2X->URShiftX->AddP->LoadB->Cmp path which checks if the card
-      // is marked as young_gen and replace the Cmp with 0 (false) to collapse the barrier.
-      Node* shift = node->find_out_with(Op_URShiftX);
-      assert(shift != NULL, "missing G1 post barrier");
-      Node* addp = shift->unique_out();
-#ifdef TP_REMSET_INVESTIGATION
-    Node *storeCM = addp->find_out_with(Op_StoreCM);
-    assert(storeCM != NULL, "missing G1 post barrier");
-    macro->replace_node(storeCM, storeCM->in(MemNode::Memory));
-#else
-    Node* load = addp->find_out_with(Op_LoadB);
-    assert(load != NULL, "missing G1 post barrier");
-    Node* cmpx = load->unique_out();
-    assert(cmpx->is_Cmp() && cmpx->unique_out()->is_Bool() &&
-           cmpx->unique_out()->as_Bool()->_test._test == BoolTest::ne,
-           "missing card value check in G1 post barrier");
-    macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
-#endif
-      // There is no G1 pre barrier in this case
+    } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_ENABLE {
+      assert(node->Opcode() == Op_CastP2X, "ConvP2XNode required");
+      assert(node->outcnt() <= 2, "expects 1 or 2 users: Xor and URShift nodes");
+      // It could be only one user, URShift node, in Object.clone() intrinsic
+      // but the new allocation is passed to arraycopy stub and it could not
+      // be scalar replaced. So we don't check the case.
+
+      // An other case of only one user (Xor) is when the value check for NULL
+      // in G1 post barrier is folded after CCP so the code which used URShift
+      // is removed.
+
+      // Remove G1 post barrier.
+
+      // Search for CastP2X->Xor->URShift->Cmp path which
+      // checks if the store done to a different from the value's region.
+      // And replace Cmp with #0 (false) to collapse G1 post barrier.
+      Node* xorx = node->find_out_with(Op_XorX);
+      if (xorx != NULL) {
+        Node* shift = xorx->unique_out();
+        Node* cmpx = shift->unique_out();
+        assert(cmpx->is_Cmp() && cmpx->unique_out()->is_Bool() &&
+            cmpx->unique_out()->as_Bool()->_test._test == BoolTest::ne,
+            "missing region check in G1 post barrier");
+        macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
+
+        this->remove_pre_barrier(macro, this_region);
+      } else {
+        assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
+        // This is a G1 post barrier emitted by the Object.clone() intrinsic.
+        // Search for the CastP2X->URShiftX->AddP->LoadB->Cmp path which checks if the card
+        // is marked as young_gen and replace the Cmp with 0 (false) to collapse the barrier.
+        Node* shift = node->find_out_with(Op_URShiftX);
+        assert(shift != NULL, "missing G1 post barrier");
+        Node* addp = shift->unique_out();
+        TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+          Node *storeCM = addp->find_out_with(Op_StoreCM);
+          assert(storeCM != NULL, "missing G1 post barrier");
+          macro->replace_node(storeCM, storeCM->in(MemNode::Memory));
+        } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_ENABLE {
+            Node* load = addp->find_out_with(Op_LoadB);
+            assert(load != NULL, "missing G1 post barrier");
+            Node* cmpx = load->unique_out();
+            assert(cmpx->is_Cmp() && cmpx->unique_out()->is_Bool() &&
+                  cmpx->unique_out()->as_Bool()->_test._test == BoolTest::ne,
+                  "missing card value check in G1 post barrier");
+            macro->replace_node(cmpx, macro->makecon(TypeInt::CC_EQ));
+        }
+        // There is no G1 pre barrier in this case
+      }
+      // Now CastP2X can be removed since it is used only on dead path
+      // which currently still alive until igvn optimize it.
+      assert(node->outcnt() == 0 || node->unique_out()->Opcode() == Op_URShiftX, "");
+      macro->replace_node(node, macro->top());
     }
-    // Now CastP2X can be removed since it is used only on dead path
-    // which currently still alive until igvn optimize it.
-    assert(node->outcnt() == 0 || node->unique_out()->Opcode() == Op_URShiftX, "");
-    macro->replace_node(node, macro->top());
-#endif
   }
 }
 

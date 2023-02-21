@@ -29,10 +29,6 @@
 #include "runtime/interfaceSupport.inline.hpp"
 #include "utilities/macros.hpp"
 
-#ifdef TP_REMSET_INVESTIGATION
-#include "gc/g1/g1RemSet.hpp"
-#endif
-
 void G1BarrierSetRuntime::write_ref_array_pre_oop_entry(oop* dst, size_t length) {
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
   bs->write_ref_array_pre(dst, length, false);
@@ -44,9 +40,9 @@ void G1BarrierSetRuntime::write_ref_array_pre_narrow_oop_entry(narrowOop* dst, s
 }
 
 void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* dst, size_t length) {
-#ifdef TP_REMSET_INVESTIGATION
-  ShouldNotCallThis();
-#endif
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    ShouldNotCallThis();
+  }
 
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
   bs->G1BarrierSet::write_ref_array(dst, length);
@@ -65,11 +61,11 @@ JRT_END
 // G1 post write barrier slowpath
 JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTable::CardValue* card_addr,
                                                                JavaThread* thread))
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  assert(thread == JavaThread::current(), "pre-condition");
-  G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thread);
-  G1BarrierSet::dirty_card_queue_set().enqueue(queue, card_addr);
-#else
-  ShouldNotCallThis();
-#endif
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    assert(thread == JavaThread::current(), "pre-condition");
+    G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thread);
+    G1BarrierSet::dirty_card_queue_set().enqueue(queue, card_addr);
+  } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
+    ShouldNotCallThis();
+  }
 JRT_END

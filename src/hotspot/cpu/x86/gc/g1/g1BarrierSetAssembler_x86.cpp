@@ -40,10 +40,6 @@
 #include "gc/g1/c1/g1BarrierSetC1.hpp"
 #endif
 
-#ifdef TP_REMSET_INVESTIGATION
-#include "gc/g1/g1RemSet.hpp"
-#endif
-
 #define __ masm->
 
 void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm, DecoratorSet decorators,
@@ -102,60 +98,57 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register tmp) {
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  __ push_call_clobbered_registers(false /* save_fpu */);
-#ifdef _LP64
-  if (c_rarg0 == count) { // On win64 c_rarg0 == rcx
-    assert_different_registers(c_rarg1, addr);
-    __ mov(c_rarg1, count);
-    __ mov(c_rarg0, addr);
-  } else {
-    assert_different_registers(c_rarg0, count);
-    __ mov(c_rarg0, addr);
-    __ mov(c_rarg1, count);
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+      __ push_call_clobbered_registers(false /* save_fpu */);
+    #ifdef _LP64
+      if (c_rarg0 == count) { // On win64 c_rarg0 == rcx
+        assert_different_registers(c_rarg1, addr);
+        __ mov(c_rarg1, count);
+        __ mov(c_rarg0, addr);
+      } else {
+        assert_different_registers(c_rarg0, count);
+        __ mov(c_rarg0, addr);
+        __ mov(c_rarg1, count);
+      }
+      __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_array_post_entry), 2);
+    #else
+      __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_array_post_entry),
+                      addr, count);
+    #endif
+      __ pop_call_clobbered_registers(false /* save_fpu */);
+  } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
+    G1BarrierSet* const g1bs =
+      barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
+    CardTable* const ct = g1bs->card_table();
+
+    intptr_t const card_table_base = (intptr_t) ct->byte_map_base();
+
+    Label L_ct_loop, L_done;
+    assert_different_registers(addr, count);
+
+    // Test whether count is zero
+    __ testl(count, count);
+    __ jcc(Assembler::zero, L_done); // zero count - nothing to do
+
+    // Calculate first card address and number of cards
+    const Register end = count;
+    __ leaq(end, Address(addr, count, (UseCompressedOops ? Address::times_4 : Address::times_8), 0));  // end == addr+count*oop_size
+    __ subptr(end, BytesPerHeapOop); // end - 1 to make inclusive
+    __ shrptr(addr, CardTable::card_shift());
+    __ shrptr(end, CardTable::card_shift());
+    __ subptr(end, addr); // end --> cards count
+
+    __ mov64(tmp, (intptr_t) card_table_base);
+    __ addptr(addr, tmp);
+
+    // Dirty cards
+    __ bind(L_ct_loop);
+    __ movb(Address(addr, count, Address::times_1), 0);
+    __ decrement(count);
+    __ jcc(Assembler::greaterEqual, L_ct_loop);
+
+    __ bind(L_done);
   }
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_array_post_entry), 2);
-#else
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_array_post_entry),
-                  addr, count);
-#endif
-  __ pop_call_clobbered_registers(false /* save_fpu */);
-#else
-
-  G1BarrierSet* const g1bs =
-    barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
-  CardTable* const ct = g1bs->card_table();
-  G1RemSet* const rem_set = g1bs->rem_set();
-
-  intptr_t const card_table_base = (intptr_t) ct->byte_map_base();
-  intptr_t const card_table_start = (intptr_t) ct->byte_map();
-
-  Label L_ct_loop, L_done;
-  assert_different_registers(addr, count);
-
-  // Test whether count is zero
-  __ testl(count, count);
-  __ jcc(Assembler::zero, L_done); // zero count - nothing to do
-
-  // Calculate first card address and number of cards
-  const Register end = count;
-  __ leaq(end, Address(addr, count, (UseCompressedOops ? Address::times_4 : Address::times_8), 0));  // end == addr+count*oop_size
-  __ subptr(end, BytesPerHeapOop); // end - 1 to make inclusive
-  __ shrptr(addr, CardTable::card_shift());
-  __ shrptr(end, CardTable::card_shift());
-  __ subptr(end, addr); // end --> cards count
-
-  __ mov64(tmp, (intptr_t) card_table_base);
-  __ addptr(addr, tmp);
-
-  // Dirty cards
-  __ bind(L_ct_loop);
-  __ movb(Address(addr, count, Address::times_1), 0);
-  __ decrement(count);
-  __ jcc(Assembler::greaterEqual, L_ct_loop);
-
-  __ bind(L_done);
-#endif
 }
 
 void G1BarrierSetAssembler::load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
@@ -316,30 +309,28 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   assert(thread == r15_thread, "must be");
 #endif // _LP64
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   Address queue_index(thread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
   Address buffer(thread, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
-#endif
 
   CardTableBarrierSet* ct =
     barrier_set_cast<CardTableBarrierSet>(BarrierSet::barrier_set());
 
   Label done;
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
   Label runtime;
 
-  // Does store cross heap regions?
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    // Does store cross heap regions?
 
-  __ movptr(tmp, store_addr);
-  __ xorptr(tmp, new_val);
-  __ shrptr(tmp, HeapRegion::LogOfHRGrainBytes);
-  __ jcc(Assembler::equal, done);
+    __ movptr(tmp, store_addr);
+    __ xorptr(tmp, new_val);
+    __ shrptr(tmp, HeapRegion::LogOfHRGrainBytes);
+    __ jcc(Assembler::equal, done);
 
-  // crosses regions, storing NULL?
+    // crosses regions, storing NULL?
 
-  __ cmpptr(new_val, NULL_WORD);
-  __ jcc(Assembler::equal, done);
-#endif
+    __ cmpptr(new_val, NULL_WORD);
+    __ jcc(Assembler::equal, done);
+  }
 
   // storing region crossing non-NULL, is card already dirty?
 
@@ -354,13 +345,14 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
   __ addptr(card_addr, cardtable);
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
-  __ jcc(Assembler::equal, done);
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
+    __ jcc(Assembler::equal, done);
 
-  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
-#endif
-  TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) {
+    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+  }
+
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER || UseCondCardMark) {
     __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
     __ jcc(Assembler::equal, done);
   }
@@ -371,23 +363,23 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movb(Address(card_addr, 0), G1CardTable::dirty_card_val());
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  __ movptr(tmp2, queue_index);
-  __ testptr(tmp2, tmp2);
-  __ jcc(Assembler::zero, runtime);
-  __ subptr(tmp2, wordSize);
-  __ movptr(queue_index, tmp2);
-  __ addptr(tmp2, buffer);
-  __ movptr(Address(tmp2, 0), card_addr);
-  __ jmp(done);
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    __ movptr(tmp2, queue_index);
+    __ testptr(tmp2, tmp2);
+    __ jcc(Assembler::zero, runtime);
+    __ subptr(tmp2, wordSize);
+    __ movptr(queue_index, tmp2);
+    __ addptr(tmp2, buffer);
+    __ movptr(Address(tmp2, 0), card_addr);
+    __ jmp(done);
 
-  __ bind(runtime);
-  // save the live input values
-  RegSet saved = RegSet::of(store_addr NOT_LP64(COMMA thread));
-  __ push_set(saved);
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), card_addr, thread);
-  __ pop_set(saved);
-#endif
+    __ bind(runtime);
+    // save the live input values
+    RegSet saved = RegSet::of(store_addr NOT_LP64(COMMA thread));
+    __ push_set(saved);
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), card_addr, thread);
+    __ pop_set(saved);
+  }
 
   __ bind(done);
 }
@@ -594,13 +586,14 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   NOT_LP64(__ get_thread(thread);)
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
-  __ jcc(Assembler::equal, done);
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
+    __ jcc(Assembler::equal, done);
 
-  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
-#endif
-  TP_REMSET_INVESTIGATION_ONLY(if (UseCondCardMark)) {
+    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+  }
+
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER || UseCondCardMark) {
     __ cmpb(Address(card_addr, 0), CardTable::dirty_card_val());
     __ jcc(Assembler::equal, done);
   }
@@ -610,29 +603,29 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ movb(Address(card_addr, 0), CardTable::dirty_card_val());
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  const Register tmp = rdx;
-  __ push(rdx);
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    const Register tmp = rdx;
+    __ push(rdx);
 
-  __ movptr(tmp, queue_index);
-  __ testptr(tmp, tmp);
-  __ jcc(Assembler::zero, runtime);
-  __ subptr(tmp, wordSize);
-  __ movptr(queue_index, tmp);
-  __ addptr(tmp, buffer);
-  __ movptr(Address(tmp, 0), card_addr);
-  __ jmp(enqueued);
+    __ movptr(tmp, queue_index);
+    __ testptr(tmp, tmp);
+    __ jcc(Assembler::zero, runtime);
+    __ subptr(tmp, wordSize);
+    __ movptr(queue_index, tmp);
+    __ addptr(tmp, buffer);
+    __ movptr(Address(tmp, 0), card_addr);
+    __ jmp(enqueued);
 
-  __ bind(runtime);
-  __ push_call_clobbered_registers();
+    __ bind(runtime);
+    __ push_call_clobbered_registers();
 
-  __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), card_addr, thread);
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), card_addr, thread);
 
-  __ pop_call_clobbered_registers();
+    __ pop_call_clobbered_registers();
 
-  __ bind(enqueued);
-  __ pop(rdx);
-#endif
+    __ bind(enqueued);
+    __ pop(rdx);
+  }
 
   __ bind(done);
   __ pop(rcx);

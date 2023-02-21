@@ -252,10 +252,6 @@ private:
     static uint chunk_size() { return M; }
 
     void do_work(uint worker_id) override {
-#ifdef TP_REMSET_INVESTIGATION
-      G1CardTable* ct = G1CollectedHeap::heap()->card_table();
-      MemRegion whole_heap = G1CollectedHeap::heap()->reserved();
-#endif
       while (_cur_dirty_regions < _regions->size()) {
         uint next = Atomic::fetch_and_add(&_cur_dirty_regions, _chunk_length);
         uint max = MIN2(next + _chunk_length, _regions->size());
@@ -472,12 +468,6 @@ public:
   void clear_scan_top(uint region_idx) {
     set_scan_top(region_idx, NULL);
   }
-
-#ifdef TP_REMSET_INVESTIGATION
-  bool all_dirty_regions_contains(uint region) const {
-    return _all_dirty_regions->contains(region) || _next_dirty_regions->contains(region);
-  }
-#endif
 };
 
 G1RemSet::G1RemSet(G1CollectedHeap* g1h,
@@ -1433,7 +1423,7 @@ void G1RemSet::print_merge_heap_roots_stats() {
   }
 }
 
-#ifdef TP_REMSET_INVESTIGATION
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
 class G1DirtyNonCollectionSetRegionsTask : public WorkerTask {
  private:
   G1CollectedHeap *_g1h;
@@ -1505,13 +1495,11 @@ void G1RemSet::merge_heap_roots(bool initial_evacuation) {
     workers->run_task(&cl, num_workers);
   }
 
-#ifdef TP_REMSET_INVESTIGATION
-  {
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
     G1DirtyNonCollectionSetRegionsTask task(_scan_state);
     log_debug(gc)("Dirty all cards not belonging to collection set regions");
     g1h->workers()->run_task(&task);
   }
-#endif
 
   print_merge_heap_roots_stats();
 }
@@ -1711,9 +1699,9 @@ void G1RemSet::enqueue_for_reprocessing(CardValue* card_ptr) {
   // this card.  Since buffers are processed in FIFO order and we try to
   // keep some in the queue, it is likely that the racing state will have
   // resolved by the time this card comes up for reprocessing.
-#ifdef TP_REMSET_INVESTIGATION
-  ShouldNotCallThis();
-#endif
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    ShouldNotCallThis();
+  }
   *card_ptr = G1CardTable::dirty_card_val();
   G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
   void** buffer = dcqs.allocate_buffer();
@@ -1749,9 +1737,3 @@ void G1RemSet::print_summary_info() {
     current.print_on(&ls, true /* show_thread_times*/);
   }
 }
-
-#ifdef TP_REMSET_INVESTIGATION
-bool G1RemSet::region_included_in_cleanup_task(HeapRegion* region) const {
-  return _scan_state->all_dirty_regions_contains(region->hrm_index());
-}
-#endif

@@ -59,7 +59,6 @@ G1BarrierSet::G1BarrierSet(G1CardTable* card_table) :
   _dirty_card_queue_buffer_allocator("DC Buffer Allocator", G1UpdateBufferSize),
   _satb_mark_queue_set(&_satb_mark_queue_buffer_allocator),
   _dirty_card_queue_set(&_dirty_card_queue_buffer_allocator)
-  TP_REMSET_INVESTIGATION_ONLY(COMMA _rem_set(NULL))
 {}
 
 template <class T> void
@@ -91,18 +90,19 @@ void G1BarrierSet::write_ref_array_pre(narrowOop* dst, size_t count, bool dest_u
 }
 
 void G1BarrierSet::write_ref_field_post_slow(volatile CardValue* byte) {
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  // In the slow path, we know a card is not young
-  assert(*byte != G1CardTable::g1_young_card_val(), "slow path invoked without filtering");
-  OrderAccess::storeload();
-#endif
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    // In the slow path, we know a card is not young
+    assert(*byte != G1CardTable::g1_young_card_val(), "slow path invoked without filtering");
+    OrderAccess::storeload();
+  }
+
   if (*byte != G1CardTable::dirty_card_val()) {
     *byte = G1CardTable::dirty_card_val();
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-    Thread* thr = Thread::current();
-    G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
-    G1BarrierSet::dirty_card_queue_set().enqueue(queue, byte);
-#endif
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+      Thread* thr = Thread::current();
+      G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
+      G1BarrierSet::dirty_card_queue_set().enqueue(queue, byte);
+    }
   }
 }
 
@@ -112,27 +112,32 @@ void G1BarrierSet::invalidate(MemRegion mr) {
   }
   volatile CardValue* byte = _card_table->byte_for(mr.start());
   CardValue* last_byte = _card_table->byte_for(mr.last());
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  // skip initial young cards
-  for (; byte <= last_byte && *byte == G1CardTable::g1_young_card_val(); byte++);
-#endif
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    // skip initial young cards
+    for (; byte <= last_byte && *byte == G1CardTable::g1_young_card_val(); byte++);
+  }
 
   if (byte <= last_byte) {
     // Enqueue if necessary.
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-    OrderAccess::storeload();
+    TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+      OrderAccess::storeload();
+    }
+
     Thread* thr = Thread::current();
     G1DirtyCardQueueSet& qset = G1BarrierSet::dirty_card_queue_set();
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thr);
-#endif
     for (; byte <= last_byte; byte++) {
       CardValue bv = *byte;
-      if (NOT_TP_REMSET_INVESTIGATION((bv != G1CardTable::g1_young_card_val()) &&)
-          (bv != G1CardTable::dirty_card_val())) {
-        *byte = G1CardTable::dirty_card_val();
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-        qset.enqueue(queue, byte);
-#endif
+      TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+        if ((bv != G1CardTable::g1_young_card_val()) &&
+            (bv != G1CardTable::dirty_card_val())) {
+          *byte = G1CardTable::dirty_card_val();
+          qset.enqueue(queue, byte);
+        }
+      } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
+        if ((bv != G1CardTable::dirty_card_val())) {
+          *byte = G1CardTable::dirty_card_val();
+        }
       }
     }
   }

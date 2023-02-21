@@ -151,34 +151,34 @@ void G1BarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_v
   }
   assert(addr->is_register(), "must be a register at this point");
 
-#ifdef DISABLE_TP_REMSET_INVESTIGATION
-  LIR_Opr xor_res = gen->new_pointer_register();
-  LIR_Opr xor_shift_res = gen->new_pointer_register();
-  if (TwoOperandLIRForm) {
-    __ move(addr, xor_res);
-    __ logical_xor(xor_res, new_val, xor_res);
-    __ move(xor_res, xor_shift_res);
-    __ unsigned_shift_right(xor_shift_res,
-                            LIR_OprFact::intConst(HeapRegion::LogOfHRGrainBytes),
-                            xor_shift_res,
-                            LIR_Opr::illegalOpr());
-  } else {
-    __ logical_xor(addr, new_val, xor_res);
-    __ unsigned_shift_right(xor_res,
-                            LIR_OprFact::intConst(HeapRegion::LogOfHRGrainBytes),
-                            xor_shift_res,
-                            LIR_Opr::illegalOpr());
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    LIR_Opr xor_res = gen->new_pointer_register();
+    LIR_Opr xor_shift_res = gen->new_pointer_register();
+    if (TwoOperandLIRForm) {
+      __ move(addr, xor_res);
+      __ logical_xor(xor_res, new_val, xor_res);
+      __ move(xor_res, xor_shift_res);
+      __ unsigned_shift_right(xor_shift_res,
+                              LIR_OprFact::intConst(HeapRegion::LogOfHRGrainBytes),
+                              xor_shift_res,
+                              LIR_Opr::illegalOpr());
+    } else {
+      __ logical_xor(addr, new_val, xor_res);
+      __ unsigned_shift_right(xor_res,
+                              LIR_OprFact::intConst(HeapRegion::LogOfHRGrainBytes),
+                              xor_shift_res,
+                              LIR_Opr::illegalOpr());
+    }
+
+    __ cmp(lir_cond_notEqual, xor_shift_res, LIR_OprFact::intptrConst(NULL_WORD));
   }
 
-  __ cmp(lir_cond_notEqual, xor_shift_res, LIR_OprFact::intptrConst(NULL_WORD));
-#endif
-
   CodeStub* slow = new G1PostBarrierStub(addr, new_val);
-#ifdef TP_REMSET_INVESTIGATION
-  __ jump(slow);
-#else
-  __ branch(lir_cond_notEqual, slow);
-#endif
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(TP_REMSET_INVESTIGATION_DYNAMIC_SWITCH_PLACEHOLDER) {
+    __ jump(slow);
+  } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_ENABLE {
+    __ branch(lir_cond_notEqual, slow);
+  }
   __ branch_destination(slow->continuation());
 }
 
