@@ -1986,8 +1986,6 @@ const int ObjectAlignmentInBytes = 8;
                                                                             \
   develop(bool, G1TpRemsetInvestigationRawParallelBarrier, TP_REMSET_INVESTIGATION_RAW_PARALLEL_BARRIER_FLAG,           \
                 "Use raw (actual) parallel gc barrier")                     \
-  develop(bool, G1TpRemsetInvestigationConcurrentRefine, TP_REMSET_INVESTIGATION_CONCURRENT_REFINE_FLAG,                \
-                "Enable concurrent refinement")                             \
 
 // end of RUNTIME_FLAGS
 
