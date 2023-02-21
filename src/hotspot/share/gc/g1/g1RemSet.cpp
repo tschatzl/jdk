@@ -264,20 +264,6 @@ private:
           HeapRegion* r = _g1h->region_at(_regions->at(i));
           if (!r->is_survivor()) {
             r->clear_cardtable();
-#ifdef TP_REMSET_INVESTIGATION
-            if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-              CardTable::CardValue* cur;
-              if (r->bottom() == whole_heap.start()) {
-                cur = ct->byte_for(r->bottom());
-              } else {
-                cur = ct->byte_after(r->bottom() - 1);
-              }
-              CardTable::CardValue* last = ct->byte_after(r->end() - 1);
-
-              size_t const cur_idx = ct->index_for_cardvalue(cur);
-              _scan_state->set_chunk_range_clean(cur_idx, last - cur);
-            }
-#endif
           }
         }
       }
@@ -339,13 +325,7 @@ public:
       _card_table_scan_state[i] = 0;
     }
 
-#ifdef TP_REMSET_INVESTIGATION
-    if (!G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-      ::memset(_region_scan_chunks, false, _num_total_scan_chunks * sizeof(*_region_scan_chunks));
-    }
-#else
     ::memset(_region_scan_chunks, false, _num_total_scan_chunks * sizeof(*_region_scan_chunks));
-#endif
   }
 
   void complete_evac_phase(bool merge_dirty_regions) {
@@ -494,22 +474,6 @@ public:
   }
 
 #ifdef TP_REMSET_INVESTIGATION
-  bool* region_scan_chunks() {
-    return _region_scan_chunks;
-  }
-
-  uint8_t scan_chunks_shift() const {
-    return _scan_chunks_shift;
-  }
-
-  void set_chunk_range_clean(size_t const region_card_idx, size_t const card_length) {
-    size_t chunk_idx = region_card_idx >> _scan_chunks_shift;
-    size_t const end_chunk = (region_card_idx + card_length - 1) >> _scan_chunks_shift;
-    for (; chunk_idx <= end_chunk; chunk_idx++) {
-      _region_scan_chunks[chunk_idx] = false;
-    }
-  }
-
   bool all_dirty_regions_contains(uint region) const {
     return _all_dirty_regions->contains(region) || _next_dirty_regions->contains(region);
   }
@@ -1491,10 +1455,9 @@ class G1DirtyNonCollectionSetRegionsTask : public WorkerTask {
       }
 
       _scan_state->add_dirty_region(hr->hrm_index());
-      if (!G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-        size_t const first_card_idx = _ct->index_for(hr->bottom());
-        _scan_state->set_chunk_range_dirty(first_card_idx, HeapRegion::CardsPerRegion);
-      }
+
+      size_t const first_card_idx = _ct->index_for(hr->bottom());
+      _scan_state->set_chunk_range_dirty(first_card_idx, HeapRegion::CardsPerRegion);
       return false;
     }
   };
@@ -1788,31 +1751,6 @@ void G1RemSet::print_summary_info() {
 }
 
 #ifdef TP_REMSET_INVESTIGATION
-bool* G1RemSet::region_scan_chunk_table() {
-  return _scan_state->region_scan_chunks();
-}
-
-intptr_t G1RemSet::region_scan_chunk_table_base() {
-  intptr_t const heap_start = (intptr_t) G1CollectedHeap::heap()->reserved().start();
-  intptr_t const chunk_table_base = ((intptr_t) _scan_state->region_scan_chunks()) -
-    (heap_start >> (CardTable::card_shift() + _scan_state->scan_chunks_shift()));
-  return chunk_table_base;
-}
-
-uint8_t G1RemSet::region_scan_chunk_table_shift() const {
-  return _scan_state->scan_chunks_shift();
-}
-
-void G1RemSet::dirty_region_scan_chunk_table(CardTable::CardValue* card_ptr) {
-    size_t card_idx = _ct->index_for_cardvalue(card_ptr);
-    _scan_state->set_chunk_dirty(card_idx);
-}
-
-void G1RemSet::dirty_region_scan_chunk_table(CardTable::CardValue* card_ptr, size_t length) {
-    size_t card_idx = _ct->index_for_cardvalue(card_ptr);
-    _scan_state->set_chunk_range_dirty(card_idx, length);
-}
-
 bool G1RemSet::region_included_in_cleanup_task(HeapRegion* region) const {
   return _scan_state->all_dirty_regions_contains(region->hrm_index());
 }

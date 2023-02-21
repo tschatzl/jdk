@@ -142,11 +142,6 @@ public:
   void print_periodic_summary_info(const char* header, uint period_count, bool show_thread_times);
 
 #ifdef TP_REMSET_INVESTIGATION
-  bool* region_scan_chunk_table();
-  intptr_t region_scan_chunk_table_base();
-  uint8_t region_scan_chunk_table_shift() const;
-  void dirty_region_scan_chunk_table(CardTable::CardValue*);
-  void dirty_region_scan_chunk_table(CardTable::CardValue*, size_t);
   bool region_included_in_cleanup_task(HeapRegion*) const;
 #endif
 };

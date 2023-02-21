@@ -128,12 +128,9 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
   G1RemSet* const rem_set = g1bs->rem_set();
 
   intptr_t const card_table_base = (intptr_t) ct->byte_map_base();
-  uint8_t const chunk_table_shift = rem_set->region_scan_chunk_table_shift();
   intptr_t const card_table_start = (intptr_t) ct->byte_map();
-  intptr_t const chunk_table_base_ptr = ((intptr_t) rem_set->region_scan_chunk_table()) -
-    (card_table_start >> chunk_table_shift);
 
-  Label L_ct_loop, L_chunk_table_loop, L_done;
+  Label L_ct_loop, L_done;
   assert_different_registers(addr, count);
 
   // Test whether count is zero
@@ -150,32 +147,12 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
 
   __ mov64(tmp, (intptr_t) card_table_base);
   __ addptr(addr, tmp);
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    // Preserve number of cards
-    __ mov(tmp, count);
-  }
 
   // Dirty cards
   __ bind(L_ct_loop);
   __ movb(Address(addr, count, Address::times_1), 0);
   __ decrement(count);
   __ jcc(Assembler::greaterEqual, L_ct_loop);
-
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    // Calculate first chunk address and number of chunks
-    assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
-    __ leaq(end, Address(addr, tmp, Address::times_1, 0)); // end == card_addr + count
-    __ shrptr(addr, chunk_table_shift);
-    __ shrptr(end, chunk_table_shift);
-    __ subptr(end, addr);
-    __ mov64(tmp, chunk_table_base_ptr);
-    __ addptr(addr, tmp);
-
-    __ bind(L_chunk_table_loop);
-    __ movb(Address(addr, count, Address::times_1), true);
-    __ decrement(count);
-    __ jcc(Assembler::greaterEqual, L_chunk_table_loop);
-  }
 
   __ bind(L_done);
 #endif
@@ -350,8 +327,6 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   Label done;
 #ifdef DISABLE_TP_REMSET_INVESTIGATION
   Label runtime;
-#else
-  Label stack_cleanup;
 #endif
 
   TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier)) {
@@ -375,11 +350,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movptr(card_addr, store_addr);
   __ shrptr(card_addr, CardTable::card_shift());
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    __ push(card_addr);
-  }
-#endif
+
   // Do not use ExternalAddress to load 'byte_map_base', since 'byte_map_base' is NOT
   // a valid address and therefore is not properly handled by the relocation code.
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
@@ -393,8 +364,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 #endif
   TP_REMSET_INVESTIGATION_ONLY(if (!G1TpRemsetInvestigationRawParallelBarrier || UseCondCardMark)) {
     __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
-    Label& dirty_card_jmp_label = TP_REMSET_INVESTIGATION_ONLY(G1TpRemsetInvestigationDirtyChunkAtBarrier ? stack_cleanup :) done;
-    __ jcc(Assembler::equal, dirty_card_jmp_label);
+    __ jcc(Assembler::equal, done);
   }
 
 
@@ -403,23 +373,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
 
   __ movb(Address(card_addr, 0), G1CardTable::dirty_card_val());
 
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    G1RemSet* rem_set = G1BarrierSet::rem_set();
-    assert(rem_set != NULL, "expected non-NULL remset");
-    assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
-
-    uint8_t const chunk_shift = rem_set->region_scan_chunk_table_shift();
-    intptr_t const chunk_table_base = rem_set->region_scan_chunk_table_base();
-
-    __ pop(card_addr);
-    __ shrptr(card_addr, chunk_shift);
-    __ movptr(cardtable, chunk_table_base);
-    __ addptr(card_addr, cardtable);
-    __ movb(Address(card_addr, 0), true);
-    __ jmp(done);
-  }
-#else
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   __ movptr(tmp2, queue_index);
   __ testptr(tmp2, tmp2);
   __ jcc(Assembler::zero, runtime);
@@ -437,12 +391,6 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ pop_set(saved);
 #endif
 
-#ifdef TP_REMSET_INVESTIGATION
-  __ bind(stack_cleanup);
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    __ pop(card_addr);
-  }
-#endif
   __ bind(done);
 }
 
@@ -635,25 +583,12 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ push(rax);
   __ push(rcx);
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    __ push(rdx);
-  }
-#endif
 
   const Register cardtable = rax;
   const Register card_addr = rcx;
-#ifdef TP_REMSET_INVESTIGATION
-  const Register chunk_addr = rdx;
-#endif
 
   __ load_parameter(0, card_addr);
   __ shrptr(card_addr, CardTable::card_shift());
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    __ movptr(chunk_addr, card_addr);
-  }
-#endif
   // Do not use ExternalAddress to load 'byte_map_base', since 'byte_map_base' is NOT
   // a valid address and therefore is not properly handled by the relocation code.
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
@@ -677,21 +612,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 
   __ movb(Address(card_addr, 0), CardTable::dirty_card_val());
 
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    G1RemSet* rem_set = G1BarrierSet::rem_set();
-    assert(rem_set != NULL, "expected non-NULL remset");
-    assert(sizeof(bool) == sizeof(uint8_t), "expected 8-bit boolean type");
-
-    uint8_t const chunk_shift = rem_set->region_scan_chunk_table_shift();
-    intptr_t const chunk_table_base = rem_set->region_scan_chunk_table_base();
-
-    __ shrptr(chunk_addr, chunk_shift);
-    __ movptr(cardtable, chunk_table_base);
-    __ addptr(chunk_addr, cardtable);
-    __ movb(Address(chunk_addr, 0), true);
-  }
-#else
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   const Register tmp = rdx;
   __ push(rdx);
 
@@ -716,11 +637,6 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
 #endif
 
   __ bind(done);
-#ifdef TP_REMSET_INVESTIGATION
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-    __ pop(rdx);
-  }
-#endif
   __ pop(rcx);
   __ pop(rax);
 

@@ -337,33 +337,6 @@ bool G1BarrierSetC2::g1_can_remove_post_barrier(GraphKit* kit,
   return false;
 }
 
-#ifdef TP_REMSET_INVESTIGATION
-void G1BarrierSetC2::dirty_chunk_at_barrier(GraphKit* kit,
-                                            IdealKit& ideal,
-                                            Node* card_adr) const {
-  if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-      Node* no_base = __ top();
-      BarrierSet *bs = BarrierSet::barrier_set();
-      CardTableBarrierSet* ctbs = barrier_set_cast<CardTableBarrierSet>(bs);
-      G1RemSet* rem_set = G1BarrierSet::rem_set();
-      assert(rem_set != NULL, "expected non-NULL remset");
-
-      uint8_t const chunk_table_shift = rem_set->region_scan_chunk_table_shift();
-      intptr_t const card_table_start = (intptr_t) ctbs->card_table()->byte_map();
-      intptr_t const chunk_table_base_ptr = ((intptr_t) rem_set->region_scan_chunk_table()) -
-        (card_table_start >> chunk_table_shift);
-
-      Node* card_adr_x = __ CastPX(__ ctrl(), card_adr);
-      Node* chunk_shift = kit->intcon(chunk_table_shift);
-      Node* chunk_table_base = kit->makecon(TypeRawPtr::make((address) chunk_table_base_ptr));
-      Node* chunk_idx = __ URShiftX(card_adr_x, chunk_shift);
-      Node* chunk_ptr = __ AddP(no_base, chunk_table_base, chunk_idx);
-      Node* dirty_chunk = kit->intcon(true);
-      __ store(__ ctrl(), chunk_ptr, dirty_chunk, T_BYTE, Compile::AliasIdxRaw, MemNode::unordered);
-  }
-}
-#endif
-
 //
 // Update the card table and add card address to the queue
 //
@@ -392,9 +365,7 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
     __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
   }
 
-#ifdef TP_REMSET_INVESTIGATION
-  this->dirty_chunk_at_barrier(kit, ideal, card_adr);
-#else
+#ifdef DISABLE_TP_REMSET_INVESTIGATION
   //  Now do the queue work
   __ if_then(index, BoolTest::ne, zeroX); {
 
@@ -814,15 +785,6 @@ void G1BarrierSetC2::eliminate_gc_barrier(PhaseMacroExpand* macro, Node* node) c
           // replace it with zero to fold the test.
           macro->replace_node(mem, macro->intcon(0));
           continue;
-        }
-
-        if (mem->Opcode() == Op_CastP2X) {
-          assert(G1TpRemsetInvestigationDirtyChunkAtBarrier, "unexpected code shape");
-          Node* chunk_shift = mem->unique_out();
-          assert(chunk_shift->Opcode() == Op_URShiftL, "unexpected code shape");
-          Node* chunk_addp = chunk_shift->unique_out();
-          assert(chunk_addp->Opcode() == Op_AddP, "unexpected code shape");
-          mem = chunk_addp->unique_out();
         }
 
         assert(mem->is_Store(), "store required");

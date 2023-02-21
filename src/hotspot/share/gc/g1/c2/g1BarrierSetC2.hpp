@@ -105,9 +105,6 @@ public:
 
 private:
   void remove_pre_barrier(PhaseMacroExpand* macro, Node* this_region) const;
-#ifdef TP_REMSET_INVESTIGATION
-  void dirty_chunk_at_barrier(GraphKit* kit, IdealKit& ideal, Node* card_adr) const;
-#endif
 };
 
 #endif // SHARE_GC_G1_C2_G1BARRIERSETC2_HPP

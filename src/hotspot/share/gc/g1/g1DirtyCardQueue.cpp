@@ -422,9 +422,6 @@ class G1RefineBufferedCards : public StackObj {
 #else
       CardTable::CardValue* card_ptr = _node_buffer[start];
       *card_ptr = G1CardTable::dirty_card_val();
-      if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-        _g1rs->dirty_region_scan_chunk_table(card_ptr);
-      }
 #endif
     }
   }

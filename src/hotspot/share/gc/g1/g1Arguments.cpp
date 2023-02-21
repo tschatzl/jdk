@@ -266,13 +266,11 @@ void G1Arguments::initialize() {
                "G1TpRemsetInvestigationRawParallelBarrier=%s; "
                "G1TpRemsetInvestigationDirectUpdate=%s; "
                "G1TpRemsetInvestigationConcurrentRefine=%s; "
-               "G1TpRemsetInvestigationDirtyChunkAtBarrier=%s; "
                "G1TpRemsetInvestigationDirtyYoungDirectly=%s; "
                "G1TpRemsetInvestigationDirtyYoungDirectlyOptimization=%s",
                BOOLTOSTR(G1TpRemsetInvestigationRawParallelBarrier),
                BOOLTOSTR(G1TpRemsetInvestigationDirectUpdate),
                BOOLTOSTR(G1TpRemsetInvestigationConcurrentRefine),
-               BOOLTOSTR(G1TpRemsetInvestigationDirtyChunkAtBarrier),
                BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectly),
                BOOLTOSTR(G1TpRemsetInvestigationDirtyYoungDirectlyOptimization));
 #undef BOOLTOSTR

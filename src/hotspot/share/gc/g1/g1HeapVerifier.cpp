@@ -353,33 +353,6 @@ private:
   VerifyOption     _vo;
   bool             _failures;
 
-  void verify_region_chunks(HeapRegion* r) {
-    G1CollectedHeap* g1h = G1CollectedHeap::heap();
-    G1RemSet* rem_set = g1h->rem_set();
-    G1CardTable* ct = g1h->card_table();
-
-    uint8_t const chunk_shift = rem_set->region_scan_chunk_table_shift();
-    bool* const chunk_table = rem_set->region_scan_chunk_table();
-
-    CardTable::CardValue* cur = ct->byte_for(r->bottom());
-    CardTable::CardValue* last = ct->byte_after(r->end() - 1);
-    assert(cur < last, "sanity");
-    for (; !_failures && cur != last; ++cur) {
-      CardTable::CardValue cur_value = *cur;
-      if (cur_value == G1CardTable::dirty_card_val()) {
-        size_t const cur_idx = ct->index_for_cardvalue(cur);
-        size_t const chunk_idx = cur_idx >> chunk_shift;
-        if (!chunk_table[chunk_idx]) {
-          log_error(gc, verify)("Chunk table clean for a dirty card: region %u (%p); card %zu (%p) value is %u, chunk %zu is clear",
-            r->hrm_index(), r->bottom(),
-            cur_idx, cur, cur_value,
-            chunk_idx);
-          _failures = true;
-        }
-      }
-    }
-  }
-
 public:
   VerifyRegionClosure(VerifyOption vo)
     : _vo(vo),
@@ -429,10 +402,6 @@ public:
           _failures = true;
         }
       }
-    }
-
-    if (G1TpRemsetInvestigationDirtyChunkAtBarrier) {
-      this->verify_region_chunks(r);
     }
 
     // stop the region iteration if we hit a failure
