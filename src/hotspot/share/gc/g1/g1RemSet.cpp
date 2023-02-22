@@ -478,7 +478,8 @@ G1RemSet::G1RemSet(G1CollectedHeap* g1h,
   _g1h(g1h),
   _ct(ct),
   _g1p(_g1h->policy()),
-  _hot_card_cache(hot_card_cache) {
+  _hot_card_cache(hot_card_cache),
+  _dirty_everything_on_next_merge(false) {
 }
 
 G1RemSet::~G1RemSet() {
@@ -1495,10 +1496,11 @@ void G1RemSet::merge_heap_roots(bool initial_evacuation) {
     workers->run_task(&cl, num_workers);
   }
 
-  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
+  if (_dirty_everything_on_next_merge TP_REMSET_INVESTIGATION_ONLY(|| G1CollectedHeap::heap()->is_throughput_barrier_enabled())) {
     G1DirtyNonCollectionSetRegionsTask task(_scan_state);
     log_debug(gc)("Dirty all cards not belonging to collection set regions");
     g1h->workers()->run_task(&task);
+    _dirty_everything_on_next_merge = false;
   }
 
   print_merge_heap_roots_stats();
@@ -1737,3 +1739,9 @@ void G1RemSet::print_summary_info() {
     current.print_on(&ls, true /* show_thread_times*/);
   }
 }
+
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+  void G1RemSet::dirty_everything_on_next_merge() {
+    this->_dirty_everything_on_next_merge = true;
+  }
+#endif

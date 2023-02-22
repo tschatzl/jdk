@@ -71,6 +71,8 @@ private:
   G1Policy*              _g1p;
   G1HotCardCache*        _hot_card_cache;
 
+  bool _dirty_everything_on_next_merge;
+
   void print_merge_heap_roots_stats();
 
   void assert_scan_top_is_null(uint hrm_index) NOT_DEBUG_RETURN;
@@ -140,6 +142,10 @@ public:
 
   // Print accumulated summary info from the last time called.
   void print_periodic_summary_info(const char* header, uint period_count, bool show_thread_times);
+
+#ifdef TP_REMSET_INVESTIGATION_RELEVANT
+  void dirty_everything_on_next_merge();
+#endif
 };
 
 #endif // SHARE_GC_G1_G1REMSET_HPP

@@ -32,7 +32,11 @@ void G1CardTable::g1_mark_as_young(const MemRegion& mr) {
   CardValue *const first = byte_for(mr.start());
   CardValue *const last = byte_after(mr.last());
 
-  memset_with_concurrent_readers(first, g1_young_gen, last - first);
+  TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
+    memset_with_concurrent_readers(first, g1_young_gen, last - first);
+  } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
+    memset_with_concurrent_readers(first, G1CardTable::dirty_card_val(), last - first);
+  }
 }
 
 #ifndef PRODUCT

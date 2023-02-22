@@ -2441,16 +2441,42 @@ bool G1CollectedHeap::is_obj_dead_cond(const oop obj,
 }
 
 #ifdef TP_REMSET_INVESTIGATION_RELEVANT
+class YoungRegionCardTableUpdateClosure : public HeapRegionIndexClosure {
+ private:
+  G1CollectedHeap *_g1h;
+  G1CardTable *_ct;
+
+ public:
+  YoungRegionCardTableUpdateClosure(G1CollectedHeap *g1h)
+    : _g1h(g1h), _ct(g1h->card_table()) {}
+
+  bool do_heap_region_index(uint region_index) final {
+    HeapRegion * const hr = _g1h->region_at(region_index);
+    if (hr->is_young()) {
+      MemRegion mr(hr->bottom(), hr->end());
+      _ct->g1_mark_as_young(mr);
+    }
+
+    return false;
+  }
+};
+
 void G1CollectedHeap::set_throughput_barrier_enabled(bool enable) {
   assert(SafepointSynchronize::is_at_safepoint(), "throughput barrier switch is only possible at safepoint");
   assert(static_cast<G1ThroughputBarrierModes>(G1ThroughputBarrierMode) == G1ThroughputBarrierModes::DynamicSwitch,
     "throughput barrier switch is not allowed in current mode");
 
-  CodeCache::mark_all_nmethods_for_deoptimization();
-  Deoptimization::deoptimize_all_marked();
   this->throughput_barrier_enabled = enable;
 
-  log_info(gc, ergo)("G1 throughtput barrier is %s; deoptimization done",
+  CodeCache::mark_all_nmethods_for_deoptimization();
+  Deoptimization::deoptimize_all_marked();
+
+  YoungRegionCardTableUpdateClosure young_region_ct_update(this);
+  this->heap_region_iterate(&young_region_ct_update);
+
+  this->rem_set()->dirty_everything_on_next_merge();
+
+  log_info(gc, ergo)("G1 throughtput barrier is %s; deoptimization and card table update done",
     (enable ? "enabled" : "disabled"));
 }
 #endif
