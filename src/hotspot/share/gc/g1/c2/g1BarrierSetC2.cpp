@@ -503,6 +503,11 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
     TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_ENABLE(!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) __ end_if();
   }
 
+  const TypeFunc *tf2 = TypeFunc::make(TypeTuple::make(TypeFunc::Parms, TypeTuple::fields(0)), TypeTuple::make(TypeFunc::Parms, TypeTuple::fields(0)));
+  if (G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
+    __ make_leaf_call(tf2, CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::assert_throughput), "assert_throughput", NULL);
+  }
+
   // Final sync IdealKit and GraphKit.
   kit->final_sync(ideal);
 }

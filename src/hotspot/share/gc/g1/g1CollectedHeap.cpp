@@ -2474,6 +2474,8 @@ void G1CollectedHeap::set_throughput_barrier_enabled(bool enable) {
   YoungRegionCardTableUpdateClosure young_region_ct_update(this);
   this->heap_region_iterate(&young_region_ct_update);
 
+  this->verifier()->verify_dirty_young_regions();
+
   this->rem_set()->dirty_everything_on_next_merge();
 
   log_info(gc, ergo)("G1 throughtput barrier is %s; deoptimization and card table update done",

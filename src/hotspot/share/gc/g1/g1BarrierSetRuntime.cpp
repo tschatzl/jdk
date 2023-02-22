@@ -45,7 +45,7 @@ void G1BarrierSetRuntime::write_ref_array_pre_narrow_oop_entry(narrowOop* dst, s
 
 void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* dst, size_t length) {
   TP_REMSET_INVESTIGATION_ONLY_IF_OTHERWISE_DISABLE(G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
-    ShouldNotCallThis();
+    // ShouldNotCallThis();
   }
 
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
@@ -70,6 +70,13 @@ JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTa
     G1DirtyCardQueue& queue = G1ThreadLocalData::dirty_card_queue(thread);
     G1BarrierSet::dirty_card_queue_set().enqueue(queue, card_addr);
   } TP_REMSET_INVESTIGATION_ONLY_ELSE_OTHERWISE_DISABLE {
-    ShouldNotCallThis();
+    // ShouldNotCallThis();
+  }
+JRT_END
+
+JRT_LEAF(void, G1BarrierSetRuntime::assert_throughput())
+  if (!G1CollectedHeap::heap()->is_throughput_barrier_enabled()) {
+    fprintf(stderr, "Expected throughput barrier to be enabled\n");
+    abort();
   }
 JRT_END

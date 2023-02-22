@@ -1023,6 +1023,11 @@ void G1Policy::report_ihop_statistics() {
 void G1Policy::record_young_gc_pause_end(bool evacuation_failed) {
   phase_times()->record_gc_pause_end();
   phase_times()->print(evacuation_failed);
+  if (G1ThroughputBarrierMode == static_cast<uint>(G1ThroughputBarrierModes::DynamicSwitch) && std::rand() * 1.0 / RAND_MAX > 0.9) { // TODO Implement actual switching policy
+    bool new_mode = !_g1h->is_throughput_barrier_enabled();
+    _g1h->set_throughput_barrier_enabled(new_mode);
+    fprintf(stderr, "Switched throughput barrier mode to %u\n", new_mode);
+  }
 }
 
 double G1Policy::predict_base_time_ms(size_t pending_cards,
