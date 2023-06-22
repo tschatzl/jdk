@@ -510,13 +510,13 @@
   product(bool, VerifyBeforeExit, trueInDebug, DIAGNOSTIC,                  \
           "Verify system before exiting")                                   \
                                                                             \
-  product(bool, VerifyBeforeGC, false, DIAGNOSTIC,                          \
+  product(bool, VerifyBeforeGC, true, DIAGNOSTIC,                          \
           "Verify memory system before GC")                                 \
                                                                             \
-  product(bool, VerifyAfterGC, false, DIAGNOSTIC,                           \
+  product(bool, VerifyAfterGC, true, DIAGNOSTIC,                           \
           "Verify memory system after GC")                                  \
                                                                             \
-  product(bool, VerifyDuringGC, false, DIAGNOSTIC,                          \
+  product(bool, VerifyDuringGC, true, DIAGNOSTIC,                          \
           "Verify memory system during GC (between phases)")                \
                                                                             \
   product(int, VerifyArchivedFields, 0, DIAGNOSTIC,                         \
