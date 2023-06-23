@@ -972,6 +972,29 @@ public sealed interface MemorySegment permits AbstractMemorySegmentImpl {
 
     /**
      * Copy the contents of this memory segment into a new byte array.
+     * If this segment is a heap segment, this method returns a native view of this segment.
+     * <p>
+     * Any writes to the native view will be committed back into this segment by the time the
+     * give {@code session} is closed. This segment should not be used while the returned view is
+     * in use, since it may result in changes being overwritten when the view is edited.
+     * <p>
+     * In the simplest implementation this method will create an off-heap copy of this segment,
+     * and copy the contents from the view back into this segment when the session is closed. But
+     * some VM configurations may choose to elide the copy and have the view share its memory
+     * with this segment.
+     *
+     * @param arena the arena to be used for the returned view
+     * @return a native view of this segment.
+     * @throws IllegalStateException if the {@linkplain #scope() scope} associated with this segment is not
+     * {@linkplain Scope#isAlive() alive}.
+     * @throws WrongThreadException if this method is called from a thread {@code T},
+     * such that {@code isAccessibleBy(T) == false}.
+     * @throws UnsupportedOperationException if this segment is not a heap segment
+     */
+    MemorySegment asNativeView(Arena arena);
+
+    /**
+     * Copy the contents of this memory segment into a fresh byte array.
      * @param elementLayout the source element layout. If the byte order associated with the layout is
      * different from the {@linkplain ByteOrder#nativeOrder native order}, a byte swap operation will be performed on each array element.
      * @return a new byte array whose contents are copied from this memory segment.

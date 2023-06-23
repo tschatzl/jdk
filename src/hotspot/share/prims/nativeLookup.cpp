@@ -205,6 +205,7 @@ extern "C" {
   void JNICALL JVM_RegisterUpcallHandlerMethods(JNIEnv *env, jclass unsafecls);
   void JNICALL JVM_RegisterUpcallLinkerMethods(JNIEnv *env, jclass unsafecls);
   void JNICALL JVM_RegisterNativeEntryPointMethods(JNIEnv *env, jclass unsafecls);
+  void JNICALL JVM_RegisterForeignGlobalsMethods(JNIEnv *env, jclass unsafecls);
   void JNICALL JVM_RegisterPerfMethods(JNIEnv *env, jclass perfclass);
   void JNICALL JVM_RegisterWhiteBoxMethods(JNIEnv *env, jclass wbclass);
   void JNICALL JVM_RegisterVectorSupportMethods(JNIEnv *env, jclass vsclass);
@@ -219,15 +220,16 @@ extern "C" {
 #define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
 
 static JNINativeMethod lookup_special_native_methods[] = {
-  { CC"Java_jdk_internal_misc_Unsafe_registerNatives",             nullptr, FN_PTR(JVM_RegisterJDKInternalMiscUnsafeMethods) },
-  { CC"Java_java_lang_invoke_MethodHandleNatives_registerNatives", nullptr, FN_PTR(JVM_RegisterMethodHandleMethods) },
-  { CC"Java_jdk_internal_foreign_abi_UpcallStubs_registerNatives",      nullptr, FN_PTR(JVM_RegisterUpcallHandlerMethods) },
-  { CC"Java_jdk_internal_foreign_abi_UpcallLinker_registerNatives",      nullptr, FN_PTR(JVM_RegisterUpcallLinkerMethods) },
-  { CC"Java_jdk_internal_foreign_abi_NativeEntryPoint_registerNatives",      nullptr, FN_PTR(JVM_RegisterNativeEntryPointMethods) },
-  { CC"Java_jdk_internal_perf_Perf_registerNatives",               nullptr, FN_PTR(JVM_RegisterPerfMethods)         },
-  { CC"Java_sun_hotspot_WhiteBox_registerNatives",                 nullptr, FN_PTR(JVM_RegisterWhiteBoxMethods)     },
-  { CC"Java_jdk_test_whitebox_WhiteBox_registerNatives",           nullptr, FN_PTR(JVM_RegisterWhiteBoxMethods)     },
-  { CC"Java_jdk_internal_vm_vector_VectorSupport_registerNatives", nullptr, FN_PTR(JVM_RegisterVectorSupportMethods)},
+  { CC"Java_jdk_internal_misc_Unsafe_registerNatives",                  nullptr, FN_PTR(JVM_RegisterJDKInternalMiscUnsafeMethods) },
+  { CC"Java_java_lang_invoke_MethodHandleNatives_registerNatives",      nullptr, FN_PTR(JVM_RegisterMethodHandleMethods)          },
+  { CC"Java_jdk_internal_foreign_abi_UpcallStubs_registerNatives",      nullptr, FN_PTR(JVM_RegisterUpcallHandlerMethods)         },
+  { CC"Java_jdk_internal_foreign_abi_UpcallLinker_registerNatives",     nullptr, FN_PTR(JVM_RegisterUpcallLinkerMethods)          },
+  { CC"Java_jdk_internal_foreign_abi_NativeEntryPoint_registerNatives", nullptr, FN_PTR(JVM_RegisterNativeEntryPointMethods)      },
+  { CC"Java_jdk_internal_foreign_ForeignGlobals_registerNatives",       nullptr, FN_PTR(JVM_RegisterForeignGlobalsMethods)        },
+  { CC"Java_jdk_internal_perf_Perf_registerNatives",                    nullptr, FN_PTR(JVM_RegisterPerfMethods)                  },
+  { CC"Java_sun_hotspot_WhiteBox_registerNatives",                      nullptr, FN_PTR(JVM_RegisterWhiteBoxMethods)              },
+  { CC"Java_jdk_test_whitebox_WhiteBox_registerNatives",                nullptr, FN_PTR(JVM_RegisterWhiteBoxMethods)              },
+  { CC"Java_jdk_internal_vm_vector_VectorSupport_registerNatives",      nullptr, FN_PTR(JVM_RegisterVectorSupportMethods)         },
 #if INCLUDE_JVMCI
   { CC"Java_jdk_vm_ci_runtime_JVMCI_initializeRuntime",            nullptr, FN_PTR(JVM_GetJVMCIRuntime)             },
   { CC"Java_jdk_vm_ci_services_Services_readSystemPropertiesInfo", nullptr, FN_PTR(JVM_ReadSystemPropertiesInfo)    },

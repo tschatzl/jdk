@@ -511,6 +511,7 @@ class CollectedHeap : public CHeapObj<mtGC> {
   // These functions are potentially safepointing.
   virtual void pin_object(JavaThread* thread, oop obj) = 0;
   virtual void unpin_object(JavaThread* thread, oop obj) = 0;
+  virtual bool supports_object_pinning() const = 0;
 
   // Support for loading objects from CDS archive into the heap
   // (usually as a snapshot of the old generation).

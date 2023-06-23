@@ -111,6 +111,7 @@ public:
 
   void pin_object(JavaThread* thread, oop obj) override;
   void unpin_object(JavaThread* thread, oop obj) override;
+  bool supports_object_pinning() const override { return false; }
 };
 
 #endif // SHARE_GC_SERIAL_SERIALHEAP_HPP

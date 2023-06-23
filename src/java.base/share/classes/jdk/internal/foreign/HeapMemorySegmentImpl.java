@@ -26,6 +26,7 @@
 
 package jdk.internal.foreign;
 
+import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -90,6 +91,24 @@ public abstract sealed class HeapMemorySegmentImpl extends AbstractMemorySegment
         }
         JavaNioAccess nioAccess = SharedSecrets.getJavaNioAccess();
         return nioAccess.newHeapByteBuffer(baseByte, (int)offset - BYTE_ARR_BASE, (int) byteSize(), null);
+    }
+
+    @Override
+    public MemorySegment asNativeView(Arena arena) {
+        long byteSize = byteSize();
+        if (ForeignGlobals.PINNING_SUPPORTED) {
+            Object array = base;
+            long addr = ForeignGlobals.pinArray(array);  // returned pointer points at first element
+            addr += address(); // add segment's own offset
+            MemorySegment ms =  NativeMemorySegmentImpl.makeNativeSegmentUnchecked(addr, byteSize,
+                    MemorySessionImpl.toMemorySession(arena), () -> ForeignGlobals.unpinArray(array));
+            return ms;
+        } else {
+            MemorySegment ms = arena.allocate(byteSize, maxAlignMask())
+                    .reinterpret(arena, raw -> this.copyFrom(raw));
+            ms.copyFrom(this);
+            return ms;
+        }
     }
 
     // factories

@@ -25,7 +25,9 @@
 #include "foreignGlobals.hpp"
 #include "classfile/javaClasses.hpp"
 #include "memory/resourceArea.hpp"
+#include "memory/universe.hpp"
 #include "prims/foreignGlobals.inline.hpp"
+#include "runtime/interfaceSupport.inline.hpp"
 #include "runtime/jniHandles.inline.hpp"
 #include "utilities/resourceHash.hpp"
 
@@ -392,3 +394,43 @@ ArgumentShuffle::ArgumentShuffle(
                                                 num_out_args, out_regs,
                                                 in_sig_bt, shuffle_temp);
 }
+
+JNI_ENTRY(jboolean, FG_GCSupportsPinning(JNIEnv *env, jclass ignored))
+  return Universe::heap()->supports_object_pinning();
+JNI_END
+
+JNI_ENTRY(jlong, FG_PinArray(JNIEnv *env, jclass ignored, jarray arr))
+  assert(Universe::heap()->supports_object_pinning(), "no pinning");
+  Handle a(thread, JNIHandles::resolve_non_null(arr));
+  assert(a->is_typeArray(), "just checking");
+
+  Universe::heap()->pin_object(thread, a());
+
+  BasicType type = TypeArrayKlass::cast(a->klass())->element_type();
+  void* ret = arrayOop(a())->base(type);
+  return (jlong) ret;
+JNI_END
+
+JNI_ENTRY(void, FG_UnpinArray(JNIEnv *env, jclass ignored, jarray arr))
+  assert(Universe::heap()->supports_object_pinning(), "no pinning");
+  Handle a(thread, JNIHandles::resolve_non_null(arr));
+  assert(a->is_typeArray(), "just checking");
+
+  Universe::heap()->unpin_object(thread, a());
+JNI_END
+
+#define CC (char*)  /*cast a literal from (const char*)*/
+#define FN_PTR(f) CAST_FROM_FN_PTR(void*, &f)
+
+static JNINativeMethod FG_methods[] = {
+  {CC "gcSupportsPinning", CC "()Z",                    FN_PTR(FG_GCSupportsPinning)},
+  {CC "pinArray",          CC "(Ljava/lang/Object;)J", FN_PTR(FG_PinArray)},
+  {CC "unpinArray",        CC "(Ljava/lang/Object;)V",  FN_PTR(FG_UnpinArray)},
+};
+
+JNI_ENTRY(void, JVM_RegisterForeignGlobalsMethods(JNIEnv *env, jclass FG_class))
+  ThreadToNativeFromVM ttnfv(thread);
+  int status = env->RegisterNatives(FG_class, FG_methods, sizeof(FG_methods)/sizeof(JNINativeMethod));
+  guarantee(status == JNI_OK && !env->ExceptionOccurred(),
+            "register jdk.internal.foreign.ForeignGlobals natives");
+JNI_END

@@ -240,6 +240,11 @@ public abstract sealed class AbstractMemorySegmentImpl
     }
 
     @Override
+    public MemorySegment asNativeView(Arena arena) {
+        throw new UnsupportedOperationException("Not a heap segment");
+    }
+
+    @Override
     public final long byteSize() {
         return length;
     }
