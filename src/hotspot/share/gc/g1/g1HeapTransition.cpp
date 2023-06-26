@@ -159,8 +159,8 @@ void G1HeapTransition::print() {
   log_trace(gc, heap)(" Used: " SIZE_FORMAT "K, Waste: " SIZE_FORMAT "K",
       usage._survivor_used / K, ((after._survivor_length * HeapRegion::GrainBytes) - usage._survivor_used) / K);
 
-  log_info(gc, heap)("Old regions: " SIZE_FORMAT "->" SIZE_FORMAT " (%u)",
-                     _before._old_length, after._old_length, _g1_heap->pinned_regions_count());
+  log_info(gc, heap)("Old regions: " SIZE_FORMAT "->" SIZE_FORMAT,
+                     _before._old_length, after._old_length);
   log_trace(gc, heap)(" Used: " SIZE_FORMAT "K, Waste: " SIZE_FORMAT "K",
       usage._old_used / K, ((after._old_length * HeapRegion::GrainBytes) - usage._old_used) / K);
 

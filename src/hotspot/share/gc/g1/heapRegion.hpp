@@ -201,9 +201,6 @@ private:
   // The remembered set for this region.
   HeapRegionRemSet* _rem_set;
 
-  // Number of objects in this region that are currently pinned.
-  volatile uint _pinned_object_count;
-
   // Cached index of this region in the heap region sequence.
   const uint _hrm_index;
 
@@ -252,6 +249,9 @@ private:
   // NUMA node.
   uint _node_index;
 
+  // Number of objects in this region that are currently pinned.
+  volatile uint _pinned_object_count;
+
   void report_region_type_change(G1HeapRegionTraceType::Type to);
 
   template <class Closure, bool in_gc_pause>
@@ -292,8 +292,8 @@ public:
   // there's clearing to be done ourselves. We also always mangle the space.
   void initialize(bool clear_space = false, bool mangle_space = SpaceDecorator::Mangle);
 
-  uint increment_pinned_object_count();
-  uint decrement_pinned_object_count();
+  inline void increment_pinned_object_count();
+  inline void decrement_pinned_object_count();
 
   static int    LogOfHRGrainBytes;
   static int    LogCardsPerRegion;

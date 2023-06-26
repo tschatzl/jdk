@@ -220,7 +220,6 @@ HeapRegion::HeapRegion(uint hrm_index,
   _bot_part(bot, this),
   _pre_dummy_top(nullptr),
   _rem_set(nullptr),
-  _pinned_object_count(0),
   _hrm_index(hrm_index),
   _type(),
   _humongous_start_region(nullptr),
@@ -235,7 +234,8 @@ HeapRegion::HeapRegion(uint hrm_index,
   _young_index_in_cset(-1),
   _surv_rate_group(nullptr),
   _age_index(G1SurvRateGroup::InvalidAgeIndex),
-  _node_index(G1NUMA::UnknownNodeIndex)
+  _node_index(G1NUMA::UnknownNodeIndex),
+  _pinned_object_count(0)
 {
   assert(Universe::on_page_boundary(mr.start()) && Universe::on_page_boundary(mr.end()),
          "invalid space boundaries");
@@ -254,18 +254,6 @@ void HeapRegion::initialize(bool clear_space, bool mangle_space) {
   set_top(bottom());
 
   hr_clear(false /*clear_space*/);
-}
-
-uint HeapRegion::increment_pinned_object_count() {
-  uint count = Atomic::fetch_then_add(&_pinned_object_count, 1u, memory_order_relaxed);
-  assert(count != UINT_MAX, "must be");
-  return count;
-}
-
-uint HeapRegion::decrement_pinned_object_count() {
-  uint count = Atomic::fetch_then_add(&_pinned_object_count, (uint)~0, memory_order_relaxed);
-  assert(count != 0, "must be");
-  return count - 1;
 }
 
 void HeapRegion::report_region_type_change(G1HeapRegionTraceType::Type to) {

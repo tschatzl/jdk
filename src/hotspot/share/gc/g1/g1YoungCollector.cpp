@@ -286,6 +286,7 @@ class G1PrepareEvacuationTask : public WorkerTask {
     G1PrepareEvacuationTask* _parent_task;
     uint _worker_humongous_total;
     uint _worker_humongous_candidates;
+    uint _worker_pinned_total;
 
     G1MonotonicArenaMemoryStats _card_set_stats;
 
@@ -359,14 +360,19 @@ class G1PrepareEvacuationTask : public WorkerTask {
       _g1h(g1h),
       _parent_task(parent_task),
       _worker_humongous_total(0),
-      _worker_humongous_candidates(0) { }
+      _worker_humongous_candidates(0),
+      _worker_pinned_total(0) { }
 
     ~G1PrepareRegionsClosure() {
       _parent_task->add_humongous_candidates(_worker_humongous_candidates);
       _parent_task->add_humongous_total(_worker_humongous_total);
+      _parent_task->add_pinned_total(_worker_pinned_total);
     }
 
     virtual bool do_heap_region(HeapRegion* hr) {
+      if (hr->has_explicitly_pinned_objects()) {
+        _worker_pinned_total++;
+      }
       // First prepare the region for scanning
       _g1h->rem_set()->prepare_region_for_scan(hr);
 
@@ -410,6 +416,7 @@ class G1PrepareEvacuationTask : public WorkerTask {
   HeapRegionClaimer _claimer;
   volatile uint _humongous_total;
   volatile uint _humongous_candidates;
+  volatile uint _pinned_total;
 
   G1MonotonicArenaMemoryStats _all_card_set_stats;
 
@@ -419,7 +426,8 @@ public:
     _g1h(g1h),
     _claimer(_g1h->workers()->active_workers()),
     _humongous_total(0),
-    _humongous_candidates(0) { }
+    _humongous_candidates(0),
+    _pinned_total(0) { }
 
   void work(uint worker_id) {
     G1PrepareRegionsClosure cl(_g1h, this);
@@ -437,12 +445,20 @@ public:
     Atomic::add(&_humongous_total, total);
   }
 
+  void add_pinned_total(uint total) {
+    Atomic::add(&_pinned_total, total);
+  }
+
   uint humongous_candidates() {
     return _humongous_candidates;
   }
 
   uint humongous_total() {
     return _humongous_total;
+  }
+
+  uint pinned_total() {
+    return Atomic::load(&_pinned_total);
   }
 
   const G1MonotonicArenaMemoryStats all_card_set_stats() const {
@@ -499,6 +515,7 @@ void G1YoungCollector::pre_evacuate_collection_set(G1EvacInfo* evacuation_info) 
 
     _g1h->set_young_gen_card_set_stats(g1_prep_task.all_card_set_stats());
     _g1h->set_humongous_stats(g1_prep_task.humongous_total(), g1_prep_task.humongous_candidates());
+    log_debug(gc, heap)("Pinned regions: %u", g1_prep_task.pinned_total());
 
     phase_times()->record_register_regions(task_time.seconds() * 1000.0);
   }

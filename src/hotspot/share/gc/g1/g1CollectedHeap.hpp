@@ -186,8 +186,6 @@ private:
   HeapRegionSet _old_set;
   HeapRegionSet _humongous_set;
 
-  volatile uint _pinned_regions_count;
-
   // Young gen memory statistics before GC.
   G1MonotonicArenaMemoryStats _young_gen_card_set_stats;
   // Collection set candidates memory statistics after GC.
@@ -569,9 +567,9 @@ public:
     return _monitoring_support;
   }
 
-  virtual bool supports_object_pinning() const { return true; }
-  virtual void pin_object(JavaThread* thread, oop obj) override { pin_object(obj); }
-  virtual void unpin_object(JavaThread* thread, oop obj) override { unpin_object(obj); }
+  void pin_object(JavaThread* thread, oop obj) override { pin_object(obj); }
+  void unpin_object(JavaThread* thread, oop obj) override { unpin_object(obj); }
+  bool supports_object_pinning() const { return true; }
 
   void resize_heap_if_necessary();
 
@@ -1225,8 +1223,6 @@ public:
   uint young_regions_count() const { return _eden.length() + _survivor.length(); }
   uint old_regions_count() const { return _old_set.length(); }
   uint humongous_regions_count() const { return _humongous_set.length(); }
-
-  uint pinned_regions_count() const { return _pinned_regions_count; }
 
 #ifdef ASSERT
   bool check_young_list_empty();

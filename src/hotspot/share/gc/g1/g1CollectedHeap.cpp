@@ -1162,7 +1162,6 @@ G1CollectedHeap::G1CollectedHeap() :
   _soft_ref_policy(),
   _old_set("Old Region Set", new OldRegionSetChecker()),
   _humongous_set("Humongous Region Set", new HumongousRegionSetChecker()),
-  _pinned_regions_count(0),
   _bot(nullptr),
   _listener(),
   _numa(G1NUMA::create()),

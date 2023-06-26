@@ -263,22 +263,14 @@ inline void G1CollectedHeap::pin_object(oop obj) {
   assert(!is_gc_active(), "must not pin objects during a GC");
   assert(obj->is_typeArray(), "must be typeArray");
   HeapRegion *r = heap_region_containing(obj);
-  uint pincount = r->increment_pinned_object_count();
-  if (pincount == 1) {
-    Atomic::inc(&_pinned_regions_count, memory_order_relaxed);
-  }
-  log_debug(gc, ergo)("pin obj " PTR_FORMAT " size %zu region %u pins %u", p2i(obj), obj->size(), r->hrm_index(), pincount);
+  r->increment_pinned_object_count();
 }
 
 inline void G1CollectedHeap::unpin_object(oop obj) {
   assert(obj != NULL, "obj must not be null");
   assert(!is_gc_active(), "must not unpin objects during a GC");
   HeapRegion *r = heap_region_containing(obj);
-  log_debug(gc, ergo)("unpin obj " PTR_FORMAT " size %zu region %u", p2i(obj), obj->size(), r->hrm_index());
-  uint pincount = r->decrement_pinned_object_count();
-  if (pincount == 0) {
-    Atomic::dec(&_pinned_regions_count, memory_order_relaxed);
-  }
+  r->decrement_pinned_object_count();
 }
 
 inline bool G1CollectedHeap::is_obj_dead(const oop obj) const {
