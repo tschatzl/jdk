@@ -567,10 +567,13 @@ class FreeCSetClosure : public HeapRegionClosure {
     G1GCPhaseTimes* p = _g1h->phase_times();
     assert(r->in_collection_set(), "Failed evacuation of region %u not in collection set", r->hrm_index());
 
+    bool is_pinned = r->has_explicitly_pinned_objects();
+
     p->record_or_add_thread_work_item(G1GCPhaseTimes::RestoreRetainedRegions,
                                       _worker_id,
                                       1,
-                                      G1GCPhaseTimes::RestoreRetainedRegionsFailedNum);
+                                      is_pinned ? G1GCPhaseTimes::RestoreRetainedRegionsPinnedNum
+                                                : G1GCPhaseTimes::RestoreRetainedRegionsFailedNum);
 
     bool retain_region = _g1h->policy()->retain_evac_failed_region(r);
     // Update the region state due to the failed evacuation.

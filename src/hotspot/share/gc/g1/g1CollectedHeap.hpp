@@ -530,6 +530,13 @@ public:
   // to discover.
   void make_pending_list_reachable();
 
+  // Merges the information gathered on a per-thread basis for all worker threads
+  // during GC into global variables.
+  void merge_per_thread_state_info(G1ParScanThreadStateSet* per_thread_states);
+
+  void pin_object(oop obj);
+  void unpin_object(oop obj);
+
   G1ServiceThread* service_thread() const { return _service_thread; }
 
   WorkerThreads* workers() const { return _workers; }
@@ -559,6 +566,10 @@ public:
     assert(_monitoring_support != nullptr, "should have been initialized");
     return _monitoring_support;
   }
+
+  virtual bool supports_object_pinning() const { return true; }
+  virtual void pin_object(JavaThread* thread, oop obj) override { pin_object(obj); }
+  virtual void unpin_object(JavaThread* thread, oop obj) override { unpin_object(obj); }
 
   void resize_heap_if_necessary();
 
@@ -613,7 +624,7 @@ public:
   // We register a region with the fast "in collection set" test. We
   // simply set to true the array slot corresponding to this region.
   void register_young_region_with_region_attr(HeapRegion* r) {
-    _region_attr.set_in_young(r->hrm_index());
+    _region_attr.set_in_young(r->hrm_index(), r->has_explicitly_pinned_objects());
   }
   inline void register_new_survivor_region_with_region_attr(HeapRegion* r);
   inline void register_region_with_region_attr(HeapRegion* r);
@@ -1294,7 +1305,7 @@ public:
 
   void pin_object(JavaThread* thread, oop obj) override;
   void unpin_object(JavaThread* thread, oop obj) override;
-  bool supports_object_pinning() const override { return false; }
+  bool supports_object_pinning() const override { return true; }
 
   // Printing
 private:

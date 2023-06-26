@@ -241,9 +241,6 @@ private:
   uint calculate_young_desired_length(size_t pending_cards, size_t rs_length) const;
   // Limit the given desired young length to available free regions.
   uint calculate_young_target_length(uint desired_young_length) const;
-  // The GCLocker might cause us to need more regions than the target. Calculate
-  // the maximum number of regions to use in that case.
-  uint calculate_young_max_length(uint target_young_length) const;
 
   size_t predict_bytes_to_copy(HeapRegion* hr) const;
   double predict_survivor_regions_evac_time() const;
@@ -387,11 +384,8 @@ public:
 
   uint young_list_desired_length() const { return Atomic::load(&_young_list_desired_length); }
   uint young_list_target_length() const { return Atomic::load(&_young_list_target_length); }
-  uint young_list_max_length() const { return Atomic::load(&_young_list_max_length); }
 
   bool should_allocate_mutator_region() const;
-
-  bool can_expand_young_list() const;
 
   bool use_adaptive_young_list_length() const;
 

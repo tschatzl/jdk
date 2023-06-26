@@ -461,6 +461,11 @@ oop G1ParScanThreadState::do_copy_to_survivor_space(G1HeapRegionAttr const regio
   Klass* klass = old->klass();
   const size_t word_sz = old->size_given_klass(klass);
 
+  if (region_attr.is_pinned() && klass->is_typeArray_klass()) {
+    // FIXME: perf... maybe move upwards? ; only for typarrayobjs....
+    return handle_evacuation_failure_par(old, old_mark, word_sz);
+  }
+
   uint age = 0;
   G1HeapRegionAttr dest_attr = next_region_attr(region_attr, old_mark, age);
   HeapRegion* const from_region = _g1h->heap_region_containing(old);

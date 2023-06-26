@@ -209,7 +209,7 @@ G1HeapRegionAttr G1CollectedHeap::region_attr(uint idx) const {
 }
 
 void G1CollectedHeap::register_humongous_candidate_region_with_region_attr(uint index) {
-  _region_attr.set_humongous_candidate(index, region_at(index)->rem_set()->is_tracked());
+  _region_attr.set_humongous_candidate(index, region_at(index)->rem_set()->is_tracked(), region_at(index)->has_explicitly_pinned_objects());
 }
 
 void G1CollectedHeap::register_new_survivor_region_with_region_attr(HeapRegion* r) {
@@ -218,6 +218,7 @@ void G1CollectedHeap::register_new_survivor_region_with_region_attr(HeapRegion* 
 
 void G1CollectedHeap::register_region_with_region_attr(HeapRegion* r) {
   _region_attr.set_remset_is_tracked(r->hrm_index(), r->rem_set()->is_tracked());
+  _region_attr.set_is_pinned(r->hrm_index(), r->has_explicitly_pinned_objects());
 }
 
 void G1CollectedHeap::register_old_region_with_region_attr(HeapRegion* r) {
@@ -255,6 +256,23 @@ inline bool G1CollectedHeap::is_obj_dead(const oop obj, const HeapRegion* hr) co
     // region is not guaranteed to be parsable. Use the bitmap for liveness.
     return !concurrent_mark()->mark_bitmap()->is_marked(obj);
   }
+}
+
+inline void G1CollectedHeap::pin_object(oop obj) {
+  assert(obj != NULL, "obj must not be null");
+  assert(!is_gc_active(), "must not pin objects during a GC");
+  assert(obj->is_typeArray(), "must be typeArray");
+  HeapRegion *r = heap_region_containing(obj);
+  uint pincount = r->increment_pinned_object_count();
+  log_debug(gc, ergo)("pin obj " PTR_FORMAT " size %zu region %u pins %u", p2i(obj), obj->size(), r->hrm_index(), pincount);
+}
+
+inline void G1CollectedHeap::unpin_object(oop obj) {
+  assert(obj != NULL, "obj must not be null");
+  assert(!is_gc_active(), "must not unpin objects during a GC");
+  HeapRegion *r = heap_region_containing(obj);
+  log_debug(gc, ergo)("unpin obj " PTR_FORMAT " size %zu region %u", p2i(obj), obj->size(), r->hrm_index());
+  r->decrement_pinned_object_count();
 }
 
 inline bool G1CollectedHeap::is_obj_dead(const oop obj) const {

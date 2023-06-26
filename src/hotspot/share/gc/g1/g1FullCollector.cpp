@@ -256,7 +256,7 @@ void G1FullCollector::complete_collection() {
 void G1FullCollector::before_marking_update_attribute_table(HeapRegion* hr) {
   if (hr->is_free()) {
     _region_attr_table.set_free(hr->hrm_index());
-  } else if (hr->is_humongous()) {
+  } else if (hr->is_humongous() || hr->has_explicitly_pinned_objects()) {
     // Humongous objects will never be moved in the "main" compaction phase, but
     // afterwards in a special phase if needed.
     _region_attr_table.set_skip_compacting(hr->hrm_index());
@@ -449,7 +449,7 @@ void G1FullCollector::phase2d_prepare_humongous_compaction() {
     if (hr == nullptr) {
       region_index++;
       continue;
-    } else if (hr->is_starts_humongous()) {
+    } else if (hr->is_starts_humongous() && !hr->has_explicitly_pinned_objects()) {
       uint num_regions = humongous_cp->forward_humongous(hr);
       region_index += num_regions; // Skip over the continues humongous regions.
       continue;

@@ -172,7 +172,7 @@ class G1RebuildRSAndScrubTask : public WorkerTask {
       assert(!_bitmap->is_marked(scrub_start), "Should not scrub live object");
 
       HeapWord* scrub_end = _bitmap->get_next_marked_addr(scrub_start, limit);
-      hr->fill_range_with_dead_objects(scrub_start, scrub_end);
+      hr->fill_range_with_dead_objects(scrub_start, scrub_end, hr->has_explicitly_pinned_objects());
 
       // Return the next object to handle.
       return scrub_end;

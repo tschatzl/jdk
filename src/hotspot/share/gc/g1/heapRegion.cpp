@@ -220,6 +220,7 @@ HeapRegion::HeapRegion(uint hrm_index,
   _bot_part(bot, this),
   _pre_dummy_top(nullptr),
   _rem_set(nullptr),
+  _pinned_object_count(0),
   _hrm_index(hrm_index),
   _type(),
   _humongous_start_region(nullptr),
@@ -253,6 +254,17 @@ void HeapRegion::initialize(bool clear_space, bool mangle_space) {
   set_top(bottom());
 
   hr_clear(false /*clear_space*/);
+}
+
+int HeapRegion::increment_pinned_object_count() {
+  uint count = Atomic::fetch_then_add(&_pinned_object_count, 1u, memory_order_relaxed);
+  assert(count != UINT_MAX, "must be");
+  return count;
+}
+
+void HeapRegion::decrement_pinned_object_count() {
+  uint count = Atomic::fetch_then_add(&_pinned_object_count, (uint)~0, memory_order_relaxed);
+  assert(count != 0, "must be");
 }
 
 void HeapRegion::report_region_type_change(G1HeapRegionTraceType::Type to) {
@@ -446,6 +458,7 @@ void HeapRegion::print_on(outputStream* st) const {
       st->print("|-");
     }
   }
+  st->print("|%3u", Atomic::load(&_pinned_object_count));
   st->print_cr("");
 }
 
@@ -746,12 +759,10 @@ void HeapRegion::fill_with_dummy_object(HeapWord* address, size_t word_size, boo
   CollectedHeap::fill_with_object(address, word_size, zap);
 }
 
-void HeapRegion::fill_range_with_dead_objects(HeapWord* start, HeapWord* end) {
+void HeapRegion::fill_range_with_dead_objects(HeapWord* start, HeapWord* end, bool preserve_typearrays) {
   size_t range_size = pointer_delta(end, start);
 
-  // Fill the dead range with objects. G1 might need to create two objects if
-  // the range is larger than half a region, which is the max_fill_size().
-  CollectedHeap::fill_with_objects(start, range_size);
+  CollectedHeap::fill_with_objects(start, range_size, !preserve_typearrays);
   HeapWord* current = start;
   do {
     // Update the BOT if the a threshold is crossed.

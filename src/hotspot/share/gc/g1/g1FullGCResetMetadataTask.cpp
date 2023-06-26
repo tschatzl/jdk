@@ -76,7 +76,7 @@ void G1FullGCResetMetadataTask::G1ResetMetadataClosure::scrub_skip_compacting_re
     HeapWord* scrub_start = current_obj;
     HeapWord* scrub_end = bitmap->get_next_marked_addr(scrub_start, limit);
     assert(scrub_start != scrub_end, "must advance");
-    hr->fill_range_with_dead_objects(scrub_start, scrub_end);
+    hr->fill_range_with_dead_objects(scrub_start, scrub_end, hr->has_explicitly_pinned_objects());
 
     current_obj = scrub_end;
   }
@@ -87,12 +87,14 @@ void G1FullGCResetMetadataTask::G1ResetMetadataClosure::reset_skip_compacting(He
   uint region_index = hr->hrm_index();
   assert(_collector->is_skip_compacting(region_index), "Only call on is_skip_compacting regions");
 
-  if (hr->is_humongous()) {
-    oop obj = cast_to_oop(hr->humongous_start_region()->bottom());
-    assert(_collector->mark_bitmap()->is_marked(obj), "must be live");
-  } else {
-    assert(_collector->live_words(region_index) > _collector->scope()->region_compaction_threshold(),
-           "should be quite full");
+  if (!hr->has_explicitly_pinned_objects()) {
+    if (hr->is_humongous()) {
+      oop obj = cast_to_oop(hr->humongous_start_region()->bottom());
+      assert(_collector->mark_bitmap()->is_marked(obj), "must be live");
+    } else {
+      assert(_collector->live_words(region_index) > _collector->scope()->region_compaction_threshold(),
+             "should be quite full or pinned");
+    }
   }
 
   assert(_collector->compaction_top(hr) == nullptr,

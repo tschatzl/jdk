@@ -158,7 +158,7 @@ public:
   // Create objects in the given range. The BOT will be updated if needed and
   // the created objects will have their header marked to show that they are
   // dead.
-  void fill_range_with_dead_objects(HeapWord* start, HeapWord* end);
+  void fill_range_with_dead_objects(HeapWord* start, HeapWord* end, bool preserve_typearrays);
 
   // All allocations are done without updating the BOT. The BOT
   // needs to be kept in sync for old generation regions and
@@ -200,6 +200,9 @@ public:
 private:
   // The remembered set for this region.
   HeapRegionRemSet* _rem_set;
+
+  // Number of objects in this region that are currently pinned.
+  volatile uint _pinned_object_count;
 
   // Cached index of this region in the heap region sequence.
   const uint _hrm_index;
@@ -288,6 +291,9 @@ public:
   // The default values for clear_space means that we will do the clearing if
   // there's clearing to be done ourselves. We also always mangle the space.
   void initialize(bool clear_space = false, bool mangle_space = SpaceDecorator::Mangle);
+
+  int increment_pinned_object_count();
+  void decrement_pinned_object_count();
 
   static int    LogOfHRGrainBytes;
   static int    LogCardsPerRegion;
@@ -395,6 +401,10 @@ public:
   bool is_old() const { return _type.is_old(); }
 
   bool is_old_or_humongous() const { return _type.is_old_or_humongous(); }
+
+  bool has_explicitly_pinned_objects() const { return Atomic::load(&_pinned_object_count) > 0; }
+
+  bool can_reclaim() const;
 
   void set_free();
 

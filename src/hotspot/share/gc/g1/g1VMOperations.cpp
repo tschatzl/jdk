@@ -68,11 +68,9 @@ VM_G1TryInitiateConcMark::VM_G1TryInitiateConcMark(uint gc_count_before,
 bool VM_G1TryInitiateConcMark::doit_prologue() {
   bool result = VM_GC_Operation::doit_prologue();
   // The prologue can fail for a couple of reasons. The first is that another GC
-  // got scheduled and prevented the scheduling of the concurrent start GC. The
-  // second is that the GC locker may be active and the heap can't be expanded.
-  // In both cases we want to retry the GC so that the concurrent start pause is
-  // actually scheduled. In the second case, however, we should stall until
-  // until the GC locker is no longer active and then retry the concurrent start GC.
+  // got scheduled and prevented the scheduling of the concurrent start GC.
+  // In this case we want to retry the GC so that the concurrent start pause is
+  // actually scheduled.
   if (!result) _transient_failure = true;
   return result;
 }
@@ -103,16 +101,9 @@ void VM_G1TryInitiateConcMark::doit() {
     // request will be remembered for a later partial collection, even though
     // we've rejected this request.
     _whitebox_attached = true;
-  } else if (!g1h->do_collection_pause_at_safepoint()) {
-    // Failure to perform the collection at all occurs because GCLocker is
-    // active, and we have the bad luck to be the collection request that
-    // makes a later _gc_locker collection needed.  (Else we would have hit
-    // the GCLocker check in the prologue.)
-    _transient_failure = true;
-  } else if (g1h->should_upgrade_to_full_gc()) {
-    _gc_succeeded = g1h->upgrade_to_full_collection();
   } else {
-    _gc_succeeded = true;
+    _gc_succeeded = g1h->do_collection_pause_at_safepoint();
+    assert(_gc_succeeded, "No reason to fail");
   }
 }
 

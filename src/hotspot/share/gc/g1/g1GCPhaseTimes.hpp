@@ -144,6 +144,7 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
 
   enum RestoreRetainedRegionsWorkItems {
     RestoreRetainedRegionsFailedNum,
+    RestoreRetainedRegionsPinnedNum,
     RestoreRetainedRegionsRetainedNum
   };
 

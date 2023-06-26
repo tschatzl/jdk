@@ -32,6 +32,7 @@
 #include "gc/g1/g1OopClosures.inline.hpp"
 #include "gc/g1/heapRegion.inline.hpp"
 #include "gc/g1/heapRegionRemSet.inline.hpp"
+#include "gc/shared/collectedHeap.hpp"
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -96,7 +97,7 @@ static size_t zap_dead_objects(HeapRegion* hr, HeapWord* start, HeapWord* end) {
     return 0;
   }
 
-  hr->fill_range_with_dead_objects(start, end);
+  hr->fill_range_with_dead_objects(start, end, hr->has_explicitly_pinned_objects());
   return pointer_delta(end, start);
 }
 
@@ -117,6 +118,10 @@ void G1RemoveSelfForwardsTask::process_chunk(uint worker_id,
   G1CMBitMap* bitmap = _cm->mark_bitmap();
   const uint region_idx = _evac_failure_regions->get_region_idx(chunk_idx / _num_chunks_per_region);
   HeapRegion* hr = _g1h->region_at(region_idx);
+
+  if (hr->has_explicitly_pinned_objects()) {
+    log_debug(gc,ergo)("Pinned region at index %u", hr->hrm_index());
+  }
 
   HeapWord* hr_bottom = hr->bottom();
   HeapWord* hr_top = hr->top();
