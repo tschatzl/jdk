@@ -256,15 +256,16 @@ void HeapRegion::initialize(bool clear_space, bool mangle_space) {
   hr_clear(false /*clear_space*/);
 }
 
-int HeapRegion::increment_pinned_object_count() {
+uint HeapRegion::increment_pinned_object_count() {
   uint count = Atomic::fetch_then_add(&_pinned_object_count, 1u, memory_order_relaxed);
   assert(count != UINT_MAX, "must be");
   return count;
 }
 
-void HeapRegion::decrement_pinned_object_count() {
+uint HeapRegion::decrement_pinned_object_count() {
   uint count = Atomic::fetch_then_add(&_pinned_object_count, (uint)~0, memory_order_relaxed);
   assert(count != 0, "must be");
+  return count - 1;
 }
 
 void HeapRegion::report_region_type_change(G1HeapRegionTraceType::Type to) {

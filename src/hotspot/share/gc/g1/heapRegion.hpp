@@ -292,8 +292,8 @@ public:
   // there's clearing to be done ourselves. We also always mangle the space.
   void initialize(bool clear_space = false, bool mangle_space = SpaceDecorator::Mangle);
 
-  int increment_pinned_object_count();
-  void decrement_pinned_object_count();
+  uint increment_pinned_object_count();
+  uint decrement_pinned_object_count();
 
   static int    LogOfHRGrainBytes;
   static int    LogCardsPerRegion;
