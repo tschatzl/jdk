@@ -569,7 +569,7 @@ public:
 
   void pin_object(JavaThread* thread, oop obj) override { pin_object(obj); }
   void unpin_object(JavaThread* thread, oop obj) override { unpin_object(obj); }
-  bool supports_object_pinning() const { return true; }
+  bool supports_object_pinning() const override { return true; }
 
   void resize_heap_if_necessary();
 
