@@ -554,11 +554,13 @@ inline void HeapRegion::record_surv_words_in_group(size_t words_survived) {
 }
 
 inline void HeapRegion::increment_pinned_object_count() {
-  Atomic::add(&_pinned_object_count, 1u, memory_order_relaxed);
+  size_t count = Atomic::fetch_then_add(&_pinned_object_count, (size_t)1, memory_order_relaxed);
+  assert(count != SIZE_MAX, "too many pinning attempts on region %u", hrm_index());
 }
 
 inline void HeapRegion::decrement_pinned_object_count() {
-  Atomic::sub(&_pinned_object_count, 1u, memory_order_relaxed);
+  size_t count = Atomic::fetch_then_add(&_pinned_object_count, (size_t)-1, memory_order_relaxed);
+  assert(count != 0, "unbalanced pinning on region %u", hrm_index());
 }
 
 #endif // SHARE_GC_G1_HEAPREGION_INLINE_HPP

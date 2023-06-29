@@ -1131,6 +1131,7 @@
   /*******************************************************************/   \
                                                                           \
   declare_unsigned_integer_type(size_t)                                   \
+  declare_unsigned_integer_type(volatile size_t)                          \
   declare_integer_type(ssize_t)                                           \
   declare_integer_type(intx)                                              \
   declare_integer_type(intptr_t)                                          \
