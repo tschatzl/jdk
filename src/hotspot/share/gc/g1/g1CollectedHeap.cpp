@@ -770,11 +770,11 @@ HeapWord* G1CollectedHeap::attempt_allocation_at_safepoint(size_t word_size,
   assert(!_allocator->has_mutator_alloc_region() || !expect_null_mutator_alloc_region,
          "the current alloc region was unexpectedly found to be non-null");
 
-  HeapWord* result;
+  HeapWord* result = nullptr;
   if (!is_humongous(word_size)) {
     result = _allocator->attempt_allocation_locked(word_size);
   } else {
-    HeapWord* result = humongous_obj_allocate(word_size);
+    result = humongous_obj_allocate(word_size);
     if (result != nullptr && policy()->need_to_start_conc_mark("STW humongous allocation")) {
       collector_state()->set_initiate_conc_mark_if_possible(true);
     }

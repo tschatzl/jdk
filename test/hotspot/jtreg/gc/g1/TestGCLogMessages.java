@@ -183,7 +183,6 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Redirty Logged Cards", Level.DEBUG),
         new LogMessageWithLevel("Redirtied Cards", Level.DEBUG),
         new LogMessageWithLevel("Resize TLABs", Level.DEBUG),
-        new LogMessageWithLevel("Resize Heap After Collection", Level.DEBUG),
         // We do not guarantee a mixed phase in these tests, so this log may not show
         // up at all.
         //new LogMessageWithLevel("Sample Collection Set Candidates", Level.DEBUG),
@@ -197,8 +196,7 @@ public class TestGCLogMessages {
         new LogMessageWithLevel("Rebuild Free List", Level.DEBUG),
         new LogMessageWithLevel("Serial Rebuild Free List", Level.TRACE),
         new LogMessageWithLevel("Parallel Rebuild Free List", Level.TRACE),
-        new LogMessageWithLevel("Prepare For Mutator", Level.DEBUG),
-        new LogMessageWithLevel("Expand Heap After Collection", Level.DEBUG),
+        new LogMessageWithLevel("Resize Heap After Collection", Level.DEBUG),
     };
 
     void checkMessagesAtLevel(OutputAnalyzer output, LogMessageWithLevel messages[], Level level) throws Exception {
