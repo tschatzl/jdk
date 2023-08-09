@@ -2137,6 +2137,10 @@ size_t G1CollectedHeap::max_capacity() const {
   return max_regions() * HeapRegion::GrainBytes;
 }
 
+size_t G1CollectedHeap::soft_max_capacity() const {
+  return clamp(align_up(SoftMaxHeapSize, HeapRegion::GrainBytes), HeapAlignment, max_capacity());
+}
+
 void G1CollectedHeap::prepare_for_verify() {
   _verifier->prepare_for_verify();
 }
