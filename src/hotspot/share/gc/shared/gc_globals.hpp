@@ -689,6 +689,11 @@
           "during parallel gc")                                             \
           range(0, 8 * 1024)                                                \
                                                                             \
+  product(uint, ParallelUnlinkWorkers, UINT_MAX,                                 \
+          "Number of entries we will try to leave on the stack "            \
+          "during parallel gc")                                             \
+          range(0, UINT_MAX)                                      \
+                                                                            \
   product(uint, GCCardSizeInBytes, 512,                                     \
           "Card table entry size (in bytes) for card based collectors")     \
           range(128, NOT_LP64(512) LP64_ONLY(1024))                         \

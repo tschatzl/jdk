@@ -77,6 +77,8 @@
 #include "utilities/vmError.hpp"
 #include "utilities/xmlstream.hpp"
 
+
+#include "code/compiledMethod.hpp"
 // Implementation of Method
 
 Method* Method::allocate(ClassLoaderData* loader_data,
@@ -1147,8 +1149,14 @@ void Method::clear_code() {
   _code = nullptr;
 }
 
-void Method::unlink_code(CompiledMethod *compare) {
-  ConditionalMutexLocker ml(CompiledMethod_lock, !CompiledMethod_lock->owned_by_self(), Mutex::_no_safepoint_check_flag);
+void Method::unlink_code(CompiledMethod *compare, void* _scope) {
+    CompiledMethod::UnloadingScope* scope = (CompiledMethod::UnloadingScope*)_scope;
+    jlong start = os::elapsed_counter();
+    // FIXME: checkme!!!
+  ConditionalMutexLocker ml(CompiledMethod_lock, !SafepointSynchronize::is_at_safepoint() && !CompiledMethod_lock->owned_by_self(), Mutex::_no_safepoint_check_flag);
+  if (scope != nullptr) {
+      scope->time(CompiledMethod::UnloadingScope::UnlinkCodeGrabLock, os::elapsed_counter() - start);
+  }
   // We need to check if either the _code or _from_compiled_code_entry_point
   // refer to this nmethod because there is a race in setting these two fields
   // in Method* as seen in bugid 4947125.

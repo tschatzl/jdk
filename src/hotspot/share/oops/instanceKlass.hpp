@@ -849,7 +849,7 @@ public:
   JNIid* jni_id_for(int offset);
 
   // maintenance of deoptimization dependencies
-  inline DependencyContext dependencies();
+  DependencyContext dependencies();
   void mark_dependent_nmethods(DeoptimizationScope* deopt_scope, KlassDepChange& changes);
   void add_dependent_nmethod(nmethod* nm);
   void clean_dependency_context();
@@ -1003,7 +1003,7 @@ public:
   virtual bool on_stack() const;
 
   // callbacks for actions during class unloading
-  static void unload_class(InstanceKlass* ik);
+  static void unload_class(InstanceKlass* ik, void* ctx);
 
   virtual void release_C_heap_structures(bool release_sub_metadata = true);
 

@@ -44,20 +44,22 @@ private:
 // Do cleanup of some weakly held data in the same parallel task.
 // Assumes a non-moving context.
 class G1ParallelCleaningTask : public WorkerTask {
-private:
-  bool                    _unloading_occurred;
-  CodeCacheUnloadingTask  _code_cache_task;
+  CodeCacheUnloadingTaskScopeProvider* _scope_provider;
+
+  CodeCacheUnloadingTask    _code_cache_task;
 #if INCLUDE_JVMCI
-  JVMCICleaningTask       _jvmci_cleaning_task;
+  JVMCICleaningTask         _jvmci_cleaning_task;
 #endif
-  KlassCleaningTask       _klass_cleaning_task;
+  KlassCleaningTask         _klass_cleaning_task;
 
 public:
   // The constructor is run in the VMThread.
   G1ParallelCleaningTask(uint num_workers,
-                         bool unloading_occurred);
+                         CodeCacheUnloadingTaskScopeProvider* scope_provider);
 
   void work(uint worker_id);
+
+  size_t num_unloaded() const { return _code_cache_task.num_unloaded(); }
 };
 
 #endif // SHARE_GC_G1_G1PARALLELCLEANING_HPP

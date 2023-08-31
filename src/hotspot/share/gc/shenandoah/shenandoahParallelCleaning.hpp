@@ -55,6 +55,7 @@ class ShenandoahClassUnloadingTask : public WorkerTask {
 private:
   ShenandoahPhaseTimings::Phase const _phase;
   bool                                _unloading_occurred;
+  DefaultCodeCacheUnloadingTaskDefaultScopeProvider _unloading_scope_provider;
   CodeCacheUnloadingTask              _code_cache_task;
   KlassCleaningTask                   _klass_cleaning_task;
 public:

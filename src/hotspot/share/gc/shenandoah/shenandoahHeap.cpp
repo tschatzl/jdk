@@ -1819,6 +1819,8 @@ void ShenandoahHeap::stw_unload_classes(bool full_gc) {
     uint num_workers = _workers->active_workers();
     ShenandoahClassUnloadingTask unlink_task(phase, num_workers, purged_class);
     _workers->run_task(&unlink_task);
+
+    scope.cleaning_completed();
   }
 
   {

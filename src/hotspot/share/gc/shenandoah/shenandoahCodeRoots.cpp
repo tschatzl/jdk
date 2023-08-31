@@ -26,6 +26,7 @@
 #include "code/codeCache.hpp"
 #include "code/icBuffer.hpp"
 #include "code/nmethod.hpp"
+#include "gc/shared/parallelCleaning.hpp"
 #include "gc/shenandoah/shenandoahClosures.inline.hpp"
 #include "gc/shenandoah/shenandoahEvacOOMHandler.inline.hpp"
 #include "gc/shenandoah/shenandoahHeap.inline.hpp"
@@ -190,7 +191,7 @@ void ShenandoahCodeRoots::disarm_nmethods() {
 
 class ShenandoahNMethodUnlinkClosure : public NMethodClosure {
 private:
-  bool                      _unloading_occurred;
+  DefaultCodeCacheUnloadingTaskDefaultScopeProvider _provider;
   volatile bool             _failed;
   ShenandoahHeap* const     _heap;
   BarrierSetNMethod* const  _bs;
@@ -201,7 +202,7 @@ private:
 
 public:
   ShenandoahNMethodUnlinkClosure(bool unloading_occurred) :
-      _unloading_occurred(unloading_occurred),
+      _provider(unloading_occurred),
       _failed(false),
       _heap(ShenandoahHeap::heap()),
       _bs(ShenandoahBarrierSet::barrier_set()->barrier_set_nmethod()) {}
@@ -215,9 +216,11 @@ public:
     ShenandoahNMethod* nm_data = ShenandoahNMethod::gc_data(nm);
     assert(!nm_data->is_unregistered(), "Should not see unregistered entry");
 
+    CompiledMethod::UnloadingScope* scope = _provider.get_scope(0 /* worker_id */);
+
     if (nm->is_unloading()) {
       ShenandoahReentrantLocker locker(nm_data->lock());
-      nm->unlink();
+      nm->unlink(scope);
       return;
     }
 
@@ -233,7 +236,7 @@ public:
     }
 
     // Clear compiled ICs and exception caches
-    if (!nm->unload_nmethod_caches(_unloading_occurred)) {
+    if (!nm->unload_nmethod_caches(scope->has_unloaded_classes())) {
       set_failed();
     }
   }

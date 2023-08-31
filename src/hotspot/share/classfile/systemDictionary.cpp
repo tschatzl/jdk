@@ -1537,7 +1537,8 @@ InstanceKlass* SystemDictionary::find_or_define_instance_class(Symbol* class_nam
 // GC support
 
 // Assumes classes in the SystemDictionary are only unloaded at a safepoint
-bool SystemDictionary::do_unloading(GCTimer* gc_timer) {
+bool SystemDictionary::do_unloading(GCTimer* gc_timer, void* _ctx) {
+  ClassLoaderData::UnloadContext* ctx = (ClassLoaderData::UnloadContext*)_ctx;
 
   bool unloading_occurred;
   bool is_concurrent = !SafepointSynchronize::is_at_safepoint();
@@ -1545,15 +1546,27 @@ bool SystemDictionary::do_unloading(GCTimer* gc_timer) {
     GCTraceTime(Debug, gc, phases) t("ClassLoaderData", gc_timer);
     assert_locked_or_safepoint(ClassLoaderDataGraph_lock);  // caller locks.
     // First, mark for unload all ClassLoaderData referencing a dead class loader.
-    unloading_occurred = ClassLoaderDataGraph::do_unloading();
+    {
+      GCTraceTime(Debug, gc, phases) t("ClassLoaderDataGraph::do_unloading()", gc_timer);
+      unloading_occurred = ClassLoaderDataGraph::do_unloading(ctx);
+    }
     if (unloading_occurred) {
       ConditionalMutexLocker ml2(Module_lock, is_concurrent);
       JFR_ONLY(Jfr::on_unloading_classes();)
       MANAGEMENT_ONLY(FinalizerService::purge_unloaded();)
       ConditionalMutexLocker ml1(SystemDictionary_lock, is_concurrent);
-      ClassLoaderDataGraph::clean_module_and_package_info();
-      LoaderConstraintTable::purge_loader_constraints();
-      ResolutionErrorTable::purge_resolution_errors();
+      {
+        GCTraceTime(Debug, gc, phases) t("ClassLoaderDataGraph::clean_module_and_package_info()", gc_timer);
+        ClassLoaderDataGraph::clean_module_and_package_info();
+      }
+      {
+        GCTraceTime(Debug, gc, phases) t("LoaderConstraintTable::purge_loader_constraints()", gc_timer);
+        LoaderConstraintTable::purge_loader_constraints();
+      }
+      {
+        GCTraceTime(Debug, gc, phases) t("ResolutionErrorTable::purge_resolution_errors()", gc_timer);
+        ResolutionErrorTable::purge_resolution_errors();
+      }
     }
   }
 

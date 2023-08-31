@@ -40,6 +40,7 @@
 #include "gc/g1/g1Policy.hpp"
 #include "gc/g1/g1RegionMarkStatsCache.inline.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
+#include "gc/shared/parallelCleaning.hpp"
 #include "gc/shared/preservedMarks.inline.hpp"
 #include "gc/shared/referenceProcessor.hpp"
 #include "gc/shared/verifyOption.hpp"
@@ -320,9 +321,21 @@ void G1FullCollector::phase1_mark_live_objects() {
   if (ClassUnloading) {
     GCTraceTime(Debug, gc, phases) debug("Phase 1: Class Unloading and Cleanup", scope()->timer());
     CodeCache::UnloadingScope unloading_scope(&_is_alive);
-    // Unload classes and purge the SystemDictionary.
-    bool purged_class = SystemDictionary::do_unloading(scope()->timer());
-    _heap->complete_cleaning(purged_class);
+    {
+      // Unload classes and purge the SystemDictionary.
+      bool unloaded_classes = SystemDictionary::do_unloading(scope()->timer());
+      DefaultCodeCacheUnloadingTaskDefaultScopeProvider _scope_provider(unloaded_classes);
+      _heap->complete_cleaning(&_scope_provider, scope()->timer());
+    }
+    unloading_scope.cleaning_completed();
+    {
+      GCTraceTime(Debug, gc, phases) ccrs("Clean Code Roots", scope()->timer());
+      _heap->clean_code_root_sets();
+    }
+    {
+      GCTraceTime(Debug, gc, phases) debug2("Flush CodeCache", scope()->timer());
+      unloading_scope.flush_codecache();
+    }
   }
 
   {

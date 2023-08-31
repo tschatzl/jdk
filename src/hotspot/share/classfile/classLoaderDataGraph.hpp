@@ -87,7 +87,7 @@ class ClassLoaderDataGraph : public AllStatic {
   static void packages_do(void f(PackageEntry*));
   static void loaded_classes_do(KlassClosure* klass_closure);
   static void classes_unloading_do(void f(Klass* const));
-  static bool do_unloading();
+  static bool do_unloading(ClassLoaderData::UnloadContext* ctx);
 
   static inline bool should_clean_metaspaces_and_reset();
   static void set_should_clean_deallocate_lists() { _should_clean_deallocate_lists = true; }

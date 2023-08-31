@@ -118,6 +118,9 @@ class CodeCache : AllStatic {
   static void add_heap(ReservedSpace rs, const char* name, CodeBlobType code_blob_type);
   static CodeHeap* get_code_heap_containing(void* p);         // Returns the CodeHeap containing the given pointer, or nullptr
   static CodeHeap* get_code_heap(const void* cb);             // Returns the CodeHeap for the given CodeBlob
+public:
+  static int get_code_heap_index(const void* cb);   // Returns the index into heaps() for the given CodeBlob
+private:
   static CodeHeap* get_code_heap(CodeBlobType code_blob_type);         // Returns the CodeHeap for the given CodeBlobType
   // Returns the name of the VM option to set the size of the corresponding CodeHeap
   static const char* get_code_heap_flag_name(CodeBlobType code_blob_type);
@@ -154,6 +157,8 @@ class CodeCache : AllStatic {
   static int  alignment_unit();                            // guaranteed alignment of all CodeBlobs
   static int  alignment_offset();                          // guaranteed offset of first CodeBlob byte within alignment unit (i.e., allocation header)
   static void free(CodeBlob* cb);                          // frees a CodeBlob
+  static size_t free(GrowableArrayCHeap<GrowableArrayCHeap<nmethod*, mtGC>*, mtGC>* data);         // frees a sorted set of CodeBlobs/nmethods.
+  static size_t free(CodeHeap* heap, GrowableArrayCHeap<nmethod*, mtGC>* list);         // frees a sorted set of CodeBlobs/nmethods.
   static void free_unused_tail(CodeBlob* cb, size_t used); // frees the unused tail of a CodeBlob (only used by TemplateInterpreter::initialize())
   static bool contains(void *p);                           // returns whether p is included
   static bool contains(nmethod* nm);                       // returns whether nm is included
@@ -183,13 +188,17 @@ class CodeCache : AllStatic {
   // to) any unmarked codeBlobs in the cache.  Sets "marked_for_unloading"
   // to "true" iff some code got unloaded.
   // "unloading_occurred" controls whether metadata should be cleaned because of class unloading.
-  class UnloadingScope: StackObj {
+  class UnloadingScope : public StackObj {
     ClosureIsUnloadingBehaviour _is_unloading_behaviour;
     IsUnloadingBehaviour*       _saved_behaviour;
+    bool                        _flushed;
 
   public:
     UnloadingScope(BoolObjectClosure* is_alive);
     ~UnloadingScope();
+
+    void cleaning_completed();
+    void flush_codecache(bool do_unregister_nmethod = true, bool do_free_in_codecache = true, CompiledMethod::FlushContext* ctx = nullptr);
   };
 
   // Code cache unloading heuristics
@@ -213,8 +222,26 @@ class CodeCache : AllStatic {
   //    nmethod::is_cold.
   static void arm_all_nmethods();
 
-  static void flush_unlinked_nmethods();
-  static void register_unlinked(nmethod* nm);
+  // do_unregister_nmethod controls whether CollectedHeap::unregister_nmethod is
+  // called for every unlinked nmethod. If false, the caller is responsible to
+  // do an equivalent operation before calling this.
+  static void flush_unlinked_nmethods(bool do_unregister_nmethod = true, bool do_codecache_free = true, CompiledMethod::FlushContext* ctx = nullptr);
+
+  static nmethod* volatile* unlinked_head() { return &_unlinked_head; }
+  static void register_unlinked(nmethod* volatile* list_head, nmethod* nm);
+
+  class DefaultCompiledMethodUnloadingScope : public CompiledMethod::UnloadingScope {
+    bool _unloading_occurred;
+  public:
+    DefaultCompiledMethodUnloadingScope(bool unloading_occurred) :
+      _unloading_occurred(unloading_occurred) { }
+
+    bool has_unloaded_classes() const { return _unloading_occurred; }
+    virtual void register_method(nmethod* nm) { CodeCache::register_unlinked(CodeCache::unlinked_head(), nm); }
+
+    virtual void time(uint tag, jlong value) { }
+  };
+
   static void do_unloading(bool unloading_occurred);
   static uint8_t unloading_cycle() { return _unloading_cycle; }
 

@@ -36,8 +36,8 @@ ShenandoahClassUnloadingTask::ShenandoahClassUnloadingTask(ShenandoahPhaseTiming
                                                            bool unloading_occurred) :
   WorkerTask("Shenandoah Class Unloading"),
   _phase(phase),
-  _unloading_occurred(unloading_occurred),
-  _code_cache_task(num_workers, unloading_occurred),
+  _unloading_scope_provider(unloading_occurred),
+  _code_cache_task(num_workers, &_unloading_scope_provider),
   _klass_cleaning_task() {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at a safepoint");
 }
@@ -50,7 +50,7 @@ void ShenandoahClassUnloadingTask::work(uint worker_id) {
   // Clean all klasses that were not unloaded.
   // The weak metadata in klass doesn't need to be
   // processed if there was no unloading.
-  if (_unloading_occurred) {
+  if (_unloading_scope_provider.get_scope(worker_id)->has_unloaded_classes()) {
     ShenandoahWorkerTimingsTracker x(_phase, ShenandoahPhaseTimings::CLDUnlink, worker_id);
     _klass_cleaning_task.work();
   }

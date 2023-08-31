@@ -42,10 +42,11 @@
 
 DEF_STUB_INTERFACE(ICStub);
 
+jlong InlineCacheBuffer::queue_for_release_count = 0;
 StubQueue* InlineCacheBuffer::_buffer    = nullptr;
 
-CompiledICHolder* InlineCacheBuffer::_pending_released = nullptr;
-int InlineCacheBuffer::_pending_count = 0;
+CompiledICHolder* volatile InlineCacheBuffer::_pending_released = nullptr;
+volatile int InlineCacheBuffer::_pending_count = 0;
 
 #ifdef ASSERT
 ICRefillVerifier::ICRefillVerifier()
@@ -247,25 +248,41 @@ void* InlineCacheBuffer::cached_value_for(CompiledIC *ic) {
 // Free CompiledICHolder*s that are no longer in use
 void InlineCacheBuffer::release_pending_icholders() {
   assert(SafepointSynchronize::is_at_safepoint(), "should only be called during a safepoint");
-  CompiledICHolder* holder = _pending_released;
-  _pending_released = nullptr;
+  CompiledICHolder* holder = Atomic::xchg(&_pending_released, (CompiledICHolder*)nullptr, memory_order_relaxed);
+  int count = 0;
   while (holder != nullptr) {
     CompiledICHolder* next = holder->next();
     delete holder;
     holder = next;
-    _pending_count--;
+    count++;
   }
-  assert(_pending_count == 0, "wrong count");
+  assert(pending_icholder_count() == count, "wrong count");
+  Atomic::store(&_pending_count, 0);
 }
 
 // Enqueue this icholder for release during the next safepoint.  It's
 // not safe to free them until them since they might be visible to
 // another thread.
 void InlineCacheBuffer::queue_for_release(CompiledICHolder* icholder) {
-  MutexLocker mex(InlineCacheBuffer_lock, Mutex::_no_safepoint_check_flag);
-  icholder->set_next(_pending_released);
-  _pending_released = icholder;
-  _pending_count++;
+  if (UseNewCode) {
+    jlong start = os::elapsed_counter();
+    MutexLocker mex(InlineCacheBuffer_lock, Mutex::_no_safepoint_check_flag);
+      queue_for_release_count += os::elapsed_counter() - start;
+    icholder->set_next(_pending_released);
+    _pending_released = icholder;
+    _pending_count++;
+  } else {
+    CompiledICHolder* old = Atomic::load(&_pending_released);
+    for (;;) {
+      icholder->set_next(old);
+      CompiledICHolder* cur = Atomic::cmpxchg(&_pending_released, old, icholder, memory_order_relaxed);
+      if (cur == old) {
+        break;
+      }
+      old = cur;
+    }
+    Atomic::inc(&_pending_count, memory_order_relaxed);
+  }
   if (TraceICBuffer) {
     tty->print_cr("enqueueing icholder " INTPTR_FORMAT " to be freed", p2i(icholder));
   }

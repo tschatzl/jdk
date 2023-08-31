@@ -138,6 +138,8 @@ class ICRefillVerifierMark: StackObj {
 #endif
 
 class InlineCacheBuffer: public AllStatic {
+public:
+    static jlong queue_for_release_count;
  private:
   // friends
   friend class ICStub;
@@ -146,8 +148,8 @@ class InlineCacheBuffer: public AllStatic {
 
   static StubQueue* _buffer;
 
-  static CompiledICHolder* _pending_released;
-  static int _pending_count;
+  static CompiledICHolder* volatile _pending_released;
+  static volatile int _pending_count;
 
   static StubQueue* buffer()                         { return _buffer;         }
 
@@ -176,7 +178,7 @@ class InlineCacheBuffer: public AllStatic {
 
   static void release_pending_icholders();
   static void queue_for_release(CompiledICHolder* icholder);
-  static int pending_icholder_count() { return _pending_count; }
+  static int pending_icholder_count() { return Atomic::load(&_pending_count); }
 
   // New interface
   static bool    create_transition_stub(CompiledIC *ic, void* cached_value, address entry);

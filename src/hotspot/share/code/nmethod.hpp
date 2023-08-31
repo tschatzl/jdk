@@ -439,7 +439,7 @@ class nmethod : public CompiledMethod {
   // Heuristically deduce an nmethod isn't worth keeping around
   bool is_cold();
   virtual bool is_unloading();
-  virtual void do_unloading(bool unloading_occurred);
+  virtual bool do_unloading(UnloadingScope* scope);
 
   nmethod* unlinked_next() const                  { return _unlinked_next; }
   void set_unlinked_next(nmethod* next)           { _unlinked_next = next; }
@@ -466,7 +466,7 @@ class nmethod : public CompiledMethod {
 
   bool has_dependencies()                         { return dependencies_size() != 0; }
   void print_dependencies_on(outputStream* out) PRODUCT_RETURN;
-  void flush_dependencies();
+  void flush_dependencies(CompiledMethod::UnloadingScope* scope);
   bool has_flushed_dependencies()                 { return _has_flushed_dependencies; }
   void set_has_flushed_dependencies()             {
     assert(!has_flushed_dependencies(), "should only happen once");
@@ -475,7 +475,7 @@ class nmethod : public CompiledMethod {
 
   int   comp_level() const                        { return _comp_level; }
 
-  void unlink_from_method();
+  void unlink_from_method(CompiledMethod::UnloadingScope* scope = nullptr);
 
   // Support for oops in scopes and relocs:
   // Note: index 0 is reserved for null.
@@ -519,10 +519,10 @@ public:
   void verify_clean_inline_caches();
 
   // Unlink this nmethod from the system
-  void unlink();
+  void unlink(UnloadingScope* scope);
 
   // Deallocate this nmethod - called by the GC
-  void flush();
+  void flush(bool do_unregister_nmethod, bool do_codecache_free, void* ctx);
 
   // See comment at definition of _last_seen_on_stack
   void mark_as_maybe_on_stack();

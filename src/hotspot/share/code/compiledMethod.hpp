@@ -41,6 +41,8 @@ class ScopeDesc;
 class CompiledIC;
 class MetadataClosure;
 
+class nmethod;
+
 // This class is used internally by nmethods, to cache
 // exception/pc/handler information.
 
@@ -174,7 +176,27 @@ protected:
 
   void* _gc_data;
 
-  virtual void flush() = 0;
+public:
+  class FlushContext {
+  public:
+    enum {
+        GrabLock,
+        Notifications,
+        ClearExceptionCache,
+        UnregisterNMethod,
+        UnregisterOldNMethod,
+        CodeBlobFlush,
+        CodeCacheFree,
+        NotifyCompileBroker,
+      NumTags
+    };
+    static const char* strings[];
+    virtual void time(uint tag, jlong value) = 0;
+  };
+protected:
+  // The parameter controls whether CollectedHeap::unregister_nmethod() is called
+  // during flush. If not, the caller is responsible for doing this.
+  virtual void flush(bool do_unregister_nmethod, bool do_codecache_free, void* ctx) = 0;
 
 private:
   DeoptimizationStatus deoptimization_status() const {
@@ -373,7 +395,8 @@ public:
   void cleanup_inline_caches_whitebox();
 
   virtual void clear_inline_caches();
-  void clear_ic_callsites();
+  class UnloadingScope;
+  void clear_ic_callsites(CompiledMethod::UnloadingScope* scope);
 
   // Execute nmethod barrier code, as if entering through nmethod call.
   void run_nmethod_entry_barrier();
@@ -413,10 +436,37 @@ public:
   // GC unloading support
   // Cleans unloaded klasses and unloaded nmethods in inline caches
 
+  class UnloadingScope {
+  public:
+    enum {
+      DisarmBarrierSet = 0,
+      CleanExceptionCache,
+      CleanupInlineCaches,                // not-unlink ---^
+
+      FlushDependencies,                  // unlink --v  xxxx
+      UnlinkFromMethod,                   // xxxx
+      ClearICCallSites,                   // xxxxxxxxxxxxxxxxx
+      InvalidateOSRMethod,
+      InvalidateNMethodMirror,
+      PostCompiledMethodUnload,
+      RegisterMethod,
+      UnlinkCodeGrabLock,
+      FlushDependencyMethodHandles,
+      FlushDependencyInstanceKlass,
+      ClearICCallSitesFoundIC,
+      NumTags
+    };
+    static const char* strings[];
+    virtual bool has_unloaded_classes() const = 0;
+    virtual void register_method(nmethod* nm) = 0;
+
+    virtual void time(uint tag, jlong value) = 0;
+  };
+
   virtual bool is_unloading() = 0;
 
-  bool unload_nmethod_caches(bool class_unloading_occurred);
-  virtual void do_unloading(bool unloading_occurred) = 0;
+  bool unload_nmethod_caches(bool class_unloading_occurred, UnloadingScope* scope = nullptr);
+  virtual bool do_unloading(UnloadingScope* scope) = 0;
 
 private:
   PcDesc* find_pc_desc(address pc, bool approximate) {

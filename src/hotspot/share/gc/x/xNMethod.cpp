@@ -27,6 +27,7 @@
 #include "code/icBuffer.hpp"
 #include "gc/shared/barrierSet.hpp"
 #include "gc/shared/barrierSetNMethod.hpp"
+#include "gc/shared/parallelCleaning.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
 #include "gc/x/xBarrier.inline.hpp"
 #include "gc/x/xGlobals.hpp"
@@ -272,7 +273,7 @@ void XNMethod::nmethods_do(NMethodClosure* cl) {
 
 class XNMethodUnlinkClosure : public NMethodClosure {
 private:
-  bool          _unloading_occurred;
+  DefaultCodeCacheUnloadingTaskDefaultScopeProvider _provider;
   volatile bool _failed;
 
   void set_failed() {
@@ -281,7 +282,7 @@ private:
 
 public:
   XNMethodUnlinkClosure(bool unloading_occurred) :
-      _unloading_occurred(unloading_occurred),
+      _provider(unloading_occurred),
       _failed(false) {}
 
   virtual void do_nmethod(nmethod* nm) {
@@ -289,9 +290,11 @@ public:
       return;
     }
 
+    CompiledMethod::UnloadingScope* scope = _provider.get_scope(0 /* worker_id */);
+
     if (nm->is_unloading()) {
       XLocker<XReentrantLock> locker(XNMethod::lock_for_nmethod(nm));
-      nm->unlink();
+      nm->unlink(scope);
       return;
     }
 
@@ -304,7 +307,7 @@ public:
     }
 
     // Clear compiled ICs and exception caches
-    if (!nm->unload_nmethod_caches(_unloading_occurred)) {
+    if (!nm->unload_nmethod_caches(scope->has_unloaded_classes())) {
       set_failed();
     }
   }

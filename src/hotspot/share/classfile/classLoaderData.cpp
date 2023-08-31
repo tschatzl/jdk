@@ -582,7 +582,14 @@ void ClassLoaderData::remove_class(Klass* scratch_class) {
   ShouldNotReachHere();   // should have found this class!!
 }
 
-void ClassLoaderData::unload() {
+static void measure(ClassLoaderData::UnloadContext* ctx, uint tag, jlong& start) {
+  if (ctx == nullptr) { return; }
+  jlong current = os::elapsed_counter();
+  ctx->time(tag, current - start);
+  start = current;
+}
+
+void ClassLoaderData::unload(UnloadContext* ctx) {
   _unloading = true;
 
   LogTarget(Trace, class, loader, data) lt;
@@ -594,14 +601,23 @@ void ClassLoaderData::unload() {
     ls.cr();
   }
 
+  jlong start = os::elapsed_counter();
   // Some items on the _deallocate_list need to free their C heap structures
   // if they are not already on the _klasses list.
   free_deallocate_list_C_heap_structures();
 
+  measure(ctx, ClassLoaderData::UnloadContext::DeallocateCHeapStructures, start); 
+
   // Clean up class dependencies and tell serviceability tools
   // these classes are unloading.  Must be called
   // after erroneous classes are released.
-  classes_do(InstanceKlass::unload_class);
+  // WAS: classes_do(InstanceKlass::unload_class);
+  for (Klass* k = Atomic::load_acquire(&_klasses); k != nullptr; k = k->next_link()) {
+    InstanceKlass::unload_class((InstanceKlass*)k, ctx);
+  }
+
+
+  measure(ctx, ClassLoaderData::UnloadContext::UnloadClasses, start); 
 
   // Method::clear_jmethod_ids only sets the jmethod_ids to null without
   // releasing the memory for related JNIMethodBlocks and JNIMethodBlockNodes.
@@ -617,6 +633,8 @@ void ClassLoaderData::unload() {
   if (_jmethod_ids != nullptr) {
     Method::clear_jmethod_ids(this);
   }
+
+  measure(ctx, ClassLoaderData::UnloadContext::ClearJMethodIds, start); 
 }
 
 ModuleEntryTable* ClassLoaderData::modules() {

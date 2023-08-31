@@ -1198,7 +1198,7 @@ void AsmRemarks::share(const AsmRemarks &src) {
 }
 
 void AsmRemarks::clear() {
-  if (_remarks->clear() == 0) {
+  if (_remarks != nullptr && _remarks->clear() == 0) {
     delete _remarks;
   }
   _remarks = nullptr;
@@ -1250,7 +1250,7 @@ void DbgStrings::share(const DbgStrings &src) {
 }
 
 void DbgStrings::clear() {
-  if (_strings->clear() == 0) {
+  if (_strings != nullptr && _strings->clear() == 0) {
     delete _strings;
   }
   _strings = nullptr;

@@ -50,6 +50,36 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/sharedRuntime.hpp"
 
+const char* CompiledMethod::FlushContext::strings[] = {
+        "GrabLock",
+        "Notifications",
+        "ClearExceptionCache",
+        "UnregisterNMethod",
+        "UnregisterOldNMethod",
+        "CodeBlobFlush",
+        "CodeCacheFree",
+        "NotifyCompileBroker"
+};
+
+const char* CompiledMethod::UnloadingScope::strings[] = {
+      "DisarmBarrierSet",
+      "CleanExceptionCache",
+      "CleanupInlineCaches",                // not-unlink ---^
+
+      "FlushDependencies",                  // unlink --v  xxxx
+      "UnlinkFromMethod",                   // xxxx
+      "ClearICCallSites",                   // xxxxxxxxxxxxxxxxx
+      "InvalidateOSRMethod",
+      "InvalidateNMethodMirror",
+      "PostCompiledMethodUnload",
+      "RegisterMethod",
+      "UnlinkCodeGrabLock",
+      "FlushDependencyMethodHandles",
+      "FlushDependencyInstanceKlass",
+      "ClearICCallSitesFoundIC",
+    };
+
+
 CompiledMethod::CompiledMethod(Method* method, const char* name, CompilerType type, const CodeBlobLayout& layout,
                                int frame_complete_offset, int frame_size, ImmutableOopMapSet* oop_maps,
                                bool caller_must_gc_arguments, bool compiled)
@@ -433,14 +463,17 @@ void CompiledMethod::clear_inline_caches() {
 
 // Clear IC callsites, releasing ICStubs of all compiled ICs
 // as well as any associated CompiledICHolders.
-void CompiledMethod::clear_ic_callsites() {
+void CompiledMethod::clear_ic_callsites(CompiledMethod::UnloadingScope* scope) {
   assert(CompiledICLocker::is_safe(this), "mt unsafe call");
   ResourceMark rm;
   RelocIterator iter(this);
   while(iter.next()) {
     if (iter.type() == relocInfo::virtual_call_type) {
+        jlong start;
+        if (scope != nullptr) start = os::elapsed_counter();
       CompiledIC* ic = CompiledIC_at(&iter);
       ic->set_to_clean(false);
+      if (scope != nullptr) scope->time(CompiledMethod::UnloadingScope::ClearICCallSitesFoundIC, os::elapsed_counter() - start);
     }
   }
 }
@@ -532,6 +565,13 @@ static bool clean_if_nmethod_is_unloaded(CompiledStaticCall *csc, CompiledMethod
   return clean_if_nmethod_is_unloaded(csc, csc->destination(), from, clean_all);
 }
 
+static void measure(CompiledMethod::UnloadingScope* scope, uint tag, jlong& start) {
+  if (scope == nullptr) { return; }
+  jlong current = os::elapsed_counter();
+  scope->time(tag, current - start);
+  start = current;
+}
+
 // Cleans caches in nmethods that point to either classes that are unloaded
 // or nmethods that are unloaded.
 //
@@ -539,17 +579,21 @@ static bool clean_if_nmethod_is_unloaded(CompiledStaticCall *csc, CompiledMethod
 // nmethods are unloaded.  Return postponed=true in the parallel case for
 // inline caches found that point to nmethods that are not yet visited during
 // the do_unloading walk.
-bool CompiledMethod::unload_nmethod_caches(bool unloading_occurred) {
+bool CompiledMethod::unload_nmethod_caches(bool unloading_occurred, UnloadingScope* scope) {
   ResourceMark rm;
-
+  jlong start = os::elapsed_counter();
   // Exception cache only needs to be called if unloading occurred
   if (unloading_occurred) {
     clean_exception_cache();
   }
+  measure(scope, UnloadingScope::CleanExceptionCache, start);
 
   if (!cleanup_inline_caches_impl(unloading_occurred, false)) {
+    measure(scope, UnloadingScope::CleanupInlineCaches, start);
+
     return false;
   }
+  measure(scope, UnloadingScope::CleanupInlineCaches, start);
 
 #ifdef ASSERT
   // Check that the metadata embedded in the nmethod is alive

@@ -203,8 +203,24 @@ class ClassLoaderData : public CHeapObj<mtClass> {
   oop holder_no_keepalive() const;
   oop holder() const;
 
+  class UnloadContext : StackObj {
+  public:
+    enum {
+        DeallocateCHeapStructures,
+        UnloadClasses,                             // 1
+        ClearJMethodIds,
+        UnloadClassDependencies,                   // 3
+        UnloadClassJVMTI,
+        UnloadClassClassLoadingService,            // 5
+        UnloadClassSystemDictionaryShared,
+        UnloadClassEvents,                         // 7
+        UnloadClassJFR,
+        NumTags
+    };
+    virtual void time(uint tag, jlong value) = 0;
+  };
  private:
-  void unload();
+  void unload(UnloadContext* ctx);
   bool keep_alive() const       { return _keep_alive > 0; }
 
   void classes_do(void f(Klass* const));

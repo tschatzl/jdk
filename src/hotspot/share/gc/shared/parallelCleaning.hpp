@@ -27,29 +27,48 @@
 
 #include "classfile/classLoaderDataGraph.hpp"
 #include "code/codeCache.hpp"
+#include "code/compiledMethod.hpp"
 #include "gc/shared/oopStorageParState.hpp"
 #include "gc/shared/workerThread.hpp"
 
-class CodeCacheUnloadingTask {
+class CodeCacheUnloadingTaskScopeProvider {
+public:
+  virtual CompiledMethod::UnloadingScope* get_scope(uint worker_id) = 0;
+};
 
-  const bool                _unloading_occurred;
-  const uint                _num_workers;
+class DefaultCodeCacheUnloadingTaskDefaultScopeProvider : public CodeCacheUnloadingTaskScopeProvider {
+  CodeCache::DefaultCompiledMethodUnloadingScope _default_cm_scope;
+
+public:
+  DefaultCodeCacheUnloadingTaskDefaultScopeProvider(bool unloading_occurred) : _default_cm_scope(unloading_occurred) { }
+  CompiledMethod::UnloadingScope* get_scope(uint worker_id) override { return &_default_cm_scope; }
+};
+
+class CodeCacheUnloadingTask {
+  CodeCacheUnloadingTaskScopeProvider* _scope_provider;
+  const uint _num_workers;
 
   // Variables used to claim nmethods.
   CompiledMethod* _first_nmethod;
   CompiledMethod* volatile _claimed_nmethod;
 
+  size_t volatile* _num_unloaded;
+
 public:
-  CodeCacheUnloadingTask(uint num_workers, bool unloading_occurred);
+  CodeCacheUnloadingTask(uint num_workers, CodeCacheUnloadingTaskScopeProvider* scope_provider);
   ~CodeCacheUnloadingTask();
 
 private:
   static const int MaxClaimNmethods = 16;
   void claim_nmethods(CompiledMethod** claimed_nmethods, int *num_claimed_nmethods);
 
+  void do_work(CompiledMethod::UnloadingScope* scope, CompiledMethod* nmethod, uint worker_id);
+
 public:
   // Cleaning and unloading of nmethods.
   void work(uint worker_id);
+
+  size_t num_unloaded() const;
 };
 
 
@@ -66,10 +85,7 @@ private:
 
 public:
 
-  void clean_klass(InstanceKlass* ik) {
-    ik->clean_weak_instanceklass_links();
-  }
-
+  void clean_klass(InstanceKlass* ik);
   void work();
 };
 

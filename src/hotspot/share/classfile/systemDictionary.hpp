@@ -184,7 +184,7 @@ class SystemDictionary : AllStatic {
 
   // Unload (that is, break root links to) all unmarked classes and
   // loaders.  Returns "true" iff something was unloaded.
-  static bool do_unloading(GCTimer* gc_timer);
+  static bool do_unloading(GCTimer* gc_timer, void* ctx = nullptr);
 
   // Printing
   static void print();

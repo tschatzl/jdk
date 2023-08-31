@@ -375,11 +375,11 @@ bool CompiledIC::set_to_clean(bool in_use) {
 
   if (safe_transition) {
     // Kill any leftover stub we might have too
-    clear_ic_stub();
+    clear_ic_stub();  // takes InlineCacheBuffer_lock
     if (is_optimized()) {
-      set_ic_destination(entry);
+      set_ic_destination(entry);  // takes InlineCacheBuffer_lock
     } else {
-      set_ic_destination_and_value(entry, (void*)nullptr);
+      set_ic_destination_and_value(entry, (void*)nullptr);  // takes InlineCacheBuffer_lock
     }
   } else {
     // Unsafe transition - create stub.

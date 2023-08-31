@@ -411,12 +411,14 @@ bool ClassLoaderDataGraph::is_valid(ClassLoaderData* loader_data) {
 
 // Move class loader data from main list to the unloaded list for unloading
 // and deallocation later.
-bool ClassLoaderDataGraph::do_unloading() {
+bool ClassLoaderDataGraph::do_unloading(ClassLoaderData::UnloadContext* ctx) {
   assert_locked_or_safepoint(ClassLoaderDataGraph_lock);
 
   ClassLoaderData* prev = nullptr;
   uint loaders_processed = 0;
   uint loaders_removed = 0;
+
+  jlong start = os::elapsed_counter();
 
   for (ClassLoaderData* data = _head; data != nullptr; data = data->next()) {
     if (data->is_alive()) {
@@ -425,7 +427,7 @@ bool ClassLoaderDataGraph::do_unloading() {
     } else {
       // Found dead CLD.
       loaders_removed++;
-      data->unload();
+      data->unload(ctx);
 
       // Move dead CLD to unloading list.
       if (prev != nullptr) {
@@ -441,6 +443,7 @@ bool ClassLoaderDataGraph::do_unloading() {
   }
 
   log_debug(class, loader, data)("do_unloading: loaders processed %u, loaders removed %u", loaders_processed, loaders_removed);
+  log_debug(gc)("CLDG::do_unloading: loaders processed %u, loaders removed %u", loaders_processed, loaders_removed);
 
   return loaders_removed != 0;
 }

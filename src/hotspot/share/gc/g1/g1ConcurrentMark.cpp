@@ -50,6 +50,7 @@
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/gcVMOperations.hpp"
+#include "gc/shared/parallelCleaning.hpp"
 #include "gc/shared/referencePolicy.hpp"
 #include "gc/shared/strongRootsScope.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
@@ -77,6 +78,11 @@
 #include "utilities/align.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/growableArray.hpp"
+#include "prims/jvmtiImpl.hpp"
+#include "utilities/quickSort.hpp"
+#include "code/icBuffer.hpp"
+
+#include "code/dependencyContext.hpp"
 
 bool G1CMBitMapClosure::do_addr(HeapWord* const addr) {
   assert(addr < _cm->finger(), "invariant");
@@ -1261,6 +1267,9 @@ void G1ConcurrentMark::remark() {
   bool const mark_finished = !has_overflown();
   if (mark_finished) {
     weak_refs_work();
+    if (ClassUnloadingWithConcurrentMark) {
+      unload_classes_and_code();
+    }
 
     SATBMarkQueueSet& satb_mq_set = G1BarrierSet::satb_mark_queue_set();
     // We're done with marking.
@@ -1297,12 +1306,6 @@ void G1ConcurrentMark::remark() {
     {
       GCTraceTime(Debug, gc, phases) debug("Reclaim Empty Regions", _gc_timer_cm);
       reclaim_empty_regions();
-    }
-
-    // Clean out dead classes
-    if (ClassUnloadingWithConcurrentMark) {
-      GCTraceTime(Debug, gc, phases) debug("Purge Metaspace", _gc_timer_cm);
-      ClassLoaderDataGraph::purge(/*at_safepoint*/true);
     }
 
     // Potentially, some empty-regions have been reclaimed; make this a
@@ -1690,13 +1693,267 @@ void G1ConcurrentMark::weak_refs_work() {
     GCTraceTime(Debug, gc, phases) debug("Weak Processing", _gc_timer_cm);
     WeakProcessor::weak_oops_do(_g1h->workers(), &g1_is_alive, &do_nothing_cl, 1);
   }
+}
 
-  // Unload Klasses, String, Code Cache, etc.
-  if (ClassUnloadingWithConcurrentMark) {
-    GCTraceTime(Debug, gc, phases) debug("Class Unloading", _gc_timer_cm);
-    CodeCache::UnloadingScope scope(&g1_is_alive);
-    bool purged_classes = SystemDictionary::do_unloading(_gc_timer_cm);
-    _g1h->complete_cleaning(purged_classes);
+class G1CodeCacheUnloadingTaskScopeProvider : public CodeCacheUnloadingTaskScopeProvider {
+
+  uint _num_workers;
+  bool _has_unloaded_classes;
+
+  static int sort_methods(nmethod** a, nmethod** b) {
+    uintptr_t u_a = (uintptr_t)*a;
+    uintptr_t u_b = (uintptr_t)*b;
+    if (u_a == u_b) return 0;
+    if (u_a < u_b) return -1;
+    return 1;
+  }
+
+  static int num_heaps() { return CodeCache::heaps()->length(); }
+
+  class CMUnloadingScope : public CompiledMethod::UnloadingScope, public CHeapObj<mtGC> {
+    const bool _has_unloaded_classes;
+
+    using MethodArray = GrowableArrayCHeap<nmethod*, mtGC>;
+    GrowableArrayCHeap<MethodArray*, mtGC> _methods;
+
+    jlong _times[CompiledMethod::UnloadingScope::NumTags];
+
+  public:
+    CMUnloadingScope(bool has_unloaded_classes) : _has_unloaded_classes(has_unloaded_classes), _methods(num_heaps()) {
+      for (int i = 0; i < num_heaps(); i++) {
+        _methods.append(new MethodArray());
+      }
+      for (int i = 0; i < CompiledMethod::UnloadingScope::NumTags; i++) {
+        _times[i] = 0;
+      }
+    }
+
+    ~CMUnloadingScope() {
+      for (int i = 0; i < num_heaps(); i++) {
+        delete _methods.at(i);
+      }
+    }
+
+    bool has_unloaded_classes() const override { return _has_unloaded_classes; }
+    void register_method(nmethod* nm) override {
+      // For now, add to both lists to keep compatibility.
+      CodeCache::register_unlinked(CodeCache::unlinked_head(), nm);
+      int idx = CodeCache::get_code_heap_index(nm);
+      _methods.at(idx)->append(nm);
+    }
+
+    GrowableArrayCHeap<GrowableArrayCHeap<nmethod*, mtGC>*, mtGC>* methods() { return &_methods; }
+
+    void time(uint tag, jlong value) {
+      _times[tag] += value;
+    }
+
+    jlong* times() { return _times; }
+  };
+
+  CMUnloadingScope** _scopes;
+
+public:
+  G1CodeCacheUnloadingTaskScopeProvider(bool has_unloaded_classes, uint num_workers) :
+    _num_workers(num_workers),
+    _has_unloaded_classes(has_unloaded_classes),
+    _scopes(NEW_C_HEAP_ARRAY(CMUnloadingScope*, num_workers, mtGC)) {
+
+    assert(num_workers > 0, "must be");
+    
+    for (uint i = 0; i < num_workers; i++) {
+      _scopes[i] = new CMUnloadingScope(has_unloaded_classes);
+    }
+  }
+
+  ~G1CodeCacheUnloadingTaskScopeProvider() {
+    for (uint i = 0; i < _num_workers; i++) {
+      delete _scopes[i];
+    }
+    FREE_C_HEAP_ARRAY(CMUnloadingScope, _scopes);
+  }
+
+  CompiledMethod::UnloadingScope* get_scope(uint worker_id) override {
+    return _scopes[worker_id];
+  }
+  
+
+  GrowableArrayCHeap<nmethod*, mtGC>* get_unsorted(int heap) {
+    assert(heap < num_heaps(), "must be");
+
+    uint total_length = 0;
+    for (uint i = 0; i < _num_workers; i++) {
+      total_length += _scopes[i]->methods()->at(heap)->length();
+    }
+
+    GrowableArrayCHeap<nmethod*, mtGC>* result = new GrowableArrayCHeap<nmethod*, mtGC>(total_length);
+    for (uint i = 0; i < _num_workers; i++) {
+      result->appendAll(_scopes[i]->methods()->at(heap));
+    }
+    return result;
+  }
+
+  GrowableArrayCHeap<GrowableArrayCHeap<nmethod*, mtGC>*, mtGC>* data() {
+      GCTraceTime(Debug, gc) fun("Sort nmethods", G1CollectedHeap::heap()->concurrent_mark()->gc_timer_cm());
+    GrowableArrayCHeap<GrowableArrayCHeap<nmethod*, mtGC>*, mtGC>* result = new GrowableArrayCHeap<GrowableArrayCHeap<nmethod*, mtGC>*, mtGC>(num_heaps());
+
+    int count = 0;
+    for (int i = 0; i < num_heaps(); i++) {
+      GrowableArrayCHeap<nmethod*, mtGC>* cur = get_unsorted(i);
+      cur->sort(sort_methods);
+      result->append(cur);
+      count += cur->length();
+    }
+    log_debug(gc)("sorting... nmethods %d", count);
+    return result;
+  }
+
+  void print_do_unloading_times() {
+    jlong totals[CompiledMethod::UnloadingScope::NumTags];
+    for (uint i = 0; i < CompiledMethod::UnloadingScope::NumTags; i++) {
+      totals[i] = 0;
+    }
+    for (uint i = 0; i < _num_workers; i++) {
+      for (int j = 0; j < CompiledMethod::UnloadingScope::NumTags; j++) {
+        totals[j] += _scopes[i]->times()[j];
+      }
+    }
+    LogTarget(Debug, gc) lt;
+    LogStream ls(&lt);
+    ls.print("CodeCache::do_unloading ");
+    for (uint i = 0; i < CompiledMethod::UnloadingScope::NumTags; i++) {
+      ls.print("%s %1.2f ", CompiledMethod::UnloadingScope::strings[i], TimeHelper::counter_to_millis(totals[i]));
+    }
+    ls.cr();
+  }
+};
+
+class G1ClassLoaderDataUnloadContext : public ClassLoaderData::UnloadContext {
+  jlong _times[ClassLoaderData::UnloadContext::NumTags];
+public:
+  G1ClassLoaderDataUnloadContext() {
+    for (uint i = 0; i < NumTags; i++) {
+        _times[i] = 0;
+    }
+  }
+  void time(uint tag, jlong value) override {
+    _times[tag] += value;
+  }
+
+  void print_do_unloading_times() {
+    LogTarget(Debug, gc) lt;
+    LogStream ls(&lt);
+    ls.print("SystemDictionary::do_unloading ");
+    for (uint i = 0; i < NumTags; i++) {
+      ls.print("%1.2f ", TimeHelper::counter_to_millis(_times[i]));
+    }
+    ls.cr();
+  }
+};
+
+class G1FlushCodeCacheContext : public CompiledMethod::FlushContext {
+  jlong _times[NumTags];
+public:
+  G1FlushCodeCacheContext() {
+    for (uint i = 0; i < NumTags; i++) {
+        _times[i] = 0;
+    }
+  }
+  void time(uint tag, jlong value) override {
+    _times[tag] += value;
+  }
+
+  void print_times() {
+    LogTarget(Debug, gc) lt;
+    LogStream ls(&lt);
+    ls.print("CodeCache::flush_unlinked_nmethods ");
+    for (uint i = 0; i < NumTags; i++) {
+      ls.print("%s %1.2f ", strings[i], TimeHelper::counter_to_millis(_times[i]));
+    }
+    ls.cr();
+  }
+};
+
+void G1ConcurrentMark::unload_classes_and_code() {
+  GCTraceTime(Debug, gc, phases) cu("Class Unloading", _gc_timer_cm);
+
+  G1CMIsAliveClosure g1_is_alive(_g1h);
+  CodeCache::UnloadingScope cc_scope(&g1_is_alive);
+  G1ClassLoaderDataUnloadContext cu_ctx;
+  G1FlushCodeCacheContext fcc_ctx;
+  bool unloaded_classes;
+  {
+    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
+
+    unloaded_classes = SystemDictionary::do_unloading(_gc_timer_cm, &cu_ctx);
+
+    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
+    log_debug(gc)("dependencies::do_unloading deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
+    log_debug(gc)("dependencies::do_unloading stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));    cu_ctx.print_do_unloading_times();
+  }
+  InlineCacheBuffer::queue_for_release_count = 0;
+  G1CodeCacheUnloadingTaskScopeProvider scope_provider(unloaded_classes, G1CollectedHeap::heap()->workers()->active_workers());
+  {
+    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
+
+    _g1h->complete_cleaning(&scope_provider, _gc_timer_cm);
+
+    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
+    log_debug(gc)("dependencies::do_cleaning deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
+    log_debug(gc)("dependencies::do_cleaning stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));
+  }
+  log_debug(gc)("complete-cleaning ICB:queue_for_release_lock time %1.2fms pending %d", TimeHelper::counter_to_millis(InlineCacheBuffer::queue_for_release_count), InlineCacheBuffer::pending_icholder_count());
+  cc_scope.cleaning_completed();  
+
+  scope_provider.print_do_unloading_times();
+
+  {
+    GCTraceTime(Debug, gc, phases) fun("Clean CodeRoots", _gc_timer_cm);
+    _g1h->clean_code_root_sets();
+  }
+  InlineCacheBuffer::queue_for_release_count = 0;
+  {
+    GCTraceTime(Debug, gc, phases) fun("Flush CodeCache", _gc_timer_cm);
+
+    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
+
+    cc_scope.flush_codecache(false /* do_unregister_nmethod */, false /* do_free_in_codecache */, &fcc_ctx);
+
+    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
+    log_debug(gc)("dependencies::do_flush deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
+    log_debug(gc)("dependencies::do_flush stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));
+  }
+  log_debug(gc)("flush-codecache ICB:queue_for_release_lock time %1.2fms pending %d", TimeHelper::counter_to_millis(InlineCacheBuffer::queue_for_release_count), InlineCacheBuffer::pending_icholder_count());
+
+  fcc_ctx.print_times();
+  // Remove stuff from codecache.
+  {
+      GCTraceTime(Debug, gc, phases) fre("Free CodeCache", _gc_timer_cm);
+    GrowableArrayCHeap<GrowableArrayCHeap<nmethod*, mtGC>*, mtGC>* data = scope_provider.data();
+    size_t freed_memory = CodeCache::free(data);
+    for (int i = 0; i < CodeCache::heaps()->length(); i++) {
+      delete data->at(i);
+    }
+    delete data;
+  }
+  // Clean out dead classes
+  { // do we need to do this if no classes were unloaded?
+    GCTraceTime(Debug, gc, phases) debug("Purge Metaspace", _gc_timer_cm);
+    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
+
+    ClassLoaderDataGraph::purge(/*at_safepoint*/true);
+    
+    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
+    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
+    log_debug(gc)("dependencies::purge deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
+    log_debug(gc)("dependencies::purge stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));
   }
 }
 

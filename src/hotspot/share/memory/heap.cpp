@@ -342,7 +342,7 @@ HeapBlock* CodeHeap::split_block(HeapBlock *b, size_t split_at) {
 }
 
 void CodeHeap::deallocate_tail(void* p, size_t used_size) {
-  assert(p == find_start(p), "illegal deallocation");
+  assert(p == find_start(p), "illegal deallocation of " PTR_FORMAT " which ought to be " PTR_FORMAT, p2i(p), p2i(find_start(p)));
   assert_locked_or_safepoint(CodeCache_lock);
 
   // Find start of HeapBlock
@@ -360,7 +360,7 @@ void CodeHeap::deallocate_tail(void* p, size_t used_size) {
 }
 
 void CodeHeap::deallocate(void* p) {
-  assert(p == find_start(p), "illegal deallocation");
+  assert(p == find_start(p), "illegal deallocation of " PTR_FORMAT " which ought to be " PTR_FORMAT " is free %d", p2i(p), p2i(find_start(p)), ((HeapBlock*)find_block_for(p))->free());
   assert_locked_or_safepoint(CodeCache_lock);
 
   // Find start of HeapBlock
@@ -372,6 +372,13 @@ void CodeHeap::deallocate(void* p) {
             p2i(b), p2i(_memory.low_boundary()), p2i(_memory.high()));
   add_to_freelist(b);
   NOT_PRODUCT(verify());
+}
+
+void CodeHeap::deallocate_list(GrowableArrayCHeap<nmethod*, mtGC>* list) {
+  assert_locked_or_safepoint(CodeCache_lock);
+  for (int i = 0; i < list->length(); i++) {
+    deallocate(list->at(i));
+  }
 }
 
 /**

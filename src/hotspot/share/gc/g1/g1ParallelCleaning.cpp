@@ -30,6 +30,9 @@
 #include "jvmci/jvmci.hpp"
 #endif
 
+#include "logging/log.hpp"
+#include "utilities/ticks.hpp"
+
 #if INCLUDE_JVMCI
 JVMCICleaningTask::JVMCICleaningTask() :
   _cleaning_claimed(false) {
@@ -46,25 +49,29 @@ bool JVMCICleaningTask::claim_cleaning_task() {
 void JVMCICleaningTask::work(bool unloading_occurred) {
   // One worker will clean JVMCI metadata handles.
   if (unloading_occurred && EnableJVMCI && claim_cleaning_task()) {
+    Ticks start = Ticks::now();
     JVMCI::do_unloading(unloading_occurred);
+    double duration = (Ticks::now() - start).seconds() * 1000.0;
+    log_debug(gc)("JVMCICleaningTask::work: %1.2f", duration);
   }
 }
 #endif // INCLUDE_JVMCI
 
 G1ParallelCleaningTask::G1ParallelCleaningTask(uint num_workers,
-                                               bool unloading_occurred) :
+                                               CodeCacheUnloadingTaskScopeProvider* scope_provider) :
   WorkerTask("G1 Parallel Cleaning"),
-  _unloading_occurred(unloading_occurred),
-  _code_cache_task(num_workers, unloading_occurred),
+  _scope_provider(scope_provider),
+  _code_cache_task(num_workers, scope_provider),
   JVMCI_ONLY(_jvmci_cleaning_task() COMMA)
   _klass_cleaning_task() {
 }
 
 // The parallel work done by all worker threads.
 void G1ParallelCleaningTask::work(uint worker_id) {
+  CompiledMethod::UnloadingScope* scope = _scope_provider->get_scope(worker_id);
   // Clean JVMCI metadata handles.
   // Execute this task first because it is serial task.
-  JVMCI_ONLY(_jvmci_cleaning_task.work(_unloading_occurred);)
+  JVMCI_ONLY(_jvmci_cleaning_task.work(scope->has_unloaded_classes());)
 
   // Do first pass of code cache cleaning.
   _code_cache_task.work(worker_id);
@@ -72,7 +79,7 @@ void G1ParallelCleaningTask::work(uint worker_id) {
   // Clean all klasses that were not unloaded.
   // The weak metadata in klass doesn't need to be
   // processed if there was no unloading.
-  if (_unloading_occurred) {
+  if (scope->has_unloaded_classes()) {
     _klass_cleaning_task.work();
   }
 }

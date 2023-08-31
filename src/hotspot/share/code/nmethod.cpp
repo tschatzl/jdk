@@ -1312,9 +1312,9 @@ void nmethod::log_state_change() const {
   }
 }
 
-void nmethod::unlink_from_method() {
+void nmethod::unlink_from_method(CompiledMethod::UnloadingScope* scope) {
   if (method() != nullptr) {
-    method()->unlink_code(this);
+    method()->unlink_code(this, scope);
   }
 }
 
@@ -1403,8 +1403,14 @@ bool nmethod::make_not_entrant() {
   return true;
 }
 
+static void measure(CompiledMethod::UnloadingScope* scope, uint tag, jlong& start) {
+  jlong current = os::elapsed_counter();
+  scope->time(tag, current - start);
+  start = current;
+}
+
 // For concurrent GCs, there must be a handshake between unlink and flush
-void nmethod::unlink() {
+void nmethod::unlink(CompiledMethod::UnloadingScope* scope) {
   if (_unlinked_next != nullptr) {
     // Already unlinked. It can be invoked twice because concurrent code cache
     // unloading might need to restart when inline cache cleaning fails due to
@@ -1412,18 +1418,25 @@ void nmethod::unlink() {
     return;
   }
 
-  flush_dependencies();
+  jlong start = os::elapsed_counter();
+
+  flush_dependencies(scope);
+
+  measure(scope, UnloadingScope::FlushDependencies, start);
 
   // unlink_from_method will take the CompiledMethod_lock.
   // In this case we don't strictly need it when unlinking nmethods from
   // the Method, because it is only concurrently unlinked by
   // the entry barrier, which acquires the per nmethod lock.
-  unlink_from_method();
-  clear_ic_callsites();
+  unlink_from_method(scope);
+  measure(scope, UnloadingScope::UnlinkFromMethod, start);
+  clear_ic_callsites(scope);
+  measure(scope, UnloadingScope::ClearICCallSites, start);
 
   if (is_osr_method()) {
     invalidate_osr_method();
   }
+  measure(scope, UnloadingScope::InvalidateOSRMethod, start);
 
 #if INCLUDE_JVMCI
   // Clear the link between this nmethod and a HotSpotNmethod mirror
@@ -1432,18 +1445,33 @@ void nmethod::unlink() {
     nmethod_data->invalidate_nmethod_mirror(this);
   }
 #endif
+  measure(scope, UnloadingScope::InvalidateNMethodMirror, start);
 
   // Post before flushing as jmethodID is being used
   post_compiled_method_unload();
+  measure(scope, UnloadingScope::PostCompiledMethodUnload, start);
 
   // Register for flushing when it is safe. For concurrent class unloading,
   // that would be after the unloading handshake, and for STW class unloading
   // that would be when getting back to the VM thread.
-  CodeCache::register_unlinked(this);
+  scope->register_method(this);
+  measure(scope, UnloadingScope::RegisterMethod, start);
 }
 
-void nmethod::flush() {
+static void measure(CompiledMethod::FlushContext* ctx, uint tag, jlong& start) {
+  if (ctx == nullptr) return;
+  jlong current = os::elapsed_counter();
+  ctx->time(tag, current - start);
+  start = current;
+}
+
+void nmethod::flush(bool do_unregister_nmethod, bool do_codecache_free, void* _ctx) {
+    CompiledMethod::FlushContext* ctx = (CompiledMethod::FlushContext*)_ctx;
+  jlong start = os::elapsed_counter();
+
   MutexLocker ml(CodeCache_lock, Mutex::_no_safepoint_check_flag);
+
+  measure(ctx, FlushContext::GrabLock, start);
 
   // completely deallocate this method
   Events::log(Thread::current(), "flushing nmethod " INTPTR_FORMAT, p2i(this));
@@ -1451,6 +1479,8 @@ void nmethod::flush() {
                        "/Free CodeCache:" SIZE_FORMAT "Kb",
                        is_osr_method() ? "osr" : "",_compile_id, p2i(this), CodeCache::blob_count(),
                        CodeCache::unallocated_capacity(CodeCache::get_code_blob_type(this))/1024);
+
+  measure(ctx, FlushContext::Notifications, start);
 
   // We need to deallocate any ExceptionCache data.
   // Note that we do not need to grab the nmethod lock for this, it
@@ -1462,11 +1492,27 @@ void nmethod::flush() {
     ec = next;
   }
 
-  Universe::heap()->unregister_nmethod(this);
+  measure(ctx, FlushContext::ClearExceptionCache, start);
+
+  if (do_unregister_nmethod) {
+    Universe::heap()->unregister_nmethod(this);
+  }
+
+  measure(ctx, FlushContext::UnregisterNMethod, start);
+
   CodeCache::unregister_old_nmethod(this);
 
-  CodeBlob::flush();
-  CodeCache::free(this);
+  measure(ctx, FlushContext::UnregisterOldNMethod, start);
+
+  CodeBlob::flush(do_unregister_nmethod, do_codecache_free, nullptr);
+
+  measure(ctx, FlushContext::CodeBlobFlush, start);
+
+  if (do_codecache_free) {
+    CodeCache::free(this);
+  }
+
+  measure(ctx, FlushContext::CodeCacheFree, start);
 }
 
 oop nmethod::oop_at(int index) const {
@@ -1487,14 +1533,17 @@ oop nmethod::oop_at_phantom(int index) const {
 // Notify all classes this nmethod is dependent on that it is no
 // longer dependent.
 
-void nmethod::flush_dependencies() {
+void nmethod::flush_dependencies(CompiledMethod::UnloadingScope* scope) {
   if (!has_flushed_dependencies()) {
     set_has_flushed_dependencies();
     for (Dependencies::DepStream deps(this); deps.next(); ) {
+        jlong start;
+        if (scope != nullptr) start = os::elapsed_counter();
       if (deps.type() == Dependencies::call_site_target_value) {
         // CallSite dependencies are managed on per-CallSite instance basis.
         oop call_site = deps.argument_oop(0);
         MethodHandles::clean_dependency_context(call_site);
+        if (scope != nullptr) scope->time(CompiledMethod::UnloadingScope::FlushDependencyMethodHandles, os::elapsed_counter() - start);
       } else {
         InstanceKlass* ik = deps.context_type();
         if (ik == nullptr) {
@@ -1503,6 +1552,7 @@ void nmethod::flush_dependencies() {
         // During GC liveness of dependee determines class that needs to be updated.
         // The GC may clean dependency contexts concurrently and in parallel.
         ik->clean_dependency_context();
+        if (scope != nullptr) scope->time(CompiledMethod::UnloadingScope::FlushDependencyInstanceKlass, os::elapsed_counter() - start);
       }
     }
   }
@@ -1742,17 +1792,21 @@ void nmethod::clear_unloading_state() {
 // This is called at the end of the strong tracing/marking phase of a
 // GC to unload an nmethod if it contains otherwise unreachable
 // oops or is heuristically found to be not important.
-void nmethod::do_unloading(bool unloading_occurred) {
+bool nmethod::do_unloading(UnloadingScope* scope) {
   // Make sure the oop's ready to receive visitors
   if (is_unloading()) {
-    unlink();
+    unlink(scope);
+    return true;
   } else {
-    guarantee(unload_nmethod_caches(unloading_occurred),
+    guarantee(unload_nmethod_caches(scope->has_unloaded_classes(), scope),
               "Should not need transition stubs");
+    jlong start = os::elapsed_counter();
     BarrierSetNMethod* bs_nm = BarrierSet::barrier_set()->barrier_set_nmethod();
     if (bs_nm != nullptr) {
       bs_nm->disarm(this);
     }
+    scope->time(UnloadingScope::DisarmBarrierSet, os::elapsed_counter() - start);
+    return false;
   }
 }
 

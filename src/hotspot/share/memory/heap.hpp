@@ -108,7 +108,7 @@ class CodeHeap : public CHeapObj<mtCode> {
 
   enum { free_sentinel = 0xFF };
   static const int fragmentation_limit = 10000;  // defragment after that many potential fragmentations.
-  static const int freelist_limit = 100;         // improve insert point search if list is longer than this limit.
+  static const int freelist_limit = 10;         // improve insert point search if list is longer than this limit.
   static char  segmap_template[free_sentinel+1];
 
   // Helper functions
@@ -155,6 +155,7 @@ class CodeHeap : public CHeapObj<mtCode> {
   // Memory allocation
   void* allocate (size_t size); // Allocate 'size' bytes in the code cache or return null
   void  deallocate(void* p);    // Deallocate memory
+  void  deallocate_list(GrowableArrayCHeap<nmethod*, mtGC>* list);
   // Free the tail of segments allocated by the last call to 'allocate()' which exceed 'used_size'.
   // ATTENTION: this is only safe to use if there was no other call to 'allocate()' after
   //            'p' was allocated. Only intended for freeing memory which would be otherwise

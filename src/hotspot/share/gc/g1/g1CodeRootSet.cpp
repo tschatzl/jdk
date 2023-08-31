@@ -184,6 +184,56 @@ public:
     }
   }
 
+  struct G1CodeRootSetHashTableDeleteUnlinked : StackObj {
+    size_t _num_retained;
+
+    G1CodeRootSetHashTableDeleteUnlinked() : _num_retained(0) {}
+    bool operator()(G1CodeRootSetHashTableValue* value) {
+      nmethod* unlinked_next = value->_nmethod->unlinked_next();
+      if (unlinked_next != nullptr) {
+        return true;
+      } else {
+        ++_num_retained;
+        return false;
+      }
+    }
+  };
+
+  // Removes unlinked entries, multi-threaded.
+  void remove_unlinked_entries() {
+    assert_at_safepoint();
+
+    // A lot of code root sets are typically empty.
+    if (is_empty()) {
+      return;
+    }
+
+    jlong start = os::elapsed_counter();
+
+    HashTable::BulkDeleteTask bdt(&_table);
+
+    bool locked = bdt.prepare(Thread::current());
+    guarantee(locked, "must be");
+
+    G1CodeRootSetHashTableDeleteUnlinked delete_check;
+    HashTableIgnore ignore;
+    while (bdt.do_task(Thread::current(), delete_check, ignore)) {
+      /* do nothing */
+    }
+    bdt.done(Thread::current());
+
+    Atomic::store(&_num_entries, delete_check._num_retained);
+
+    jlong mid = os::elapsed_counter();
+
+    bool shrunk = shrink_to_match(delete_check._num_retained);
+
+    jlong end = os::elapsed_counter();
+
+    if (shrunk)
+      log_debug(gc)("remove unlinked entries shrinking total %1.2f remove %1.2f shrink %1.2f", TimeHelper::counter_to_millis(end - start), TimeHelper::counter_to_millis(mid - start), TimeHelper::counter_to_millis(end - mid));
+  }
+
   // Calculate the log2 of the table size we want to shrink to.
   size_t log2_target_shrink_size(size_t current_size) const {
     // A table with the new size should be at most filled by this factor. Otherwise
@@ -200,12 +250,14 @@ public:
   }
 
   // Shrink to keep table size appropriate to the given number of entries.
-  void shrink_to_match(size_t current_size) {
+  bool shrink_to_match(size_t current_size) {
     size_t prev_log2size = _table.get_size_log2(Thread::current());
     size_t new_log2_table_size = log2_target_shrink_size(current_size);
     if (new_log2_table_size < prev_log2size) {
       _table.shrink(Thread::current(), new_log2_table_size);
+      return true;
     }
+    return false;
   }
 
   void reset_table_scanner() {

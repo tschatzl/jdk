@@ -2464,7 +2464,7 @@ jmethodID InstanceKlass::jmethod_id_or_null(Method* method) {
   return id;
 }
 
-inline DependencyContext InstanceKlass::dependencies() {
+DependencyContext InstanceKlass::dependencies() {
   DependencyContext dep_context(&_dep_context, &_dep_context_last_cleaned);
   return dep_context;
 }
@@ -2821,26 +2821,45 @@ static void clear_all_breakpoints(Method* m) {
 }
 #endif
 
-void InstanceKlass::unload_class(InstanceKlass* ik) {
-  // Release dependencies.
-  ik->dependencies().remove_all_dependents();
+static void measure(ClassLoaderData::UnloadContext* ctx, uint tag, jlong& start) {
+  if (ctx == nullptr) { return; }
+  jlong current = os::elapsed_counter();
+  ctx->time(tag, current - start);
+  start = current;
+}
 
+void InstanceKlass::unload_class(InstanceKlass* ik, void* _ctx) {
+  ClassLoaderData::UnloadContext* ctx = (ClassLoaderData::UnloadContext*)_ctx;
+  jlong start = os::elapsed_counter();
+  // Release dependencies.
+//  if (!UseNewCode || !UseG1GC)
+//  ik->dependencies().remove_all_dependents();            // trivially parallelizable
+
+  measure(ctx, ClassLoaderData::UnloadContext::UnloadClassDependencies, start);
   // notify the debugger
   if (JvmtiExport::should_post_class_unload()) {
-    JvmtiExport::post_class_unload(ik);
+    JvmtiExport::post_class_unload(ik);                  // locks global mutex
   }
 
-  // notify ClassLoadingService of class unload
-  ClassLoadingService::notify_class_unloaded(ik);
+  measure(ctx, ClassLoaderData::UnloadContext::UnloadClassJVMTI, start);
 
-  SystemDictionaryShared::handle_class_unloading(ik);
+  // notify ClassLoadingService of class unload
+  ClassLoadingService::notify_class_unloaded(ik);        // expects code is completely serial(!)
+
+  measure(ctx, ClassLoaderData::UnloadContext::UnloadClassClassLoadingService, start);
+
+  SystemDictionaryShared::handle_class_unloading(ik);    // only enabled with archive (dumping); lots of locking
+
+  measure(ctx, ClassLoaderData::UnloadContext::UnloadClassSystemDictionaryShared, start);
 
   if (log_is_enabled(Info, class, unload)) {
     ResourceMark rm;
     log_info(class, unload)("unloading class %s " PTR_FORMAT, ik->external_name(), p2i(ik));
   }
 
-  Events::log_class_unloading(Thread::current(), ik);
+  Events::log_class_unloading(Thread::current(), ik);    // expects code is serial
+
+  measure(ctx, ClassLoaderData::UnloadContext::UnloadClassEvents, start);
 
 #if INCLUDE_JFR
   assert(ik != nullptr, "invariant");
@@ -2849,6 +2868,9 @@ void InstanceKlass::unload_class(InstanceKlass* ik) {
   event.set_definingClassLoader(ik->class_loader_data());
   event.commit();
 #endif
+
+  measure(ctx, ClassLoaderData::UnloadContext::UnloadClassJFR, start);
+
 }
 
 static void method_release_C_heap_structures(Method* m) {

@@ -351,7 +351,7 @@ class Method : public Metadata {
   CompiledMethod* code() const;
 
   // Locks CompiledMethod_lock if not held.
-  void unlink_code(CompiledMethod *compare);
+  void unlink_code(CompiledMethod *compare, void* scope = nullptr);
   // Locks CompiledMethod_lock if not held.
   void unlink_code();
 

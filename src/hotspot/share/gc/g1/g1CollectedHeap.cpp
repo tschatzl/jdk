@@ -2589,10 +2589,44 @@ void G1CollectedHeap::do_collection_pause_at_safepoint_helper() {
   }
 }
 
-void G1CollectedHeap::complete_cleaning(bool class_unloading_occurred) {
+void G1CollectedHeap::complete_cleaning(CodeCacheUnloadingTaskScopeProvider* scope_provider, GCTimer* timer) {
+  GCTraceTime(Debug, gc, phases) debug("Complete Cleaning", timer);
   uint num_workers = workers()->active_workers();
-  G1ParallelCleaningTask unlink_task(num_workers, class_unloading_occurred);
+  G1ParallelCleaningTask unlink_task(num_workers, scope_provider);
   workers()->run_task(&unlink_task);
+  log_debug(gc)("G1CollectedHeap::complete_cleaning: num_unloaded %zu", unlink_task.num_unloaded());
+}
+
+class G1CleanCodeRoots : public HeapRegionClosure {
+public:
+  G1CleanCodeRoots() { }
+
+  bool do_heap_region(HeapRegion* hr) {
+    hr->rem_set()->remove_dead_entries();
+    return false;
+  }
+};
+
+class G1CleanCodeRootsTask : public WorkerTask {
+  HeapRegionClaimer _hrclaimer;
+  G1CleanCodeRoots _cl;
+
+public:
+  G1CleanCodeRootsTask(uint num_workers)
+  : WorkerTask("G1 Clean Code Roots Task"),
+    _hrclaimer(num_workers) { }
+
+  void work(uint worker_id) {
+      jlong start = os::elapsed_counter();
+    G1CollectedHeap::heap()->heap_region_par_iterate_from_worker_offset(&_cl, &_hrclaimer, worker_id);
+      log_debug(gc)("Clean code roots worker %u time %1.2f", worker_id, TimeHelper::counter_to_millis(os::elapsed_counter() - start));
+  }
+};
+
+void G1CollectedHeap::clean_code_root_sets() {
+  uint num_workers = workers()->active_workers();
+  G1CleanCodeRootsTask clean_task(num_workers);
+  workers()->run_task(&clean_task);
 }
 
 bool G1STWSubjectToDiscoveryClosure::do_object_b(oop obj) {
