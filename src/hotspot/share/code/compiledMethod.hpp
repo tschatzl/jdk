@@ -188,6 +188,7 @@ public:
         CodeBlobFlush,
         CodeCacheFree,
         NotifyCompileBroker,
+        UnlinkTotal,
       NumTags
     };
     static const char* strings[];

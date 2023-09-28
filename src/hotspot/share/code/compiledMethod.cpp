@@ -58,7 +58,8 @@ const char* CompiledMethod::FlushContext::strings[] = {
         "UnregisterOldNMethod",
         "CodeBlobFlush",
         "CodeCacheFree",
-        "NotifyCompileBroker"
+        "NotifyCompileBroker",
+        "UnlinkTotal"
 };
 
 const char* CompiledMethod::UnloadingScope::strings[] = {

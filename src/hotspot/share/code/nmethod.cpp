@@ -1469,10 +1469,6 @@ void nmethod::flush(bool do_unregister_nmethod, bool do_codecache_free, void* _c
     CompiledMethod::FlushContext* ctx = (CompiledMethod::FlushContext*)_ctx;
   jlong start = os::elapsed_counter();
 
-  MutexLocker ml(CodeCache_lock, Mutex::_no_safepoint_check_flag);
-
-  measure(ctx, FlushContext::GrabLock, start);
-
   // completely deallocate this method
   Events::log(Thread::current(), "flushing nmethod " INTPTR_FORMAT, p2i(this));
   log_debug(codecache)("*flushing %s nmethod %3d/" INTPTR_FORMAT ". Live blobs:" UINT32_FORMAT
@@ -1500,13 +1496,17 @@ void nmethod::flush(bool do_unregister_nmethod, bool do_codecache_free, void* _c
 
   measure(ctx, FlushContext::UnregisterNMethod, start);
 
-  CodeCache::unregister_old_nmethod(this);
-
-  measure(ctx, FlushContext::UnregisterOldNMethod, start);
-
   CodeBlob::flush(do_unregister_nmethod, do_codecache_free, nullptr);
 
   measure(ctx, FlushContext::CodeBlobFlush, start);
+
+  MutexLocker ml(CodeCache_lock, Mutex::_no_safepoint_check_flag);
+
+  measure(ctx, FlushContext::GrabLock, start);
+
+  CodeCache::unregister_old_nmethod(this);
+
+  measure(ctx, FlushContext::UnregisterOldNMethod, start);
 
   if (do_codecache_free) {
     CodeCache::free(this);

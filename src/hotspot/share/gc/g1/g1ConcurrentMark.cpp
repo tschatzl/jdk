@@ -1908,28 +1908,12 @@ void G1ConcurrentMark::unload_classes_and_code() {
   G1FlushCodeCacheContext fcc_ctx;
   bool unloaded_classes;
   {
-    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
-
     unloaded_classes = SystemDictionary::do_unloading(_gc_timer_cm, &cu_ctx);
-
-    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
-    log_debug(gc)("dependencies::do_unloading deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
-    log_debug(gc)("dependencies::do_unloading stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));    cu_ctx.print_do_unloading_times();
   }
   InlineCacheBuffer::queue_for_release_count = 0;
   G1CodeCacheUnloadingTaskScopeProvider scope_provider(unloaded_classes, G1CollectedHeap::heap()->workers()->active_workers());
   {
-    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
-
     _g1h->complete_cleaning(&scope_provider, _gc_timer_cm);
-
-    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
-    log_debug(gc)("dependencies::do_cleaning deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
-    log_debug(gc)("dependencies::do_cleaning stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));
   }
   log_debug(gc)("complete-cleaning ICB:queue_for_release_lock time %1.2fms pending %d", TimeHelper::counter_to_millis(InlineCacheBuffer::queue_for_release_count), InlineCacheBuffer::pending_icholder_count());
   cc_scope.cleaning_completed();  
@@ -1943,16 +1927,7 @@ void G1ConcurrentMark::unload_classes_and_code() {
   InlineCacheBuffer::queue_for_release_count = 0;
   {
     GCTraceTime(Debug, gc, phases) fun("Flush CodeCache", _gc_timer_cm);
-
-    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
-
     cc_scope.flush_codecache(false /* do_unregister_nmethod */, false /* do_free_in_codecache */, &fcc_ctx);
-
-    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
-    log_debug(gc)("dependencies::do_flush deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
-    log_debug(gc)("dependencies::do_flush stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));
   }
   log_debug(gc)("flush-codecache ICB:queue_for_release_lock time %1.2fms pending %d", TimeHelper::counter_to_millis(InlineCacheBuffer::queue_for_release_count), InlineCacheBuffer::pending_icholder_count());
 
@@ -1970,17 +1945,8 @@ void G1ConcurrentMark::unload_classes_and_code() {
   // Clean out dead classes
   { // do we need to do this if no classes were unloaded?
     GCTraceTime(Debug, gc, phases) debug("Purge Metaspace", _gc_timer_cm);
-    jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
     G1CLDGUnloadContext cldg_uc;
-
     ClassLoaderDataGraph::purge(true /* at_safepoint */, &cldg_uc);
-    
-    jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
-    jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
-    log_debug(gc)("dependencies::purge deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
-    log_debug(gc)("dependencies::purge stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));
-
     cldg_uc.print_times();
   }
 }

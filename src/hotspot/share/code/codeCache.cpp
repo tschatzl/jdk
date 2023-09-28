@@ -1044,7 +1044,7 @@ void CodeCache::register_unlinked(nmethod* volatile* list_head, nmethod* nm) {
 // Flush all the nmethods the GC unlinked
 void CodeCache::flush_unlinked_nmethods(bool do_unregister_nmethod, bool do_codecache_free, CompiledMethod::FlushContext* ctx) {
 
-    jlong start;
+    jlong start = os::elapsed_counter();
 
   size_t num_unlinked = 0;
   nmethod* nm = _unlinked_head;
@@ -1052,9 +1052,7 @@ void CodeCache::flush_unlinked_nmethods(bool do_unregister_nmethod, bool do_code
   size_t freed_memory = 0;
   while (nm != nullptr) {
     nmethod* next = nm->unlinked_next();
-    if (do_codecache_free) {
-      freed_memory += nm->total_size();
-    }
+    freed_memory += nm->total_size();
     nm->flush(do_unregister_nmethod, do_codecache_free, ctx);
     num_unlinked++;
     if (next == nm) {
@@ -1063,6 +1061,9 @@ void CodeCache::flush_unlinked_nmethods(bool do_unregister_nmethod, bool do_code
     }
     nm = next;
   }
+  if (ctx != nullptr)
+    ctx->time(CompiledMethod::FlushContext::UnlinkTotal, os::elapsed_counter() - start);
+
 
   start = os::elapsed_counter();
   // Try to start the compiler again if we freed any memory

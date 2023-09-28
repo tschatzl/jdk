@@ -220,6 +220,9 @@ void ClassLoadingService::notify_class_unloaded(InstanceKlass* k) {
     // We are called during phase 1 of mark sweep, so it's
     // still ok to iterate through Method*s here.
     Array<Method*>* methods = k->methods();
+    if (methods == nullptr) { // FIXME: why is this needed now?
+      return;
+    }
     for (int i = 0; i < methods->length(); i++) {
       _class_methods_size->inc(-methods->at(i)->size());
     }
