@@ -616,7 +616,6 @@ void ClassLoaderData::unload(UnloadContext* ctx) {
     InstanceKlass::unload_class((InstanceKlass*)k, ctx);
   }
 
-
   measure(ctx, ClassLoaderData::UnloadContext::UnloadClasses, start); 
 
   // Method::clear_jmethod_ids only sets the jmethod_ids to null without

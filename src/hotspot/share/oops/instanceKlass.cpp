@@ -2833,7 +2833,7 @@ void InstanceKlass::unload_class(InstanceKlass* ik, void* _ctx) {
   jlong start = os::elapsed_counter();
   // Release dependencies.
 //  if (!UseNewCode || !UseG1GC)
-//  ik->dependencies().remove_all_dependents();            // trivially parallelizable
+  ik->dependencies().remove_all_dependents();            // trivially parallelizable
 
   measure(ctx, ClassLoaderData::UnloadContext::UnloadClassDependencies, start);
   // notify the debugger
