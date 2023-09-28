@@ -45,8 +45,11 @@ DEF_STUB_INTERFACE(ICStub);
 jlong InlineCacheBuffer::queue_for_release_count = 0;
 StubQueue* InlineCacheBuffer::_buffer    = nullptr;
 
+char InlineCacheBuffer::padding0[128];
 CompiledICHolder* volatile InlineCacheBuffer::_pending_released = nullptr;
+char InlineCacheBuffer::padding1[128];
 volatile int InlineCacheBuffer::_pending_count = 0;
+char InlineCacheBuffer::padding2[128];
 
 #ifdef ASSERT
 ICRefillVerifier::ICRefillVerifier()
@@ -140,6 +143,9 @@ void ICStub::print() {
 
 
 void InlineCacheBuffer::initialize() {
+    padding0[0] = 10;
+    padding1[1] = 20;
+    padding2[29] = 30;
   if (_buffer != nullptr) return; // already initialized
   _buffer = new StubQueue(new ICStubInterface, 10*K, InlineCacheBuffer_lock, "InlineCacheBuffer");
   assert (_buffer != nullptr, "cannot allocate InlineCacheBuffer");

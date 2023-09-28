@@ -47,6 +47,13 @@
 #include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
 
+const char* ClassLoaderDataGraph::PurgeContext::strings[] = {
+          "CLDDelete",
+          "MetaspacePurge",
+          "DependencyContextPurge",
+          "WalkMetadata"
+};
+
 volatile size_t ClassLoaderDataGraph::_num_array_classes = 0;
 volatile size_t ClassLoaderDataGraph::_num_instance_classes = 0;
 
@@ -471,24 +478,41 @@ void ClassLoaderDataGraph::clean_module_and_package_info() {
   }
 }
 
-void ClassLoaderDataGraph::purge(bool at_safepoint) {
+static void measure(ClassLoaderDataGraph::PurgeContext* ctx, uint tag, jlong& start) {
+    if (ctx == nullptr) return;
+    jlong cur = os::elapsed_counter();
+    ctx->time(tag, cur - start);
+    start = cur;
+}
+
+void ClassLoaderDataGraph::purge(bool at_safepoint, PurgeContext* ctx) {
+
+    jlong start = os::elapsed_counter();
   ClassLoaderData* list = _unloading_head;
   _unloading_head = nullptr;
   ClassLoaderData* next = list;
-  bool classes_unloaded = false;
+  uint count = 0;
   while (next != nullptr) {
     ClassLoaderData* purge_me = next;
     next = purge_me->unloading_next();
     delete purge_me;
-    classes_unloaded = true;
+    count++;
   }
+  log_debug(gc)("CLDG::purge: unloaded %u classes", count);
 
-  Metaspace::purge(classes_unloaded);
-  if (classes_unloaded) {
+  measure(ctx, PurgeContext::CLDDelete, start);
+
+  Metaspace::purge(count > 0);
+  if (count > 0) {
     set_metaspace_oom(false);
   }
 
-  DependencyContext::purge_dependency_contexts();
+  measure(ctx, PurgeContext::MetaspacePurge, start);
+
+  int num_removed = DependencyContext::purge_dependency_contexts();
+  log_debug(gc)("CLDG::purge: purged %u dependencies", num_removed);
+
+  measure(ctx, PurgeContext::DependencyContextPurge, start);
 
   // If we're purging metadata at a safepoint, clean remaining
   // metaspaces if we need to.
@@ -504,6 +528,7 @@ void ClassLoaderDataGraph::purge(bool at_safepoint) {
     _safepoint_cleanup_needed = true;
     Service_lock->notify_all();
   }
+  measure(ctx, PurgeContext::WalkMetadata, start);
 }
 
 ClassLoaderDataGraphKlassIteratorAtomic::ClassLoaderDataGraphKlassIteratorAtomic()

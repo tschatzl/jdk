@@ -148,8 +148,11 @@ public:
 
   static StubQueue* _buffer;
 
+  static char padding0[128];
   static CompiledICHolder* volatile _pending_released;
+  static char padding1[128];
   static volatile int _pending_count;
+  static char padding2[128];
 
   static StubQueue* buffer()                         { return _buffer;         }
 

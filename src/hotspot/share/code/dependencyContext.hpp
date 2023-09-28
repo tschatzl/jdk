@@ -118,7 +118,7 @@ private:
   void remove_and_mark_for_deoptimization_all_dependents(DeoptimizationScope* deopt_scope);
   void clean_unloading_dependents();
   static nmethodBucket* release_and_get_next_not_unloading(nmethodBucket* b);
-  static void purge_dependency_contexts();
+  static int purge_dependency_contexts();
   static void release(nmethodBucket* b);
   static void cleaning_start();
   static void cleaning_end();

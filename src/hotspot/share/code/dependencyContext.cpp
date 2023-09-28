@@ -138,7 +138,7 @@ void DependencyContext::release(nmethodBucket* b) {
 //
 // Reclaim all unused buckets.
 //
-void DependencyContext::purge_dependency_contexts() {
+int DependencyContext::purge_dependency_contexts() {
   int removed = 0;
   for (nmethodBucket* b = _purge_list; b != nullptr;) {
     nmethodBucket* next = b->purge_list_next();
@@ -150,6 +150,7 @@ void DependencyContext::purge_dependency_contexts() {
     _perf_total_buckets_deallocated_count->inc(removed);
   }
   _purge_list = nullptr;
+  return removed;
 }
 
 //

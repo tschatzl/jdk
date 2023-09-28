@@ -1874,6 +1874,31 @@ public:
   }
 };
 
+class G1CLDGUnloadContext : public ClassLoaderDataGraph::PurgeContext {
+  jlong _times[NumTags];
+
+public:
+  G1CLDGUnloadContext() {
+    for (uint i = 0; i < NumTags; i++) {
+        _times[i] = 0;
+    }
+  }
+
+  void time(uint tag, jlong value) override {
+    _times[tag] += value;
+  }
+
+  void print_times() {
+    LogTarget(Debug, gc) lt;
+    LogStream ls(&lt);
+    ls.print("CLDG::purge ");
+    for (uint i = 0; i < NumTags; i++) {
+      ls.print("%s %1.2f ", strings[i], TimeHelper::counter_to_millis(_times[i]));
+    }
+    ls.cr();
+  }
+};
+
 void G1ConcurrentMark::unload_classes_and_code() {
   GCTraceTime(Debug, gc, phases) cu("Class Unloading", _gc_timer_cm);
 
@@ -1947,13 +1972,16 @@ void G1ConcurrentMark::unload_classes_and_code() {
     GCTraceTime(Debug, gc, phases) debug("Purge Metaspace", _gc_timer_cm);
     jlong before_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
     jlong before_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();
+    G1CLDGUnloadContext cldg_uc;
 
-    ClassLoaderDataGraph::purge(/*at_safepoint*/true);
+    ClassLoaderDataGraph::purge(true /* at_safepoint */, &cldg_uc);
     
     jlong after_dealloc = DependencyContext::_perf_total_buckets_deallocated_count->get_value();
     jlong after_stale = DependencyContext::_perf_total_buckets_stale_count->get_value();;
     log_debug(gc)("dependencies::purge deallocated buckets %zu (+ %zu)", (size_t)before_dealloc, (size_t)(after_dealloc - before_dealloc));
     log_debug(gc)("dependencies::purge stale buckets %zu (+ %zu)", (size_t)before_stale, (size_t)(after_stale - before_stale));
+
+    cldg_uc.print_times();
   }
 }
 

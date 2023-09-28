@@ -64,7 +64,19 @@ class ClassLoaderDataGraph : public AllStatic {
   static ClassLoaderData* find_or_create(Handle class_loader);
   static ClassLoaderData* add(Handle class_loader, bool has_class_mirror_holder);
   static void clean_module_and_package_info();
-  static void purge(bool at_safepoint);
+  class PurgeContext {
+  public:
+      enum {
+          CLDDelete,
+          MetaspacePurge,
+          DependencyContextPurge,
+          WalkMetadata,
+          NumTags
+      };
+      static const char* strings[];
+      virtual void time(uint tag, jlong value) = 0;
+  };
+  static void purge(bool at_safepoint, PurgeContext* ctx = nullptr);
   static void clear_claimed_marks();
   static void clear_claimed_marks(int claim);
   static void verify_claimed_marks_cleared(int claim);
