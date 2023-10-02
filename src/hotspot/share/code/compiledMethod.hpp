@@ -441,6 +441,7 @@ public:
   public:
     enum {
       DisarmBarrierSet = 0,
+      UnloadNMethodCaches,
       CleanExceptionCache,
       CleanupInlineCaches,                // not-unlink ---^
 

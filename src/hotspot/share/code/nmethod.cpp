@@ -1798,9 +1798,12 @@ bool nmethod::do_unloading(UnloadingScope* scope) {
     unlink(scope);
     return true;
   } else {
+      jlong start = os::elapsed_counter();
     guarantee(unload_nmethod_caches(scope->has_unloaded_classes(), scope),
               "Should not need transition stubs");
-    jlong start = os::elapsed_counter();
+      jlong cur = os::elapsed_counter();
+      scope->time(UnloadingScope::UnloadNMethodCaches, cur - start);
+      start = cur;
     BarrierSetNMethod* bs_nm = BarrierSet::barrier_set()->barrier_set_nmethod();
     if (bs_nm != nullptr) {
       bs_nm->disarm(this);

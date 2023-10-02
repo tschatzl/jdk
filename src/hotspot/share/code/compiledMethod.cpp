@@ -64,6 +64,7 @@ const char* CompiledMethod::FlushContext::strings[] = {
 
 const char* CompiledMethod::UnloadingScope::strings[] = {
       "DisarmBarrierSet",
+      "UnloadNMethodCaches",
       "CleanExceptionCache",
       "CleanupInlineCaches",                // not-unlink ---^
 
