@@ -365,5 +365,5 @@ void XNMethod::unlink(XWorkers* workers, bool unloading_occurred) {
 }
 
 void XNMethod::purge() {
-  CodeCache::flush_unlinked_nmethods();
+  CodeCache::flush_unlinked_nmethods(true /* do_unregister_nmethods */);
 }

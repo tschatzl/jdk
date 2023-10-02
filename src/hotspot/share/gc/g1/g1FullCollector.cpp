@@ -330,7 +330,7 @@ void G1FullCollector::phase1_mark_live_objects() {
     unloading_scope.cleaning_completed();
     {
       GCTraceTime(Debug, gc, phases) ccrs("Clean Code Roots", scope()->timer());
-      _heap->clean_code_root_sets();
+      _heap->remove_dead_entries_from_code_root_sets();
     }
     {
       GCTraceTime(Debug, gc, phases) debug2("Flush CodeCache", scope()->timer());

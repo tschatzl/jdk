@@ -1265,6 +1265,7 @@ public:
   // Performs cleaning of data structures after class unloading.
   void complete_cleaning(CodeCacheUnloadingTaskScopeProvider* scope_provider, GCTimer* timer);
 
+  void remove_dead_entries_from_code_root_sets();
   // Verification
 
   // Perform any cleanup actions necessary before allowing a verification.

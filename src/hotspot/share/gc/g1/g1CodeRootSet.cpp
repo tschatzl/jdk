@@ -188,8 +188,8 @@ public:
     size_t _num_retained;
 
     G1CodeRootSetHashTableDeleteUnlinked() : _num_retained(0) {}
-    bool operator()(G1CodeRootSetHashTableValue* value) {
-      nmethod* unlinked_next = value->_nmethod->unlinked_next();
+    bool operator()(nmethod** value) {
+      nmethod* unlinked_next = (*value)->unlinked_next();
       if (unlinked_next != nullptr) {
         return true;
       } else {
@@ -232,6 +232,15 @@ public:
 
     if (shrunk)
       log_debug(gc)("remove unlinked entries shrinking total %1.2f remove %1.2f shrink %1.2f", TimeHelper::counter_to_millis(end - start), TimeHelper::counter_to_millis(mid - start), TimeHelper::counter_to_millis(end - mid));
+  }
+
+  // Removes dead/unlinked entries.
+  void remove_dead_entries() {
+    auto delete_check =
+      [&] (nmethod** value) {
+        return (*value)->unlinked_next() != nullptr;
+      };
+    clean(delete_check);
   }
 
   // Calculate the log2 of the table size we want to shrink to.
@@ -302,6 +311,11 @@ G1CodeRootSet::~G1CodeRootSet() {
 bool G1CodeRootSet::remove(nmethod* method) {
   assert(!_is_iterating, "should not mutate while iterating the table");
   return _table->remove(method);
+}
+
+void G1CodeRootSet::remove_dead_entries() {
+  assert(!_is_iterating, "should not mutate while iterating the table");
+  _table->remove_dead_entries();
 }
 
 bool G1CodeRootSet::contains(nmethod* method) {

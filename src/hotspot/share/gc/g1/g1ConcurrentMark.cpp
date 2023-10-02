@@ -1909,6 +1909,7 @@ void G1ConcurrentMark::unload_classes_and_code() {
   bool unloaded_classes;
   {
     unloaded_classes = SystemDictionary::do_unloading(_gc_timer_cm, &cu_ctx);
+    cu_ctx.print_do_unloading_times();
   }
   InlineCacheBuffer::queue_for_release_count = 0;
   G1CodeCacheUnloadingTaskScopeProvider scope_provider(unloaded_classes, G1CollectedHeap::heap()->workers()->active_workers());
@@ -1922,7 +1923,7 @@ void G1ConcurrentMark::unload_classes_and_code() {
 
   {
     GCTraceTime(Debug, gc, phases) fun("Clean CodeRoots", _gc_timer_cm);
-    _g1h->clean_code_root_sets();
+    _g1h->remove_dead_entries_from_code_root_sets();
   }
   InlineCacheBuffer::queue_for_release_count = 0;
   {
