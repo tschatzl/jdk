@@ -640,6 +640,11 @@
           "will retry before printing a warning")                           \
           range(0, max_uintx)                                               \
                                                                             \
+  product(int, MaxClaimNmethods, 16,                           \
+          "Number of times an allocation that queues behind a GC "          \
+          "will retry before printing a warning")                           \
+          range(0, 100000)                                               \
+                                                                            \
   product(uintx, VerifyGCStartAt,   0, DIAGNOSTIC,                          \
           "GC invoke count where +VerifyBefore/AfterGC kicks in")           \
           range(0, max_uintx)                                               \

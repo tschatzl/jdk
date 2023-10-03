@@ -109,7 +109,7 @@ void CodeCacheUnloadingTask::work(uint worker_id) {
   }
   size_t total_claimed_nmethods = 0;
   int num_claimed_nmethods;
-  CompiledMethod* claimed_nmethods[MaxClaimNmethods];
+  CompiledMethod** claimed_nmethods = NEW_C_HEAP_ARRAY(CompiledMethod*, MaxClaimNmethods, mtGC);
 
   while (true) {
     claim_nmethods(claimed_nmethods, &num_claimed_nmethods);
@@ -130,6 +130,7 @@ void CodeCacheUnloadingTask::work(uint worker_id) {
   double duration = (Ticks::now() - start).seconds() * 1000.0;
   log_debug(gc)("CodeCachUnloading::do_work %u total %1.2f unlink %1.2f claimed %zu unloaded %zu", worker_id, duration,
                ((double)unlink_time / os::elapsed_frequency()) * 1000.0, total_claimed_nmethods, _num_unloaded[worker_id]);
+  FREE_C_HEAP_ARRAY(CompiledMethod*, claimed_nmethods);
 }
 
 size_t CodeCacheUnloadingTask::num_unloaded() const {

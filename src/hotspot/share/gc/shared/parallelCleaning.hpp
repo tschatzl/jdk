@@ -49,8 +49,11 @@ class CodeCacheUnloadingTask {
   const uint _num_workers;
 
   // Variables used to claim nmethods.
+  char padding0[128];
   CompiledMethod* _first_nmethod;
+  char padding1[128];
   CompiledMethod* volatile _claimed_nmethod;
+  char padding2[128];
 
   size_t volatile* _num_unloaded;
 
@@ -59,7 +62,6 @@ public:
   ~CodeCacheUnloadingTask();
 
 private:
-  static const int MaxClaimNmethods = 16;
   void claim_nmethods(CompiledMethod** claimed_nmethods, int *num_claimed_nmethods);
 
   void do_work(CompiledMethod::UnloadingScope* scope, CompiledMethod* nmethod, uint worker_id);
