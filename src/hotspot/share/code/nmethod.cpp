@@ -83,6 +83,7 @@
 #include "utilities/xmlstream.hpp"
 #if INCLUDE_JVMCI
 #include "jvmci/jvmciRuntime.hpp"
+#include "gc/shared/classUnloadingScope.hpp"
 #endif
 
 #ifdef DTRACE_ENABLED
@@ -1439,7 +1440,7 @@ void nmethod::unlink() {
   // Register for flushing when it is safe. For concurrent class unloading,
   // that would be after the unloading handshake, and for STW class unloading
   // that would be when getting back to the VM thread.
-  CodeCache::register_unlinked(this);
+  ClassUnloadingContext::context()->register_free_nmethod(this);
 }
 
 void nmethod::flush() {

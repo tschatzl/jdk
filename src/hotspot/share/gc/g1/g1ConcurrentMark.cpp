@@ -77,6 +77,7 @@
 #include "utilities/align.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/growableArray.hpp"
+#include "gc/shared/classUnloadingScope.hpp"
 
 bool G1CMBitMapClosure::do_addr(HeapWord* const addr) {
   assert(addr < _cm->finger(), "invariant");
@@ -1299,10 +1300,9 @@ void G1ConcurrentMark::remark() {
       reclaim_empty_regions();
     }
 
-    // Clean out dead classes
+    // Unload Klasses, String, Code Cache, etc.
     if (ClassUnloadingWithConcurrentMark) {
-      GCTraceTime(Debug, gc, phases) debug("Purge Metaspace", _gc_timer_cm);
-      ClassLoaderDataGraph::purge(/*at_safepoint*/true);
+      unload_classes();
     }
 
     // Potentially, some empty-regions have been reclaimed; make this a
@@ -1690,17 +1690,22 @@ void G1ConcurrentMark::weak_refs_work() {
     GCTraceTime(Debug, gc, phases) debug("Weak Processing", _gc_timer_cm);
     WeakProcessor::weak_oops_do(_g1h->workers(), &g1_is_alive, &do_nothing_cl, 1);
   }
+}
 
-  // Unload Klasses, String, Code Cache, etc.
-  if (ClassUnloadingWithConcurrentMark) {
-    GCTraceTime(Debug, gc, phases) debug("Class Unloading", _gc_timer_cm);
-    {
-      CodeCache::UnloadingScope scope(&g1_is_alive);
-      bool unloading_occurred = SystemDictionary::do_unloading(_gc_timer_cm);
-      _g1h->complete_cleaning(unloading_occurred);
-    }
-    CodeCache::flush_unlinked_nmethods();
+void G1ConcurrentMark::unload_classes() {
+  DefaultClassUnloadingContext unload_context;
+
+  GCTraceTime(Debug, gc, phases) debug("Class Unloading", _gc_timer_cm);
+  {
+    CodeCache::UnloadingScope scope(&g1_is_alive);
+    bool unloading_occurred = SystemDictionary::do_unloading(_gc_timer_cm);
+    _g1h->complete_cleaning(unloading_occurred);
   }
+
+  CodeCache::flush_unlinked_nmethods();
+
+  GCTraceTime(Debug, gc, phases) debug("Purge Metaspace", _gc_timer_cm);
+  ClassLoaderDataGraph::purge(/*at_safepoint*/true);
 }
 
 class G1PrecleanYieldClosure : public YieldClosure {

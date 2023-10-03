@@ -46,6 +46,7 @@
 #include "utilities/growableArray.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
+#include "gc/shared/classUnloadingScope.hpp"
 
 volatile size_t ClassLoaderDataGraph::_num_array_classes = 0;
 volatile size_t ClassLoaderDataGraph::_num_instance_classes = 0;
@@ -124,7 +125,6 @@ void ClassLoaderDataGraph::walk_metadata_and_clean_metaspaces() {
 
 // List head of all class loader data.
 ClassLoaderData* volatile ClassLoaderDataGraph::_head = nullptr;
-ClassLoaderData* ClassLoaderDataGraph::_unloading_head = nullptr;
 
 bool ClassLoaderDataGraph::_should_clean_deallocate_lists = false;
 bool ClassLoaderDataGraph::_safepoint_cleanup_needed = false;
@@ -342,11 +342,7 @@ void ClassLoaderDataGraph::loaded_classes_do(KlassClosure* klass_closure) {
 }
 
 void ClassLoaderDataGraph::classes_unloading_do(void f(Klass* const)) {
-  assert_locked_or_safepoint(ClassLoaderDataGraph_lock);
-  for (ClassLoaderData* cld = _unloading_head; cld != nullptr; cld = cld->unloading_next()) {
-    assert(cld->is_unloading(), "invariant");
-    cld->classes_do(f);
-  }
+  ClassUnloadingContext::context()->classes_unloading_do(f);
 }
 
 void ClassLoaderDataGraph::verify_dictionary() {
@@ -425,9 +421,9 @@ bool ClassLoaderDataGraph::do_unloading() {
     } else {
       // Found dead CLD.
       loaders_removed++;
-      data->unload();
 
-      // Move dead CLD to unloading list.
+      ClassUnloadingContext::context()->register_unloading_class_loader(data);
+  
       if (prev != nullptr) {
         prev->unlink_next();
       } else {
@@ -435,8 +431,6 @@ bool ClassLoaderDataGraph::do_unloading() {
         // The GC might be walking this concurrently
         Atomic::store(&_head, data->next());
       }
-      data->set_unloading_next(_unloading_head);
-      _unloading_head = data;
     }
   }
 
@@ -469,16 +463,10 @@ void ClassLoaderDataGraph::clean_module_and_package_info() {
 }
 
 void ClassLoaderDataGraph::purge(bool at_safepoint) {
-  ClassLoaderData* list = _unloading_head;
-  _unloading_head = nullptr;
-  ClassLoaderData* next = list;
-  bool classes_unloaded = false;
-  while (next != nullptr) {
-    ClassLoaderData* purge_me = next;
-    next = purge_me->unloading_next();
-    delete purge_me;
-    classes_unloaded = true;
-  }
+  auto purge_cld = [=] (ClassLoaderData* cld) { delete cld; }
+  ClassUnloadingContext::context()->classloaderdata_unloading_do(purge_cld);
+
+  bool classes_unloaded = ClassUnloadingContext::context()->has_unloaded_classes();
 
   Metaspace::purge(classes_unloaded);
   if (classes_unloaded) {

@@ -48,6 +48,7 @@
 class WorkerTask;
 class AdaptiveSizePolicy;
 class BarrierSet;
+class ClassUnloadingContext;
 class GCHeapLog;
 class GCHeapSummary;
 class GCTimer;

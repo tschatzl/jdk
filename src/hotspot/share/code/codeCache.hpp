@@ -106,7 +106,6 @@ class CodeCache : AllStatic {
   static TruncatedSeq      _unloading_gc_intervals;
   static TruncatedSeq      _unloading_allocation_rates;
   static volatile bool     _unloading_threshold_gc_requested;
-  static nmethod* volatile _unlinked_head;
 
   static ExceptionCache* volatile _exception_cache_purge_list;
 
@@ -211,7 +210,6 @@ class CodeCache : AllStatic {
   static void arm_all_nmethods();
 
   static void flush_unlinked_nmethods();
-  static void register_unlinked(nmethod* nm);
   static void do_unloading(bool unloading_occurred);
   static uint8_t unloading_cycle() { return _unloading_cycle; }
 

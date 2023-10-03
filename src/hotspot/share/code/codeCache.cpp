@@ -970,21 +970,6 @@ void CodeCache::purge_exception_caches() {
   _exception_cache_purge_list = nullptr;
 }
 
-// Register an is_unloading nmethod to be flushed after unlinking
-void CodeCache::register_unlinked(nmethod* nm) {
-  assert(nm->unlinked_next() == nullptr, "Only register for unloading once");
-  for (;;) {
-    // Only need acquire when reading the head, when the next
-    // pointer is walked, which it is not here.
-    nmethod* head = Atomic::load(&_unlinked_head);
-    nmethod* next = head != nullptr ? head : nm; // Self looped means end of list
-    nm->set_unlinked_next(next);
-    if (Atomic::cmpxchg(&_unlinked_head, head, nm) == head) {
-      break;
-    }
-  }
-}
-
 // Flush all the nmethods the GC unlinked
 void CodeCache::flush_unlinked_nmethods() {
   nmethod* nm = _unlinked_head;
@@ -1013,7 +998,6 @@ void CodeCache::flush_unlinked_nmethods() {
 }
 
 uint8_t CodeCache::_unloading_cycle = 1;
-nmethod* volatile CodeCache::_unlinked_head = nullptr;
 
 void CodeCache::increment_unloading_cycle() {
   // 2-bit value (see IsUnloadingState in nmethod.cpp for details)

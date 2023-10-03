@@ -186,9 +186,11 @@ class ClassLoaderData : public CHeapObj<mtClass> {
   ClassLoaderData* next() const;
   void unlink_next();
 
+public:
   void set_unloading_next(ClassLoaderData* unloading_next);
   ClassLoaderData* unloading_next() const;
 
+private:
   ClassLoaderData(Handle h_class_loader, bool has_class_mirror_holder);
   ~ClassLoaderData();
 
@@ -203,8 +205,9 @@ class ClassLoaderData : public CHeapObj<mtClass> {
   oop holder_no_keepalive() const;
   oop holder() const;
 
- private:
   void unload();
+
+private:
   bool keep_alive() const       { return _keep_alive > 0; }
 
   void classes_do(void f(Klass* const));

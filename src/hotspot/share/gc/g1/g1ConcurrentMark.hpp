@@ -378,6 +378,7 @@ class G1ConcurrentMark : public CHeapObj<mtGC> {
   void finalize_marking();
 
   void weak_refs_work();
+  void unload_classes();
 
   void reclaim_empty_regions();
 
