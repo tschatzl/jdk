@@ -129,7 +129,7 @@ void CompiledIC::internal_set_ic_destination(address entry_point, bool is_icstub
   }
 
   {
-    CodeBlob* cb = CodeCache::find_blob(_call->instruction_address());
+    DEBUG_ONLY(CodeBlob* cb = CodeCache::find_blob(_call->instruction_address());)
     assert(cb != nullptr && cb->is_compiled(), "must be compiled");
     _call->set_destination_mt_safe(entry_point);
   }
