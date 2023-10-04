@@ -78,7 +78,16 @@ const char* CompiledMethod::UnloadingScope::strings[] = {
       "UnlinkCodeGrabLock",
       "FlushDependencyMethodHandles",
       "FlushDependencyInstanceKlass",
-      "ClearICCallSitesFoundIC",
+      "ClearICCallSitesInitCompiledIC",
+      "ClearICCallSitesSetToClean",
+      "ClearICCallSitesSetToClean1",
+      "ClearICCallSitesSetToClean2",
+      "ClearICCallSitesSetToClean3",
+      "ClearICCallSitesSetToClean4",
+      "ClearICCallSitesSetToClean5",
+      "ClearICCallSitesSetICDest1",
+      "ClearICCallSitesSetICDest2",
+      "ClearICCallSitesSetICDest3"
     };
 
 
@@ -474,8 +483,13 @@ void CompiledMethod::clear_ic_callsites(CompiledMethod::UnloadingScope* scope) {
         jlong start;
         if (scope != nullptr) start = os::elapsed_counter();
       CompiledIC* ic = CompiledIC_at(&iter);
-      ic->set_to_clean(false);
-      if (scope != nullptr) scope->time(CompiledMethod::UnloadingScope::ClearICCallSitesFoundIC, os::elapsed_counter() - start);
+        if (scope != nullptr) {
+            jlong cur = os::elapsed_counter();
+            scope->time(CompiledMethod::UnloadingScope::ClearICCallSitesInitCompiledIC, cur - start);
+            start = cur;
+        }
+      ic->set_to_clean(false, scope);
+        if (scope != nullptr) scope->time(CompiledMethod::UnloadingScope::ClearICCallSitesSetToClean, os::elapsed_counter() - start);
     }
   }
 }

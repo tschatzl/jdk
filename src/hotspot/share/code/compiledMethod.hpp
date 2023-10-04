@@ -455,7 +455,16 @@ public:
       UnlinkCodeGrabLock,
       FlushDependencyMethodHandles,
       FlushDependencyInstanceKlass,
-      ClearICCallSitesFoundIC,
+      ClearICCallSitesInitCompiledIC,
+      ClearICCallSitesSetToClean,
+      ClearICCallSitesSetToClean1,
+      ClearICCallSitesSetToClean2,
+      ClearICCallSitesSetToClean3,
+      ClearICCallSitesSetToClean4,
+      ClearICCallSitesSetToClean5,
+      ClearICCallSitesSetICDest1,
+      ClearICCallSitesSetICDest2,
+      ClearICCallSitesSetICDest3,
       NumTags
     };
     static const char* strings[];

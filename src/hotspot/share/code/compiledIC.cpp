@@ -95,7 +95,15 @@ void* CompiledIC::cached_value() const {
 }
 
 
-void CompiledIC::internal_set_ic_destination(address entry_point, bool is_icstub, void* cache, bool is_icholder) {
+static void measure(CompiledMethod::UnloadingScope* scope, uint tag, jlong& start) {
+  if (scope == nullptr) return;
+
+  jlong cur = os::elapsed_counter();
+  scope->time(tag, cur - start);
+  start = cur;
+}
+
+void CompiledIC::internal_set_ic_destination(address entry_point, bool is_icstub, void* cache, bool is_icholder, void* ctx) {
   assert(entry_point != nullptr, "must set legal entry point");
   assert(CompiledICLocker::is_safe(_method), "mt unsafe call");
   assert (!is_optimized() || cache == nullptr, "an optimized virtual call does not have a cached metadata");
@@ -103,6 +111,10 @@ void CompiledIC::internal_set_ic_destination(address entry_point, bool is_icstub
 
   assert(!is_icholder || is_icholder_entry(entry_point), "must be");
 
+CompiledMethod::UnloadingScope* scope = (CompiledMethod::UnloadingScope*) ctx;
+jlong start;
+if (scope != nullptr) start = os::elapsed_counter();
+        
   // Don't use ic_destination for this test since that forwards
   // through ICBuffer instead of returning the actual current state of
   // the CompiledIC.
@@ -114,6 +126,8 @@ void CompiledIC::internal_set_ic_destination(address entry_point, bool is_icstub
     // once the entry point is overwritten.
     InlineCacheBuffer::queue_for_release((CompiledICHolder*)get_data());
   }
+
+measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetICDest1, start);
 
   if (TraceCompiledIC) {
     tty->print("  ");
@@ -134,6 +148,8 @@ void CompiledIC::internal_set_ic_destination(address entry_point, bool is_icstub
     _call->set_destination_mt_safe(entry_point);
   }
 
+measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetICDest2, start);
+
   if (is_optimized() || is_icstub) {
     // Optimized call sites don't have a cache value and ICStub call
     // sites only change the entry point.  Changing the value in that
@@ -145,6 +161,8 @@ void CompiledIC::internal_set_ic_destination(address entry_point, bool is_icstub
   if (cache == nullptr)  cache = Universe::non_oop_word();
 
   set_data((intptr_t)cache);
+measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetICDest3, start);
+
 }
 
 
@@ -362,8 +380,13 @@ bool CompiledIC::is_call_to_interpreted() const {
   return is_call_to_interpreted;
 }
 
-bool CompiledIC::set_to_clean(bool in_use) {
+bool CompiledIC::set_to_clean(bool in_use, void* ctx) {
   assert(CompiledICLocker::is_safe(_method), "mt unsafe call");
+
+    jlong start;
+    CompiledMethod::UnloadingScope* scope = (CompiledMethod::UnloadingScope*)ctx;
+    if (scope != nullptr) start = os::elapsed_counter();
+
   if (TraceInlineCacheClearing || TraceICs) {
     tty->print_cr("IC@" INTPTR_FORMAT ": set to clean", p2i(instruction_address()));
     print();
@@ -371,15 +394,24 @@ bool CompiledIC::set_to_clean(bool in_use) {
 
   address entry = _call->get_resolve_call_stub(is_optimized());
 
+  measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetToClean1, start);
+
   bool safe_transition = _call->is_safe_for_patching() || !in_use || is_optimized() || SafepointSynchronize::is_at_safepoint();
+
+  measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetToClean2, start);
 
   if (safe_transition) {
     // Kill any leftover stub we might have too
     clear_ic_stub();  // takes InlineCacheBuffer_lock
+
+    measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetToClean3, start);
+
     if (is_optimized()) {
-      set_ic_destination(entry);  // takes InlineCacheBuffer_lock
+      set_ic_destination(entry, ctx);  // takes InlineCacheBuffer_lock
+      measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetToClean4, start);
     } else {
-      set_ic_destination_and_value(entry, (void*)nullptr);  // takes InlineCacheBuffer_lock
+      set_ic_destination_and_value(entry, (void*)nullptr, ctx);  // takes InlineCacheBuffer_lock
+      measure(scope, CompiledMethod::UnloadingScope::ClearICCallSitesSetToClean5, start);
     }
   } else {
     // Unsafe transition - create stub.

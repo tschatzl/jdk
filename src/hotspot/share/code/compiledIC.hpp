@@ -182,21 +182,21 @@ class CompiledIC: public ResourceObj {
   // low-level inline-cache manipulation. Cannot be accessed directly, since it might not be MT-safe
   // to change an inline-cache. These changes the underlying inline-cache directly. They *newer* make
   // changes to a transition stub.
-  void internal_set_ic_destination(address entry_point, bool is_icstub, void* cache, bool is_icholder);
+  void internal_set_ic_destination(address entry_point, bool is_icstub, void* cache, bool is_icholder, void* ctx = nullptr);
   void set_ic_destination(ICStub* stub);
-  void set_ic_destination(address entry_point) {
+  void set_ic_destination(address entry_point, void* ctx = nullptr) {
     assert(_is_optimized, "use set_ic_destination_and_value instead");
-    internal_set_ic_destination(entry_point, false, nullptr, false);
+    internal_set_ic_destination(entry_point, false, nullptr, false, ctx);
   }
   // This only for use by ICStubs where the type of the value isn't known
-  void set_ic_destination_and_value(address entry_point, void* value) {
-    internal_set_ic_destination(entry_point, false, value, is_icholder_entry(entry_point));
+  void set_ic_destination_and_value(address entry_point, void* value, void* ctx = nullptr) {
+    internal_set_ic_destination(entry_point, false, value, is_icholder_entry(entry_point), ctx);
   }
-  void set_ic_destination_and_value(address entry_point, Metadata* value) {
-    internal_set_ic_destination(entry_point, false, value, false);
+  void set_ic_destination_and_value(address entry_point, Metadata* value, void* ctx = nullptr) {
+    internal_set_ic_destination(entry_point, false, value, false, ctx);
   }
-  void set_ic_destination_and_value(address entry_point, CompiledICHolder* value) {
-    internal_set_ic_destination(entry_point, false, value, true);
+  void set_ic_destination_and_value(address entry_point, CompiledICHolder* value, void* ctx = nullptr) {
+    internal_set_ic_destination(entry_point, false, value, true, ctx);
   }
 
   // Reads the location of the transition stub. This will fail with an assertion, if no transition stub is
@@ -255,7 +255,7 @@ class CompiledIC: public ResourceObj {
   //
   // They all takes a TRAP argument, since they can cause a GC if the inline-cache buffer is full.
   //
-  bool set_to_clean(bool in_use = true);
+  bool set_to_clean(bool in_use = true, void* ctx = nullptr);
   bool set_to_monomorphic(CompiledICInfo& info);
   void clear_ic_stub();
 
