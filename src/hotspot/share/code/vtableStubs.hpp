@@ -109,6 +109,7 @@ class VtableStubs : AllStatic {
   static bool        contains(address pc);                           // is pc within any stub?
   static VtableStub* stub_containing(address pc);                    // stub containing pc or nullptr
   static int         number_of_vtable_stubs() { return _number_of_vtable_stubs; }
+  static int         max_link_length();
   static void        initialize();
   static void        vtable_stub_do(void f(VtableStub*));            // iterates over all vtable stubs
 };

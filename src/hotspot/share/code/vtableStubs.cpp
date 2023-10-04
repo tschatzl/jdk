@@ -276,7 +276,7 @@ void VtableStubs::enter(bool is_vtable_stub, int vtable_index, VtableStub* s) {
 }
 
 VtableStub* VtableStubs::entry_point(address pc) {
-  MutexLocker ml(VtableStubs_lock, Mutex::_no_safepoint_check_flag);
+  ConditionalMutexLocker ml(VtableStubs_lock, !SafepointSynchronize::is_at_safepoint(), Mutex::_no_safepoint_check_flag);
   VtableStub* stub = (VtableStub*)(pc - VtableStub::entry_offset());
   uint hash = VtableStubs::hash(stub->is_vtable_stub(), stub->index());
   VtableStub* s;
@@ -301,6 +301,20 @@ VtableStub* VtableStubs::stub_containing(address pc) {
     }
   }
   return nullptr;
+}
+
+int VtableStubs::max_link_length() {
+  int result = 0;
+  for (int i = 0; i < N; i++) {
+    int cur = 0;
+    VtableStub* start = _table[i];
+    while (start != nullptr) {
+      cur++;
+      start = start->next();
+    }
+    result = MAX2(result, cur);
+  }
+  return result;
 }
 
 void vtableStubs_init() {

@@ -81,7 +81,7 @@
 #include "prims/jvmtiImpl.hpp"
 #include "utilities/quickSort.hpp"
 #include "code/icBuffer.hpp"
-
+#include "code/vtableStubs.hpp"
 #include "code/dependencyContext.hpp"
 
 bool G1CMBitMapClosure::do_addr(HeapWord* const addr) {
@@ -1950,6 +1950,7 @@ void G1ConcurrentMark::unload_classes_and_code() {
     ClassLoaderDataGraph::purge(true /* at_safepoint */, &cldg_uc);
     cldg_uc.print_times();
   }
+  log_debug(gc)("#vtablestubs : %d max link length %d", VtableStubs::number_of_vtable_stubs(), VtableStubs::max_link_length());
 }
 
 class G1PrecleanYieldClosure : public YieldClosure {
