@@ -280,7 +280,6 @@ void InlineCacheBuffer::queue_for_release(CompiledICHolder* icholder) {
     old = cur;
   }
   Atomic::inc(&_pending_count, memory_order_relaxed);
-      queue_for_release_count += os::elapsed_counter() - start;
   if (TraceICBuffer) {
     tty->print_cr("enqueueing icholder " INTPTR_FORMAT " to be freed", p2i(icholder));
   }
