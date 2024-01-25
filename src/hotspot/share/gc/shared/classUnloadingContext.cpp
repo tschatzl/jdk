@@ -30,6 +30,8 @@
 #include "runtime/mutexLocker.hpp"
 #include "utilities/growableArray.hpp"
 
+#include "logging/logStream.hpp"
+
 ClassUnloadingContext* ClassUnloadingContext::_context = nullptr;
 
 ClassUnloadingContext::ClassUnloadingContext(uint num_workers,
@@ -49,6 +51,10 @@ ClassUnloadingContext::ClassUnloadingContext(uint num_workers,
   _unlinked_nmethods = NEW_C_HEAP_ARRAY(NMethodSet*, num_workers, mtGC);
   for (uint i = 0; i < num_workers; ++i) {
     _unlinked_nmethods[i] = new NMethodSet();
+  }
+
+  for (uint i = 0; i < NUM_COUNTERS; i++) {
+    _times[i] = 0;
   }
 }
 
@@ -120,6 +126,15 @@ void ClassUnloadingContext::purge_nmethods() {
     }
   }
 
+  LogTarget(Trace, gc, sweep) lt;
+  if (lt.is_enabled()) {
+    LogStream ls(lt);
+    ls.print("Purge_nmethods: ");
+    for (uint i = 0; i < NUM_COUNTERS; i++) {
+      ls.print("%.2f ", TimeHelper::counter_to_millis(_times[i]));
+    }
+    ls.cr();
+  }
   CodeCache::maybe_restart_compiler(freed_memory);
 }
 

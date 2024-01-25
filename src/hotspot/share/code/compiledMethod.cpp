@@ -48,6 +48,8 @@
 #include "runtime/mutexLocker.hpp"
 #include "runtime/sharedRuntime.hpp"
 
+#include "gc/shared/classUnloadingContext.hpp"
+
 CompiledMethod::CompiledMethod(Method* method, const char* name, CompilerType type, const CodeBlobLayout& layout,
                                int frame_complete_offset, int frame_size, ImmutableOopMapSet* oop_maps,
                                bool caller_must_gc_arguments, bool compiled)
@@ -407,6 +409,14 @@ void CompiledMethod::clear_inline_caches() {
   }
 }
 
+static void record(jlong& start, uint id) {
+  ClassUnloadingContext* ctx = ClassUnloadingContext::context();
+
+  jlong end = os::elapsed_counter();
+  ctx->_times[id] += end - start;
+  start = end;
+}
+
 // Clear IC callsites
 // as well as any associated CompiledICHolders.
 void CompiledMethod::purge_ic_callsites() {
@@ -414,8 +424,10 @@ void CompiledMethod::purge_ic_callsites() {
   RelocIterator iter(this);
   while(iter.next()) {
     if (iter.type() == relocInfo::virtual_call_type) {
+      jlong start = os::elapsed_counter();
       CompiledIC* ic = CompiledIC_at(&iter);
       delete ic->data();
+      record(start, 7);
     }
   }
 }

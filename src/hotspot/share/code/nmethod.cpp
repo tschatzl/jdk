@@ -1444,10 +1444,20 @@ void nmethod::unlink() {
   ClassUnloadingContext::context()->register_unlinked_nmethod(this);
 }
 
+static void record(jlong& start, uint id) {
+  ClassUnloadingContext* ctx = ClassUnloadingContext::context();
+
+  jlong end = os::elapsed_counter();
+  ctx->_times[id] += end - start;
+  start = end;
+}
+
 void nmethod::purge(bool free_code_cache_data, bool unregister_nmethod) {
   assert(!free_code_cache_data, "must only call not freeing code cache data");
 
+  jlong start = os::elapsed_counter();
   MutexLocker ml(CodeCache_lock, Mutex::_no_safepoint_check_flag);
+  record(start, 0);
 
   // completely deallocate this method
   Events::log(Thread::current(), "flushing nmethod " INTPTR_FORMAT, p2i(this));
@@ -1455,6 +1465,7 @@ void nmethod::purge(bool free_code_cache_data, bool unregister_nmethod) {
                        "/Free CodeCache:" SIZE_FORMAT "Kb",
                        is_osr_method() ? "osr" : "",_compile_id, p2i(this), CodeCache::blob_count(),
                        CodeCache::unallocated_capacity(CodeCache::get_code_blob_type(this))/1024);
+  record(start, 1);
 
   // We need to deallocate any ExceptionCache data.
   // Note that we do not need to grab the nmethod lock for this, it
@@ -1465,15 +1476,22 @@ void nmethod::purge(bool free_code_cache_data, bool unregister_nmethod) {
     delete ec;
     ec = next;
   }
+  record(start, 2);
 
   purge_ic_callsites();
+  record(start, 3);
 
   if (unregister_nmethod) {
     Universe::heap()->unregister_nmethod(this);
   }
+  record(start, 4);
+
   CodeCache::unregister_old_nmethod(this);
+  record(start, 5);
+
 
   CodeBlob::purge(free_code_cache_data, unregister_nmethod);
+  record(start, 6);
 }
 
 oop nmethod::oop_at(int index) const {

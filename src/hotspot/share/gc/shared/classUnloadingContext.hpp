@@ -46,6 +46,8 @@ class ClassUnloadingContext : public CHeapObj<mtGC> {
   bool _lock_codeblob_free_separately;
 
 public:
+    static const uint NUM_COUNTERS = 8;
+    jlong _times[NUM_COUNTERS];
   static ClassUnloadingContext* context() { assert(_context != nullptr, "context not set"); return _context; }
 
   // Num_nmethod_unlink_workers configures the maximum numbers of threads unlinking
