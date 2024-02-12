@@ -372,19 +372,24 @@ void BitMap::set_range_within_word(idx_t beg, idx_t end) {
 void BitMap::set_range(idx_t beg, idx_t end) {
   verify_range(beg, end);
 
-  idx_t beg_full_word = to_words_align_up(beg);
-  idx_t end_full_word = to_words_align_down(end);
-
-  if (beg_full_word < end_full_word) {
-    // The range includes at least one full word.
-    set_range_within_word(beg, bit_index(beg_full_word));
-    set_range_of_words(beg_full_word, end_full_word);
-    set_range_within_word(bit_index(end_full_word), end);
+  if (((beg^end) >> LogBitsPerWord) == 0) { // begin and end in same word?
+    bm_word_t mask = (((bm_word_t)1 << (end - beg)) - 1) << (beg & (BitsPerWord - 1));
+    *word_addr(beg) |= mask;
   } else {
-    // The range spans at most 2 partial words.
-    idx_t boundary = MIN2(bit_index(beg_full_word), end);
-    set_range_within_word(beg, boundary);
-    set_range_within_word(boundary, end);
+    idx_t beg_full_word = to_words_align_up(beg);
+    idx_t end_full_word = to_words_align_down(end);
+
+    if (beg_full_word < end_full_word) {
+      // The range includes at least one full word.
+      set_range_within_word(beg, bit_index(beg_full_word));
+      set_range_of_words(beg_full_word, end_full_word);
+      set_range_within_word(bit_index(end_full_word), end);
+    } else {
+      // The range spans at most 2 partial words.
+      idx_t boundary = MIN2(bit_index(beg_full_word), end);
+      set_range_within_word(beg, boundary);
+      set_range_within_word(boundary, end);
+    }
   }
 }
 
