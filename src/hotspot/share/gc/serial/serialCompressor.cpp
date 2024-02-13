@@ -212,8 +212,8 @@ private:
   // Build the forward table for space at index.
   void build_table_for_space(uint idx) {
     ContiguousSpace* space = get_space(idx);
-    HeapWord* bottom = space->bottom();
-    HeapWord* top = space->top();
+    HeapWord* const bottom = space->bottom();
+    HeapWord* const top = space->top();
 
     // Clear table (only required for assertion in forwardee()).
     DEBUG_ONLY(clear(bottom, top);)
@@ -281,10 +281,14 @@ public:
 
   // Compact live objects in a space.
   void compact_space(uint idx) const;
+  void adjust_space(uint idx);
 
   void phase3_compact() {
     for (uint i = 0; i < _num_spaces; ++i) {
       compact_space(i);
+    }
+    for (uint i = 0; i < _num_spaces; ++i) {
+      adjust_space(i);
     }
   }
 };
@@ -322,13 +326,11 @@ public:
 // Compact live objects in a space.
 void SCCompacter::compact_space(uint idx) const {
   ContiguousSpace* space = get_space(idx);
-  HeapWord* bottom = space->bottom();
-  HeapWord* top = space->top();
+  HeapWord* const bottom = space->bottom();
+  HeapWord* const top = space->top();
   HeapWord* current = _mark_bitmap.get_next_marked_addr(bottom, top);
 
-  SCUpdateRefsClosure cl(*this);
-
-  TenuredSpace* tenured_space = SerialHeap::heap()->old_gen()->space();
+  GCTraceTime(Info, gc) x("Move objects");
 
   // Visit all live objects in the space.
   while (current < top) {
@@ -339,23 +341,45 @@ void SCCompacter::compact_space(uint idx) const {
     HeapWord* compact_to = forwardee(current);
     Copy::aligned_conjoint_words(current, compact_to, size);
 
-    // Update references of object.
-    oop obj = cast_to_oop(compact_to);
-    obj->oop_iterate(&cl);
-
-    // We need to update the offset table so that the beginnings of objects can be
-    // found during scavenge.  Note that we are updating the offset table based on
-    // where the object will be once the compaction phase finishes.
-    if (tenured_space->is_in_reserved(compact_to)) {
-      tenured_space->update_for_block(compact_to, compact_to + size);
-    }
-
     // Advance to next live object.
     current = _mark_bitmap.get_next_marked_addr(current + size, top);
   }
 
   // Reset top and unused memory
   space->set_top(get_compaction_top(idx));
+}
+
+void SCCompacter::adjust_space(uint idx) {
+  GCTraceTime(Info, gc) x("Adjust pointers");
+
+  // Scan all consecutive live objects in the current live chunk, update their references
+  // and the BOT if needed.
+  ContiguousSpace* space = get_space(idx);
+
+  SCUpdateRefsClosure cl(*this);
+
+  TenuredSpace* tenured_space = SerialHeap::heap()->old_gen()->space();
+  bool needs_bot_update = space == tenured_space;
+
+  HeapWord* obj_start = space->bottom();
+  HeapWord* obj_top = space->top();
+
+  while (obj_start < obj_top) {
+    oop obj = cast_to_oop(obj_start);
+    // Update references of object.
+    obj->oop_iterate(&cl);
+
+    // We need to update the BOT so that the beginnings of objects can be
+    // found during scavenge.  Note that we are updating the offset table based on
+    // where the object will be once the compaction phase finishes.
+    HeapWord* next_obj = obj_start + obj->size();
+    if (needs_bot_update) {
+      tenured_space->update_for_block(obj_start, next_obj);
+    }
+
+    // Advance to next object in chunk.
+    obj_start = next_obj;
+  }
   if (ZapUnusedHeapArea) {
     space->mangle_unused_area();
   }
