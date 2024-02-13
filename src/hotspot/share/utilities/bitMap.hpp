@@ -236,6 +236,7 @@ protected:
 
   // Update a range of bits.  Ranges are half-open [beg, end).
   inline void set_range   (idx_t beg, idx_t end);
+  void set_range_really_slow(idx_t beg, idx_t end);
   void clear_range (idx_t beg, idx_t end);
   void set_large_range   (idx_t beg, idx_t end);
   void clear_large_range (idx_t beg, idx_t end);

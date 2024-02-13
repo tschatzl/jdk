@@ -204,6 +204,23 @@ void BitMap::par_put_range_within_word(idx_t beg, idx_t end, bool value) {
   }
 }
 
+void BitMap::set_range_really_slow(idx_t beg, idx_t end) {
+    idx_t beg_full_word = to_words_align_up(beg);
+    idx_t end_full_word = to_words_align_down(end);
+
+    if (beg_full_word < end_full_word) {
+      // The range includes at least one full word.
+      set_range_within_word(beg, bit_index(beg_full_word));
+      set_range_of_words(beg_full_word, end_full_word);
+      set_range_within_word(bit_index(end_full_word), end);
+    } else {
+      // The range spans at most 2 partial words.
+      idx_t boundary = MIN2(bit_index(beg_full_word), end);
+      set_range_within_word(beg, boundary);
+      set_range_within_word(boundary, end);
+    }
+}
+
 void BitMap::clear_range(idx_t beg, idx_t end) {
   verify_range(beg, end);
 
