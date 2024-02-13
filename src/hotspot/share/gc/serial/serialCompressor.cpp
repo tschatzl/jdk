@@ -408,6 +408,7 @@ void SCCompacter::compact_space(uint idx) const {
   SCUpdateRefsClosure cl(*this);
 
   TenuredSpace* tenured_space = SerialHeap::heap()->old_gen()->space();
+  bool needs_bot_update = space == tenured_space;
 
   HeapWord* last_compact_end = nullptr;
 
@@ -436,7 +437,7 @@ void SCCompacter::compact_space(uint idx) const {
       // found during scavenge.  Note that we are updating the offset table based on
       // where the object will be once the compaction phase finishes.
       HeapWord* next_obj = obj_start + obj->size();
-      if (tenured_space->is_in_reserved(obj_start)) {
+      if (needs_bot_update) {
         tenured_space->update_for_block(obj_start, next_obj);
       }
 
