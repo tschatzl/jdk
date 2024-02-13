@@ -297,6 +297,10 @@ class SCCompacter {
         size_t size_in_bytes = align_up(num_blocks * sizeof(HeapWord*), os::vm_page_size());
         const char* msg = "Not enough memory to allocate block-offset-table for Serial Full GC";
         os::commit_memory_or_exit(reinterpret_cast<char*>(addr), size_in_bytes, false /* exec */, msg);
+        if (AlwaysPreTouch) {
+          // What to do for the BOT? Make it static?
+//          os::pretouch_memory(addr, addr + size_in_bytes / HeapWordSize, os::vm_page_size());
+        }
       }
     }
   }
@@ -485,6 +489,9 @@ SerialCompressor::SerialCompressor(STWGCTimer* gc_timer):
   os::commit_memory_or_exit((char *)_mark_bitmap_region.start(), _mark_bitmap_region.byte_size(), false,
                             "Cannot commit bitmap memory");
   _mark_bitmap.initialize(heap->reserved_region(), _mark_bitmap_region);
+  if (AlwaysPreTouch) {
+    os::pretouch_memory(heap->reserved_region().start(), heap->reserved_region().end(), bitmap.page_size());
+  }
 }
 
 SerialCompressor::~SerialCompressor() {
