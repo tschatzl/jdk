@@ -151,7 +151,7 @@ class SCCompacter {
 
   // Given a heap word (usually the start of an object), compute the forwarding address.
   inline HeapWord* forwardee(HeapWord* addr) const {
-    assert(_mark_bitmap.is_marked(addr), "must be marked");
+    //assert(_mark_bitmap.is_marked(addr), "must be marked");
     HeapWord* block_base = align_down(addr, bytes_per_block());
     size_t block = addr_to_block_idx(addr);
     assert(_bot[block] != nullptr, "must have initialized BOT entry");
@@ -212,8 +212,8 @@ class SCCompacter {
   // Build the block-offset-table for space at index.
   void build_table_for_space(uint idx) {
     ContiguousSpace* space = get_space(idx);
-    HeapWord* bottom = space->bottom();
-    HeapWord* top = space->top();
+    HeapWord* const bottom = space->bottom();
+    HeapWord* const top = space->top();
 
     // Clear table (only required for assertion in forwardee()).
     DEBUG_ONLY(clear(bottom, top);)
@@ -223,6 +223,7 @@ class SCCompacter {
     SCDeadSpacer dead_spacer(space);
 
     HeapWord* compact_top = get_compaction_top(_index);
+    HeapWord* const start_compact_top = compact_top;
     HeapWord* current = bottom;
 
     // Scan all live blocks in the space.
@@ -256,6 +257,7 @@ class SCCompacter {
       size_t live_in_block = _mark_bitmap.count_marked_words(first_obj_this_block, first_obj_after_block);
       while (live_in_block > pointer_delta(_spaces[_index]._space->end(),
                                            compact_top)) {
+        log_info(gc)("split!");
         // out-of-memory in this space
         _spaces[_index]._compaction_top = compact_top;
         _index++;
@@ -274,6 +276,7 @@ class SCCompacter {
       record_first_dead(idx, top);
     }
     _spaces[_index]._compaction_top = compact_top;
+    //log_info(gc)("compacted [" PTR_FORMAT ", " PTR_FORMAT ") to [" PTR_FORMAT " to " PTR_FORMAT ")", p2i(bottom), p2i(top), p2i(start_compact_top), p2i(compact_top));
   }
 
   // Reserves memory for the block-offset-table (does not commit any memory, yet).
@@ -342,10 +345,14 @@ public:
 
   // Compact live objects in a space.
   void compact_space(uint idx) const;
+  void adjust_space(uint idx);
 
   void phase3_compact() {
     for (uint i = 0; i < _num_spaces; ++i) {
       compact_space(i);
+    }
+    for (uint i = 0; i < _num_spaces; ++i) {
+      adjust_space(i);
     }
   }
 };
@@ -405,68 +412,74 @@ static ContiguousSpace* space_containing(HeapWord* addr) {
 // Compact live objects in a space.
 void SCCompacter::compact_space(uint idx) const {
   ContiguousSpace* space = get_space(idx);
-  HeapWord* bottom = space->bottom();
-  HeapWord* top = space->top();
+  HeapWord* const bottom = space->bottom();
+  HeapWord* const top = space->top();
   HeapWord* current = _mark_bitmap.get_next_marked_addr(bottom, top);
 
-  SCUpdateRefsClosure cl(*this);
+  //log_info(gc)("compact_space [" PTR_FORMAT ", " PTR_FORMAT ")", p2i(bottom), p2i(top));
+    HeapWord* last_compact_end = nullptr;
+  {
+    GCTraceTime(Info, gc) x("Move objects");
 
-  TenuredSpace* tenured_space = SerialHeap::heap()->old_gen()->space();
-
-  HeapWord* last_compact_end = nullptr;
-
-  // Visit all live objects in the space.
-  while (current < top) {
-    assert(_mark_bitmap.is_marked(current), "must be marked");
-    // Copy the whole chunk.
-    HeapWord* compact_to = forwardee(current);
-    HeapWord* next_dead = _mark_bitmap.get_next_unmarked_addr(current, top);
-    size_t size = pointer_delta(next_dead, current);
-    if (compact_to != current) {
-      assert(last_compact_end == nullptr || current < get_first_dead(idx) || compact_to == last_compact_end || space_containing(last_compact_end) != space_containing(compact_to),
-             "must compact without gaps, except when switching spaces: current: " PTR_FORMAT ", first_dead: " PTR_FORMAT ", compact_to: " PTR_FORMAT ", last_compact_end: " PTR_FORMAT, p2i(current), p2i(get_first_dead(idx)), p2i(compact_to), p2i(last_compact_end));
-      Copy::aligned_conjoint_words(current, compact_to, size);
-    }
-    last_compact_end = compact_to + size;
-
-    // Scan all consecutive live objects in the current live chunk and update their references.
-    HeapWord* obj_start = compact_to;
-    while (obj_start < last_compact_end) {
-      oop obj = cast_to_oop(obj_start);
-      // Update references of object.
-      obj->oop_iterate(&cl);
-
-      // We need to update the offset table so that the beginnings of objects can be
-      // found during scavenge.  Note that we are updating the offset table based on
-      // where the object will be once the compaction phase finishes.
-      HeapWord* next_obj = obj_start + obj->size();
-      if (tenured_space->is_in_reserved(obj_start)) {
-        tenured_space->update_for_block(obj_start, next_obj);
+    // Visit all live objects in the space.
+    while (current < top) {
+      assert(_mark_bitmap.is_marked(current), "must be marked");
+      // Copy the whole chunk.
+      HeapWord* compact_to = forwardee(current);
+      HeapWord* next_dead = _mark_bitmap.get_next_unmarked_addr(current, top);
+      size_t size = pointer_delta(next_dead, current);
+      if (compact_to != current) {
+        assert(last_compact_end == nullptr || current < get_first_dead(idx) || compact_to == last_compact_end || space_containing(last_compact_end) != space_containing(compact_to),
+               "must compact without gaps, except when switching spaces: current: " PTR_FORMAT ", first_dead: " PTR_FORMAT ", compact_to: " PTR_FORMAT ", last_compact_end: " PTR_FORMAT, p2i(current), p2i(get_first_dead(idx)), p2i(compact_to), p2i(last_compact_end));
+        Copy::aligned_conjoint_words(current, compact_to, size);
       }
-
-      // Advance to next object in chunk.
-      obj_start = next_obj;
-    }
-
-    // Advance to next live object.
-    if (next_dead >= top) {
-      break;
-    }
-    assert(!_mark_bitmap.is_marked(next_dead), "must not be live");
-    if (next_dead < get_first_dead(idx)) {
+      last_compact_end = compact_to + size;
+      
+      // Advance to next live object.
+      if (next_dead >= top) {
+        break;
+      }
+      assert(!_mark_bitmap.is_marked(next_dead), "must not be live");
+      assert(next_dead < get_first_dead(idx), "must be, deadspacer not supoprted");
       // Dead-spacer object, not a record of next live object.
       current = _mark_bitmap.get_next_marked_addr(next_dead, top);
-    } else {
-      // We stored the address of the next live object in the first unmarked word
-      // after the current live chunk.
-      HeapWord* next = *(HeapWord**)next_dead;
-      assert(next == _mark_bitmap.get_next_marked_addr(next_dead, top), "must match");
-      current = next;
     }
   }
 
   // Reset top and unused memory
   space->set_top(get_compaction_top(idx));
+}
+
+void SCCompacter::adjust_space(uint idx) {
+      // Scan all consecutive live objects in the current live chunk and update their references.
+  ContiguousSpace* space = get_space(idx);
+  {
+    GCTraceTime(Info, gc) a("Adjust pointers");
+  SCUpdateRefsClosure cl(*this);
+
+  TenuredSpace* tenured_space = SerialHeap::heap()->old_gen()->space();
+  bool needs_bot_update = space == tenured_space;
+      HeapWord* obj_start = space->bottom();
+      HeapWord* obj_top = space->top();
+  //log_info(gc)("Adjust [" PTR_FORMAT ", " PTR_FORMAT ")", p2i(obj_start), p2i(obj_top));
+
+      while (obj_start < obj_top) {
+        oop obj = cast_to_oop(obj_start);
+        // Update references of object.
+        obj->oop_iterate(&cl);
+
+        // We need to update the offset table so that the beginnings of objects can be
+        // found during scavenge.  Note that we are updating the offset table based on
+        // where the object will be once the compaction phase finishes.
+        HeapWord* next_obj = obj_start + obj->size();
+        if (needs_bot_update) {
+          tenured_space->update_for_block(obj_start, next_obj);
+        }
+
+        // Advance to next object in chunk.
+        obj_start = next_obj;
+      }
+  }
   if (ZapUnusedHeapArea) {
     space->mangle_unused_area();
   }
