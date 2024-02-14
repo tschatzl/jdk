@@ -53,6 +53,7 @@ class G1FullKeepAliveClosure: public OopClosure {
 
 public:
   G1FullKeepAliveClosure(G1FullGCMarker* pm) : _marker(pm) { }
+  ~G1FullKeepAliveClosure();
 
   virtual void do_oop(oop* p);
   virtual void do_oop(narrowOop* p);

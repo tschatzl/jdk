@@ -38,5 +38,9 @@ G1IsAliveClosure::G1IsAliveClosure(G1FullCollector* collector) :
 
 void G1FollowStackClosure::do_void() { _marker->follow_marking_stacks(); }
 
+G1FullKeepAliveClosure::~G1FullKeepAliveClosure() {
+  _marker->flush_mark_stats_cache();
+}
+
 void G1FullKeepAliveClosure::do_oop(oop* p) { do_oop_work(p); }
 void G1FullKeepAliveClosure::do_oop(narrowOop* p) { do_oop_work(p); }
