@@ -99,11 +99,13 @@ class SCCompacter {
     return LogBitsPerWord;
   }
 
+public:
   // The number of heap words covered by each block.
   static inline constexpr uint words_per_block() {
     return BitsPerWord;
   }
 
+private:
   // The number of bytes covered by each block.
   static inline constexpr uint bytes_per_block() {
     return BitsPerWord << LogBytesPerWord;
@@ -125,7 +127,7 @@ class SCCompacter {
   };
 
   // The block offset table.
-  HeapWord** const _bot;
+  HeapWord** const _forward_table;
 
   // The heap region covered by the BOT.
   const MemRegion _covered;
@@ -154,9 +156,9 @@ class SCCompacter {
     assert(_mark_bitmap.is_marked(addr), "must be marked");
     HeapWord* block_base = align_down(addr, bytes_per_block());
     size_t block = addr_to_block_idx(addr);
-    assert(_bot[block] != nullptr, "must have initialized BOT entry");
-    HeapWord* fwd = _bot[block] + _mark_bitmap.count_marked_words_in_block(block_base, addr);
-    assert(SerialHeap::heap()->is_in_reserved(fwd), "forward addresses must be in heap: addr: " PTR_FORMAT ", fwd: " PTR_FORMAT ", block: " SIZE_FORMAT ", bot[block]: " PTR_FORMAT ", block_base: " PTR_FORMAT, p2i(addr), p2i(fwd), block, p2i(_bot[block]), p2i(block_base));
+    assert(_forward_table[block] != nullptr, "must have initialized BOT entry");
+    HeapWord* fwd = _forward_table[block] + _mark_bitmap.count_marked_words_in_block(block_base, addr);
+    assert(SerialHeap::heap()->is_in_reserved(fwd), "forward addresses must be in heap: addr: " PTR_FORMAT ", fwd: " PTR_FORMAT ", block: " SIZE_FORMAT ", bot[block]: " PTR_FORMAT ", block_base: " PTR_FORMAT, p2i(addr), p2i(fwd), block, p2i(_forward_table[block]), p2i(block_base));
     return fwd;
   }
 
@@ -165,7 +167,7 @@ class SCCompacter {
   void clear(HeapWord* from, HeapWord* to) {
     size_t from_block = addr_to_block_idx(from);
     size_t num_blocks = align_up(pointer_delta(to, from), words_per_block()) / words_per_block();
-    Copy::fill_to_words(reinterpret_cast<HeapWord*>(&_bot[from_block]), num_blocks);
+    Copy::fill_to_words(reinterpret_cast<HeapWord*>(&_forward_table[from_block]), num_blocks);
   }
 #endif // ASSERT
 
@@ -207,7 +209,7 @@ class SCCompacter {
     }
   }
 
-  // Build the block-offset-table for space at index.
+  // Build the forward table for space at index.
   void build_table_for_space(uint idx) {
     ContiguousSpace* space = get_space(idx);
     HeapWord* bottom = space->bottom();
@@ -241,7 +243,7 @@ class SCCompacter {
       }
 
       // Record address of the first live word of this block.
-      _bot[addr_to_block_idx(current)] = compact_top - _mark_bitmap.count_marked_words_in_block(current, first_obj_this_block);
+      _forward_table[addr_to_block_idx(current)] = compact_top - _mark_bitmap.count_marked_words_in_block(current, first_obj_this_block);
       compact_top += live_in_block;
       // Continue to scan at next block that has an object header.
       first_obj_this_block = first_obj_after_block;
@@ -250,64 +252,25 @@ class SCCompacter {
     _spaces[_index]._compaction_top = compact_top;
   }
 
-  // Reserves memory for the block-offset-table (does not commit any memory, yet).
-  static HeapWord** reserve_table() {
-    // TODO: Allocate table only for relevant (bottom-top) parts of spaces and keep them in
-    // the CompactionSpace structure.
-    MemRegion covered = SerialHeap::heap()->reserved_region();
-    HeapWord* start = covered.start();
-    HeapWord* end = covered.end();
-    size_t num_blocks = align_up(pointer_delta(end, start), words_per_block()) / words_per_block();
-    char* table_mem = os::reserve_memory(sizeof(HeapWord*) * num_blocks, false, mtGC);
-    return reinterpret_cast<HeapWord**>(table_mem);
-  }
-
-  void commit_bot() {
-    for (uint i = 0; i < _num_spaces; ++i) {
-      ContiguousSpace* space = _spaces[i]._space;
-      HeapWord* bottom = space->bottom();
-      HeapWord* top = space->top();
-      HeapWord** table_start = &_bot[addr_to_block_idx(bottom)];
-      HeapWord** addr = align_down(table_start, os::vm_page_size());
-      size_t num_blocks = align_up(pointer_delta(top, bottom), words_per_block()) / words_per_block();
-      HeapWord** table_end = table_start + num_blocks;
-      size_t aligned_num_blocks = pointer_delta(reinterpret_cast<void*>(align_up(table_end, os::vm_page_size())), reinterpret_cast<void*>(addr), BytesPerWord);
-      if (num_blocks > 0) {
-        size_t size_in_bytes = aligned_num_blocks * sizeof(HeapWord*);
-        assert(is_aligned(size_in_bytes, os::vm_page_size()), "size of table must be page-size aligned");
-        const char* msg = "Not enough memory to allocate block-offset-table for Serial Full GC";
-        os::commit_memory_or_exit(reinterpret_cast<char*>(addr), size_in_bytes, false /* exec */, msg);
-      }
-    }
-  }
-
 public:
-  explicit SCCompacter(SerialHeap* heap, MarkBitMap& mark_bitmap) :
-    _bot(reserve_table()),
+  explicit SCCompacter(SerialHeap* heap, MarkBitMap& mark_bitmap, HeapWord** forward_table) :
+    _forward_table(forward_table),
     _covered(heap->reserved_region()),
     _mark_bitmap(mark_bitmap)
   {
     // In this order so that heap is compacted towards old-gen.
-    _spaces[0].init(heap->old_gen()->space(), _bot);
-    _spaces[1].init(heap->young_gen()->eden(), _bot);
-    _spaces[2].init(heap->young_gen()->from(), _bot);
+    _spaces[0].init(heap->old_gen()->space(), _forward_table);
+    _spaces[1].init(heap->young_gen()->eden(), _forward_table);
+    _spaces[2].init(heap->young_gen()->from(), _forward_table);
 
     bool is_promotion_failed = (heap->young_gen()->from()->next_compaction_space() != nullptr);
     if (is_promotion_failed) {
-      _spaces[3].init(heap->young_gen()->to(), _bot);
+      _spaces[3].init(heap->young_gen()->to(), _forward_table);
       _num_spaces = 4;
     } else {
       _num_spaces = 3;
     }
     _index = 0;
-    commit_bot();
-  }
-
-  ~SCCompacter() {
-    HeapWord* start = _covered.start();
-    HeapWord* end = _covered.end();
-    size_t num_blocks = align_up(pointer_delta(end, start), words_per_block()) / words_per_block();
-    os::release_memory(reinterpret_cast<char*>(_bot), num_blocks * sizeof(HeapWord*));
   }
 
   void phase2_prepare() {
@@ -356,28 +319,6 @@ public:
   }
 };
 
-#ifdef ASSERT_0
-static ContiguousSpace* space_containing(HeapWord* addr) {
-  SerialHeap* heap = SerialHeap::heap();
-  TenuredGeneration* old_gen = heap->old_gen();
-  DefNewGeneration* young_gen = heap->young_gen();
-  const int NUM_SPACES = 4;
-  ContiguousSpace* spaces[NUM_SPACES];
-  spaces[0] = old_gen->space();
-  spaces[1] = young_gen->eden();
-  spaces[2] = young_gen->from();
-  spaces[3] = young_gen->to();
-  for (int i = 0; i < NUM_SPACES; i++) {
-    ContiguousSpace* space = spaces[i];
-    if (space->is_in_reserved(addr)) {
-      return space;
-    }
-  }
-  assert(false, "must find a space containing heap obj");
-  return nullptr;
-}
-#endif
-
 // Compact live objects in a space.
 void SCCompacter::compact_space(uint idx) const {
   ContiguousSpace* space = get_space(idx);
@@ -420,8 +361,34 @@ void SCCompacter::compact_space(uint idx) const {
   }
 }
 
+static size_t forward_table_size_in__bytes() {
+  MemRegion covered = SerialHeap::heap()->reserved_region();
+  HeapWord* start = covered.start();
+  HeapWord* end = covered.end();
+  size_t num_blocks = align_up(pointer_delta(end, start), SCCompacter::words_per_block()) / SCCompacter::words_per_block();
+  return sizeof(HeapWord*) * num_blocks;
+}
+// Reserves memory for the block-offset-table (does not commit any memory, yet).
+static HeapWord** reserve_and_commit_table() {
+  // TODO: Allocate table only for relevant (bottom-top) parts of spaces and keep them in
+  // the CompactionSpace structure.
+
+  size_t size_in_bytes = forward_table_size_in__bytes();
+  char* table_mem = os::reserve_memory(size_in_bytes, false, mtGC);
+
+  const char* msg = "Not enough memory to allocate block-offset-table for Serial Full GC";
+  os::commit_memory_or_exit(reinterpret_cast<char*>(table_mem), size_in_bytes, false /* exec */, msg);
+
+  if (AlwaysPreTouch) {
+    os::pretouch_memory(table_mem, table_mem + size_in_bytes / HeapWordSize, os::vm_page_size());
+  }
+
+  return reinterpret_cast<HeapWord**>(table_mem);
+}
+
 SerialCompressor::SerialCompressor(STWGCTimer* gc_timer):
   _mark_bitmap(),
+  _forward_table(nullptr),
   _marking_stack(),
   _objarray_stack(),
   _string_dedup_requests(),
@@ -437,12 +404,16 @@ SerialCompressor::SerialCompressor(STWGCTimer* gc_timer):
   os::commit_memory_or_exit((char *)_mark_bitmap_region.start(), _mark_bitmap_region.byte_size(), false,
                             "Cannot commit bitmap memory");
   _mark_bitmap.initialize(heap->reserved_region(), _mark_bitmap_region);
+  if (AlwaysPreTouch) {
+    os::pretouch_memory(heap->reserved_region().start(), heap->reserved_region().end(), bitmap.page_size());
+  }
+  _forward_table = reserve_and_commit_table();
 }
 
 SerialCompressor::~SerialCompressor() {
   os::release_memory((char*)_mark_bitmap_region.start(), _mark_bitmap_region.byte_size());
+  os::release_memory((char*)_forward_table, forward_table_size_in__bytes());
 }
-
 
 // Update all GC roots.
 static void update_roots(SCCompacter& compacter) {
@@ -482,7 +453,7 @@ void SerialCompressor::invoke_at_safepoint(bool clear_all_softrefs) {
 
   phase1_mark(clear_all_softrefs);
 
-  SCCompacter compacter{gch, _mark_bitmap};
+  SCCompacter compacter{gch, _mark_bitmap, _forward_table};
   {
     GCTraceTime(Info, gc, phases) tm("Phase 2: Build block-offset-table", _gc_timer);
     compacter.phase2_prepare();

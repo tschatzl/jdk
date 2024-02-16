@@ -78,6 +78,9 @@ private:
   MemRegion  _mark_bitmap_region;
   // The marking bitmap.
   MarkBitMap _mark_bitmap;
+
+  // The block offset table.
+  HeapWord** _forward_table;
   // The marking stack.
   Stack<oop,mtGC> _marking_stack;
   // Separate marking stack for object-array-chunks.
