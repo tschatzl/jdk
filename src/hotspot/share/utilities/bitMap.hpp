@@ -214,6 +214,7 @@ protected:
   // memory_order must be memory_order_relaxed or memory_order_acquire.
   bool par_at(idx_t index, atomic_memory_order memory_order = memory_order_acquire) const;
 
+  inline bool maybe_set_bit(idx_t bit);
   // Set or clear the specified bit.
   inline void set_bit(idx_t bit);
   inline void clear_bit(idx_t bit);

@@ -78,6 +78,7 @@ public:
     return _bm.at(addr_to_offset(addr));
   }
 
+  inline bool set_mark(HeapWord* addr);
   // Return the address corresponding to the next marked bit at or after
   // "addr", and before "limit", if "limit" is non-null.  If there is no
   // such bit, returns "limit" if that is non-null, or else "endWord()".

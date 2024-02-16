@@ -33,6 +33,10 @@
 #include "utilities/align.hpp"
 #include "utilities/bitMap.inline.hpp"
 
+inline bool MarkBitMap::set_mark(HeapWord* addr) {
+  return _bm.maybe_set_bit(addr_to_offset(addr));
+}
+
 inline HeapWord* MarkBitMap::get_next_marked_addr(const HeapWord* const addr,
                                                   HeapWord* const limit) const {
   assert(limit != nullptr, "limit must not be null");

@@ -176,36 +176,47 @@ private:
     return _spaces[index]._compaction_top;
   }
 
-  // Get space at index.
+  // Get space at index.build_
   ContiguousSpace* get_space(uint index) const {
     return _spaces[index]._space;
   }
 
   // Find the start of the first object at or after addr (but not after limit).
-  HeapWord* first_object_in_block(HeapWord* addr, HeapWord* start, HeapWord* limit) {
+  HeapWord* first_object_in_block(HeapWord* addr, HeapWord* start, HeapWord* limit, TenuredSpace* bot_provider) {
     if (addr >= limit) return limit;
     if (!_mark_bitmap.is_marked(addr)) {
       // Easy: find next marked address.
       return _mark_bitmap.get_next_marked_addr(addr, limit);
     } else {
-      // Find beginning of live chunk.
-      HeapWord* current = _mark_bitmap.get_last_unmarked_addr(start, addr);
-      if (current == addr) {
-        // No clear bit found before search range, start of range because that must
-        // be the previous object.
-        current = start;
-      } else {
-        // Use first marked word, this must be an object.
-        assert(!_mark_bitmap.is_marked(current), "must not be marked");
-        current = current + 1;
-      }
       // Forward-search to first object >= addr.
-      while (current < addr) {
-        size_t obj_size = cast_to_oop(current)->size();
-        current += obj_size;
+      if (bot_provider != nullptr) {
+        HeapWord* reaching_into = bot_provider->block_start_const(addr);
+        if (reaching_into < addr) {
+          reaching_into = reaching_into + cast_to_oop<HeapWord*>(reaching_into)->size();
+        }
+        assert(reaching_into >= addr, "must be");
+        assert(reaching_into == limit || oopDesc::is_oop(cast_to_oop<HeapWord*>(reaching_into)), "must be");
+        return reaching_into;
+      } else {
+        // Find beginning of live chunk.
+        HeapWord* current = _mark_bitmap.get_last_unmarked_addr(start, addr);
+        if (current == addr) {
+          // No clear bit found before search range, start of range because that must
+          // be the previous object.
+          current = start;
+        } else {
+          // Use first marked word, this must be an object.
+          assert(!_mark_bitmap.is_marked(current), "must not be marked");
+          current = current + 1;
+        }
+
+        while (current < addr) {
+          size_t obj_size = cast_to_oop(current)->size();
+          current += obj_size;
+        }
+        assert(current >= addr, "found object start must be >= addr");
+        return MIN2(current, limit);
       }
-      assert(current >= addr, "found object start must be >= addr");
-      return MIN2(current, limit);
     }
   }
 
@@ -215,6 +226,7 @@ private:
     HeapWord* const bottom = space->bottom();
     HeapWord* const top = space->top();
 
+    TenuredSpace* bot_space = UseNewCode && space == SerialHeap::heap()->old_gen()->space() ? SerialHeap::heap()->old_gen()->space() : nullptr;
     // Clear table (only required for assertion in forwardee()).
     DEBUG_ONLY(clear(bottom, top);)
 
@@ -231,7 +243,7 @@ private:
       // Find first object that starts after this block and count
       // live words up to that object. This is how many words we
       // must fit into the current compaction space.
-      HeapWord* first_obj_after_block = first_object_in_block(current + words_per_block(), first_obj_this_block, top);
+      HeapWord* first_obj_after_block = first_object_in_block(current + words_per_block(), first_obj_this_block, top, bot_space);
       size_t live_in_block = _mark_bitmap.count_marked_words(first_obj_this_block, first_obj_after_block);
       while (live_in_block > pointer_delta(_spaces[_index]._space->end(),
                                            compact_top)) {
@@ -287,8 +299,10 @@ public:
     for (uint i = 0; i < _num_spaces; ++i) {
       compact_space(i);
     }
-    for (uint i = 0; i < _num_spaces; ++i) {
-      adjust_space(i);
+    if (UseNewCode2) {
+      for (uint i = 0; i < _num_spaces; ++i) {
+        adjust_space(i);
+      }
     }
   }
 };
@@ -330,19 +344,45 @@ void SCCompacter::compact_space(uint idx) const {
   HeapWord* const top = space->top();
   HeapWord* current = _mark_bitmap.get_next_marked_addr(bottom, top);
 
+  SCUpdateRefsClosure cl(*this);
+
   GCTraceTime(Info, gc) x("Move objects");
+
+  TenuredSpace* tenured_space = SerialHeap::heap()->old_gen()->space();
 
   // Visit all live objects in the space.
   while (current < top) {
     assert(_mark_bitmap.is_marked(current), "must be marked");
-
-    // Copy the object.
-    size_t size = cast_to_oop(current)->size();
+    // Copy the whole chunk.
     HeapWord* compact_to = forwardee(current);
+
+    HeapWord* const next_dead = _mark_bitmap.get_next_unmarked_addr(current, top);
+    size_t const size = pointer_delta(next_dead, current);
+
     Copy::aligned_conjoint_words(current, compact_to, size);
 
+    if (!UseNewCode2) {
+      HeapWord* compact_end = compact_to + size;
+      while (compact_to < compact_end) {
+        oop obj = cast_to_oop(compact_to);
+        // Update references of object.
+        obj->oop_iterate(&cl);
+
+        // We need to update the BOT so that the beginnings of objects can be
+        // found during scavenge.  Note that we are updating the offset table based on
+        // where the object will be once the compaction phase finishes.
+        HeapWord* next_obj = compact_to + obj->size();
+        if (tenured_space->is_in_reserved(compact_to)) {
+          tenured_space->update_for_block(compact_to, next_obj);
+        }
+
+        // Advance to next object in chunk.
+        compact_to = next_obj;
+      }
+    }
+
     // Advance to next live object.
-    current = _mark_bitmap.get_next_marked_addr(current + size, top);
+    current = _mark_bitmap.get_next_marked_addr(next_dead, top);
   }
 
   // Reset top and unused memory
@@ -601,7 +641,7 @@ public:
 
 bool SerialCompressor::mark_object(oop obj) {
   HeapWord* addr = cast_from_oop<HeapWord*>(obj);
-  if (!_mark_bitmap.is_marked(addr)) {
+  if (_mark_bitmap.set_mark(addr)) {
     if (StringDedup::is_enabled() &&
         java_lang_String::is_instance(obj) &&
         SerialStringDedup::is_candidate_from_mark(obj)) {
@@ -612,7 +652,6 @@ bool SerialCompressor::mark_object(oop obj) {
     // which might include important class information.
     ContinuationGCSupport::transform_stack_chunk(obj);
 
-    _mark_bitmap.mark_range(addr, obj->size());
     return true;
   } else {
     return false;
@@ -638,9 +677,11 @@ void SerialCompressor::follow_object(oop obj) {
   assert(_mark_bitmap.is_marked(obj), "p must be marked");
   if (obj->is_objArray()) {
     follow_array((objArrayOop)obj);
+    _mark_bitmap.mark_range(cast_from_oop<HeapWord*>(obj), ((objArrayOop)obj)->size());
   } else {
     SCMarkAndPushClosure mark_and_push_closure(ClassLoaderData::_claim_stw_fullgc_mark, *this);
-    obj->oop_iterate(&mark_and_push_closure);
+    size_t size = obj->oop_iterate_size(&mark_and_push_closure);
+    _mark_bitmap.mark_range(cast_from_oop<HeapWord*>(obj), size);
   }
 }
 

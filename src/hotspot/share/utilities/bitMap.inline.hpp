@@ -33,6 +33,14 @@
 #include "utilities/population_count.hpp"
 #include "utilities/powerOfTwo.hpp"
 
+inline bool BitMap::maybe_set_bit(idx_t bit) {
+  verify_index(bit);
+  bm_word_t old_value = *word_addr(bit);
+  bm_word_t new_value = old_value | bit_mask(bit);
+  *word_addr(bit) = new_value;
+  return new_value != old_value;
+}
+
 inline void BitMap::set_bit(idx_t bit) {
   verify_index(bit);
   *word_addr(bit) |= bit_mask(bit);
