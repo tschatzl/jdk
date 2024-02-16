@@ -33,8 +33,10 @@
 #include "gc/shared/gcLocker.hpp"
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTrace.hpp"
+#include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/space.hpp"
 #include "logging/log.hpp"
+#include "logging/logLevel.hpp"
 #include "memory/allocation.inline.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/java.hpp"
@@ -430,9 +432,15 @@ void TenuredGeneration::collect(bool   full,
 
   if (UseCompressorFullGC) {
     SerialCompressor full_gc = SerialCompressor(gc_timer);
-    full_gc.invoke_at_safepoint(clear_all_soft_refs);
+    {
+      GCTraceTime(Info, gc) x("Invoke at safepoint");
+      full_gc.invoke_at_safepoint(clear_all_soft_refs);
+    }
   } else {
-    GenMarkSweep::invoke_at_safepoint(clear_all_soft_refs);
+    {
+      GCTraceTime(Info, gc) x("Invoke at safepoint");
+      GenMarkSweep::invoke_at_safepoint(clear_all_soft_refs);
+    }
   }
 
   gch->post_full_gc_dump(gc_timer);
