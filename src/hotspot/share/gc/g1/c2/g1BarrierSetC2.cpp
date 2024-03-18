@@ -345,11 +345,11 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
                                   Node* index_adr,
                                   Node* buffer,
                                   const TypeFunc* tf) const {
-  Node* zero  = __ ConI(0);
+  Node* zero  = __ ConI(G1CardTable::dirty_card_val());
   Node* zeroX = __ ConX(0);
   Node* no_base = __ top();
   BasicType card_bt = T_BYTE;
-  // Smash zero into card. MUST BE ORDERED WRT TO STORE
+  // Smash the dirty card value into card. MUST BE ORDERED WRT TO STORE
   __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
   //  Now do the queue work

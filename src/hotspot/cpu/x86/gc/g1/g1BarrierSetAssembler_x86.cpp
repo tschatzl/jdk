@@ -98,6 +98,84 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register tmp) {
+  if (UseNewCode) {
+    assert(sizeof(CardTable::CardValue) == 1, "must be");
+
+    Label done;
+    // Count may be zero. Nothing to do then.
+    __ testptr(count, count);
+    __ jcc(Assembler::equal, done);
+
+    // Calculate end address in "count".
+    Address::ScaleFactor scale = UseCompressedOops ? Address::times_4 : Address::times_8;
+    __ leaq(count, Address(addr, count, scale));
+
+    // Calculate start card address in "addr".
+    __ shrptr(addr, CardTable::card_shift());
+    __ movptr(tmp, (intptr_t)barrier_set_cast<CardTableBarrierSet>(BarrierSet::barrier_set())->card_table()->byte_map_base());
+    __ addptr(addr, tmp);
+
+    // If the object starts in a young region, there is nothing to do.
+    __ cmpb(Address(addr, 0), G1CardTable::g1_young_card_val());
+    __ jcc(Assembler::equal, done);
+    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+
+    // Caclulate address of card of last word in the array.
+    __ subptr(count, 1);
+    __ shrptr(count, CardTable::card_shift());
+    __ addptr(count, tmp);
+
+    Label loop;
+    // Iterate from start card to end card (inclusive).
+    __ bind(loop);
+
+    Label clean_card;
+    __ cmpb(Address(addr, 0), G1CardTable::dirty_card_val());
+    __ jcc(Assembler::notEqual, clean_card);
+    Label next_card;
+    __ bind(next_card);
+    __ addptr(addr, sizeof(CardTable::CardValue));
+    __ cmpptr(addr, count);
+    __ jcc(Assembler::belowEqual, loop);
+    __ jmp(done);
+
+    // Card was not dirty. Dirty card and enqueue.
+    __ bind(clean_card);
+    __ movb(Address(addr, 0), G1CardTable::dirty_card_val());
+
+    Address queue_index(r15_thread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
+    Address buffer(r15_thread, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
+
+    __ movptr(tmp, queue_index);
+    __ testptr(tmp, tmp);
+    Label runtime;
+    __ jcc(Assembler::zero, runtime);
+    __ subptr(tmp, wordSize);
+    __ movptr(queue_index, tmp);
+    __ addptr(tmp, buffer);
+    __ movptr(Address(tmp, 0), addr);
+    __ jmp(next_card);
+
+    __ bind(runtime);
+
+    // Save caller saved registers.
+    __ push_call_clobbered_registers(false /* save_fpu */);
+    // FIXME: probably issue with Windows....
+    if (c_rarg1 != r15_thread) {
+      __ mov(c_rarg1, r15_thread);
+    }
+    if (c_rarg0 != addr) {
+      __ mov(c_rarg0, addr);
+    }
+
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), c_rarg0, c_rarg1);
+    __ pop_call_clobbered_registers(false /* save_fpu */);
+
+    __ jmp(next_card);
+
+    __ bind(done);
+    return;
+  }
   __ push_call_clobbered_registers(false /* save_fpu */);
 #ifdef _LP64
   if (c_rarg0 == count) { // On win64 c_rarg0 == rcx
