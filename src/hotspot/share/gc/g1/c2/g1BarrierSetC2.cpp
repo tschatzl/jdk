@@ -468,9 +468,11 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
         Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
 
         __ if_then(card_val, BoolTest::ne, young_card, unlikely); {
-          //kit->sync_kit(ideal);
-          //kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
-          //__ sync_kit(kit);
+          if (!UseNewCode) {
+            kit->sync_kit(ideal);
+            kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
+            __ sync_kit(kit);
+          }
 
           Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
           __ if_then(card_val_reload, BoolTest::ne, dirty_card); {

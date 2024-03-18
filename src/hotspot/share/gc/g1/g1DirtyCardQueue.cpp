@@ -448,7 +448,11 @@ public:
     // setting the regions' tops in humongous allocation path).
     // It's okay that reading region's top and reading region's type were racy
     // wrto each other. We need both set, in any order, to proceed.
-    SystemMemoryBarrier::emit();
+    if (!UseNewCode) {
+      OrderAccess::fence();
+    } else {
+      SystemMemoryBarrier::emit();
+    }
     sort_cards(first_clean_index);
     return refine_cleaned_cards(first_clean_index);
   }
