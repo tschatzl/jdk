@@ -98,6 +98,80 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register tmp) {
+
+  if (true) {
+    assert(sizeof(CardTable::CardValue) == 1, "must be");
+    
+    Label done;
+    __ testptr(count, count);
+    __ jcc(Assembler::equal, done); // nothing to do if empty ref array.
+
+    // Calculate end address.
+    __ shlptr(count, LogBytesPerHeapOop);
+    __ addptr(count, addr);
+    // Calculate start card address in "addr".
+    __ shrptr(addr, CardTable::card_shift());
+    __ movptr(tmp, (intptr_t)barrier_set_cast<CardTableBarrierSet>(BarrierSet::barrier_set())->card_table()->byte_map_base());
+    __ addptr(addr, tmp);
+
+    if (!UseNewCode) {
+      // If the object starts in a young region, there is nothing to do.
+      __ cmpb(Address(addr, 0), G1CardTable::g1_young_card_val());
+      __ jcc(Assembler::equal, done);
+      __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+    }
+
+    // Caclulate card address of last word.
+    __ subptr(count, 1);
+    __ shrptr(count, CardTable::card_shift());
+    __ addptr(count, tmp);
+
+    Label loop;
+    __ bind(loop);
+
+    Label next_card;
+    __ cmpb(Address(addr, 0), G1CardTable::dirty_card_val());
+    __ jcc(Assembler::zero, next_card);
+
+    // Card was not dirty. Dirty card and enqueue.
+    __ movb(Address(addr, 0), G1CardTable::dirty_card_val());
+
+    Address queue_index(r15_thread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
+    Address buffer(r15_thread, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
+
+    __ movptr(tmp, queue_index);
+    __ testptr(tmp, tmp);
+    Label runtime;
+    __ jcc(Assembler::zero, runtime);
+    __ subptr(tmp, wordSize);
+    __ movptr(queue_index, tmp);
+    __ addptr(tmp, buffer);
+    __ movptr(Address(tmp, 0), addr);
+    __ jmp(next_card);
+
+    __ bind(runtime);
+
+    // Save caller saved registers.
+    __ push_call_clobbered_registers(false /* save_fpu */);
+    // FIXME: probably issue with Windows....
+    if (c_rarg1 != r15_thread) {
+      __ mov(c_rarg1, r15_thread);
+    }
+    if (c_rarg0 != addr) {
+      __ mov(c_rarg0, addr);
+    }
+
+    __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), c_rarg0, c_rarg1);
+    __ pop_call_clobbered_registers(false /* save_fpu */);
+    
+    __ bind(next_card);
+    __ addptr(addr, sizeof(CardTable::CardValue));
+    __ cmpptr(addr, count);
+    __ jcc(Assembler::belowEqual, loop);
+
+    __ bind(done);
+    return;
+  }
   __ push_call_clobbered_registers(false /* save_fpu */);
 #ifdef _LP64
   if (c_rarg0 == count) { // On win64 c_rarg0 == rcx
@@ -308,10 +382,12 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
   __ addptr(card_addr, cardtable);
 
-  __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
-  __ jcc(Assembler::equal, done);
+  if (!UseNewCode) {
+    __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
+    __ jcc(Assembler::equal, done);
 
-  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+  }
   __ cmpb(Address(card_addr, 0), G1CardTable::dirty_card_val());
   __ jcc(Assembler::equal, done);
 
@@ -541,11 +617,12 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
   __ addptr(card_addr, cardtable);
 
   NOT_LP64(__ get_thread(thread);)
+  if (!UseNewCode) {
+    __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
+    __ jcc(Assembler::equal, done);
 
-  __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
-  __ jcc(Assembler::equal, done);
-
-  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+  }
   __ cmpb(Address(card_addr, 0), CardTable::dirty_card_val());
   __ jcc(Assembler::equal, done);
 

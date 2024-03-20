@@ -39,9 +39,16 @@ void G1BarrierSetRuntime::write_ref_array_pre_narrow_oop_entry(narrowOop* dst, s
   bs->write_ref_array_pre(dst, length, false);
 }
 
-void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* dst, size_t length) {
+void G1BarrierSetRuntime::write_ref_array_post_entry(HeapWord* start, size_t length) {
+  HeapWord* end = (HeapWord*)((char*)start + (length*heapOopSize));
+
+  HeapWord* aligned_start = align_down(start, HeapWordSize);
+  HeapWord* aligned_end   = align_up  (end,   HeapWordSize);
+  // If compressed oops were not being used, these should already be aligned
+  assert(UseCompressedOops || (aligned_start == start && aligned_end == end),
+         "Expected heap word alignment of start and end");
   G1BarrierSet *bs = barrier_set_cast<G1BarrierSet>(BarrierSet::barrier_set());
-  bs->G1BarrierSet::write_ref_array(dst, length);
+  bs->write_ref_array_work(MemRegion(aligned_start, aligned_end));
 }
 
 // G1 pre write barrier slowpath

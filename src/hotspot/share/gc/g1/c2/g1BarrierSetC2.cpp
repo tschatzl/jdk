@@ -465,20 +465,25 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
         // Ok must mark the card if not already dirty
 
         // load the original value of the card
-        Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
 
+if (!UseNewCode) {
+        Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
         __ if_then(card_val, BoolTest::ne, young_card, unlikely); {
-          if (!UseNewCode) {
-            kit->sync_kit(ideal);
-            kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
-            __ sync_kit(kit);
-          }
+          kit->sync_kit(ideal);
+          kit->insert_mem_bar(Op_MemBarVolatile, oop_store);
+          __ sync_kit(kit);
 
           Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
           __ if_then(card_val_reload, BoolTest::ne, dirty_card); {
             g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
           } __ end_if();
         } __ end_if();
+} else {
+        Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
+        __ if_then(card_val_reload, BoolTest::ne, dirty_card); {
+          g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
+        } __ end_if();    
+}
       } __ end_if();
     } __ end_if();
   } else {
@@ -488,7 +493,7 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
     // are set to 'g1_young_gen' (see G1CardTable::verify_g1_young_region()).
     assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
     Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-    __ if_then(card_val, BoolTest::ne, young_card); {
+    __ if_then(card_val, BoolTest::ne, !UseNewCode ? young_card : dirty_card); {
       g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
     } __ end_if();
   }
