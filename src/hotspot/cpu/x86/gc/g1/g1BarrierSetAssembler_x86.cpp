@@ -148,7 +148,8 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
     __ jcc(Assembler::zero, runtime);
     __ subptr(tmp, wordSize);
     __ movptr(queue_index, tmp);
-    __ movptr(Address(buffer, tmp), addr);
+    __ addptr(tmp, buffer);
+    __ movptr(Address(tmp, 0), addr);
     __ jmp(next_card);
 
     __ bind(runtime);

@@ -86,31 +86,32 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register scratch, RegSet saved_regs) {
-  assert_different_registers(start, count, scratch);
+  assert_different_registers(scratch, rscratch2);
+  assert_different_registers(addr, count, scratch);
   assert_different_registers(c_rarg0, count);
 if (UseNewCode) {
   Label done;
   // Count may be zero. Nothing to do then.
   __ cbz(count, done);
 
-  __ load_byte_map_base(tmp);
+  __ load_byte_map_base(scratch);
 
   __ lsl(count, count, LogBytesPerHeapOop);
   __ add(count, addr, count);
-  __ subi(count, 1);
+  __ sub(count, count, 1);
   __ lsr(count, count, CardTable::card_shift());
   // Calculate end card address (last word in block) in "count".
-  __ add(count, count, tmp);
+  __ add(count, count, scratch);
 
   // Calculate start card address in "start".
   __ lsr(addr, addr, CardTable::card_shift());
-  __ add(addr, addr, tmp);
+  __ add(addr, addr, scratch);
 
   if (!G1UseAsyncDekkerSync) {
     // If the object starts in a young region, there is nothing to do.
-    __ ldrb(tmp, Address(addr, 0));
-    __ cmpw(tmp, (int)G1CardTable::g1_young_card_val());
-    __ br(Assembler::eq, done);
+    __ ldrb(scratch, Address(addr, 0));
+    __ cmpw(scratch, (int)G1CardTable::g1_young_card_val());
+    __ br(Assembler::EQ, done);
 
     __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
   }
@@ -119,9 +120,9 @@ if (UseNewCode) {
   __ bind(loop);
 
   Label next_card;
-  __ ldrb(tmp, Address(addr, 0));
+  __ ldrb(scratch, Address(addr, 0));
   assert(G1CardTable::dirty_card_val() == 0, "must be to use cbz");
-  __ cbz(tmp, next_card);
+  __ cbz(scratch, next_card);
 
   // Card was not dirty. Dirty card and enqueue.
   assert(G1CardTable::dirty_card_val() == 0, "must be to use zr");
@@ -130,18 +131,18 @@ if (UseNewCode) {
   Address queue_index(rthread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
   Address buffer(rthread, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
 
-  __ ldr(tmp, queue_index);
-  __ cbz(tmp, runtime);
+  __ ldr(scratch, queue_index);
+  Label runtime;
+  __ cbz(scratch, runtime);
 
-  __ subi(tmp, wordSize);
-  __ str(queue_index, tmp);
+  __ sub(scratch, scratch, wordSize);
+  __ str(scratch, queue_index);
 
   __ ldr(rscratch2, buffer);
-  __ str(addr, Address(rscratch2, tmp));
+  __ str(addr, Address(rscratch2, scratch));
 
-  __ jmp(next_card);
+  __ b(next_card);
   
-  Label runtime;
   __ bind(runtime);
     
   __ push(saved_regs, sp);
@@ -152,16 +153,16 @@ if (UseNewCode) {
 
   __ bind(next_card);
 
-  __ addi(addr, sizeof(CardTable::CardValue));
+  __ add(addr, addr, sizeof(CardTable::CardValue));
   __ cmp(addr, count);
-  __ jmp(Assembler::LS, loop);
+  __ br(Assembler::LS, loop);
 
   __ bind(done);
   return;
 }
     
   __ push(saved_regs, sp);
-  __ mov(c_rarg0, start);
+  __ mov(c_rarg0, addr);
   __ mov(c_rarg1, count);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_array_post_entry), 2);
   __ pop(saved_regs, sp);
