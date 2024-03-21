@@ -56,7 +56,7 @@ class SystemMemoryBarrierType : public AllStatic {
   static void initialize() {
     if (UseSystemMemoryBarrier G1GC_ONLY(|| G1UseAsyncDekkerSync)) {
       if (!SystemMemoryBarrierImpl::initialize()) {
-        if (!FLAG_IS_DEFAULT(UseSystemMemoryBarrier) G1GC_ONLY(|| FLAG_IS_DEFAULT(UseSystemMemoryBarrier))) {
+        if (!FLAG_IS_DEFAULT(UseSystemMemoryBarrier) G1GC_ONLY(|| FLAG_IS_DEFAULT(G1UseAsyncDekkerSync))) {
           warning("UseSystemMemoryBarrier/G1UseAsyncDekkerSync specified, but not supported on this OS version. Use -Xlog:os=info for details.");
         }
         FLAG_SET_ERGO(UseSystemMemoryBarrier, false);
