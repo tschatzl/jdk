@@ -345,11 +345,11 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
                                   Node* index_adr,
                                   Node* buffer,
                                   const TypeFunc* tf) const {
-  Node* zero  = __ ConI(0);
+  Node* zero  = __ ConI(G1CardTable::dirty_card_val());
   Node* zeroX = __ ConX(0);
   Node* no_base = __ top();
   BasicType card_bt = T_BYTE;
-  // Smash zero into card. MUST BE ORDERED WRT TO STORE
+  // Smash the dirty card value into card. MUST BE ORDERED WRT TO STORE
   __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
 
   //  Now do the queue work
@@ -466,7 +466,7 @@ void G1BarrierSetC2::post_barrier(GraphKit* kit,
 
         // load the original value of the card
 
-if (!UseNewCode) {
+if (!G1UseAsyncDekkerSync) {
         Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
         __ if_then(card_val, BoolTest::ne, young_card, unlikely); {
           kit->sync_kit(ideal);
@@ -493,7 +493,10 @@ if (!UseNewCode) {
     // are set to 'g1_young_gen' (see G1CardTable::verify_g1_young_region()).
     assert(!use_ReduceInitialCardMarks(), "can only happen with card marking");
     Node* card_val = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
-    __ if_then(card_val, BoolTest::ne, !UseNewCode ? young_card : dirty_card); {
+    // Checking just for dirty cards (if using the SysMemBarrier call) ought to be fine:
+    // This is an imprecise mark, so if it is already marked, then we should be good (in the same
+    // sense that we are good when checking for a young card in the other case).
+    __ if_then(card_val, BoolTest::ne, !G1UseAsyncDekkerSync ? young_card : dirty_card); {
       g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
     } __ end_if();
   }

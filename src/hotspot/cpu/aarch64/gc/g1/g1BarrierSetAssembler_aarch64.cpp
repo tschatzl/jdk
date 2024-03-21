@@ -223,7 +223,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   // get the address of the card
   __ load_byte_map_base(tmp2);
   __ add(card_addr, card_addr, tmp2);
-  if (!UseNewCode) {
+  if (!G1UseAsyncDekkerSync) {
     __ ldrb(tmp2, Address(card_addr));
     __ cmpw(tmp2, (int)G1CardTable::g1_young_card_val());
     __ br(Assembler::EQ, done);
@@ -444,7 +444,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
   __ load_parameter(0, card_offset);
   __ lsr(card_offset, card_offset, CardTable::card_shift());
   __ load_byte_map_base(byte_map_base);
-  if (!UseNewCode) {
+  if (!G1UseAsyncDekkerSync) {
     __ ldrb(rscratch1, Address(byte_map_base, card_offset));
     __ cmpw(rscratch1, (int)G1CardTable::g1_young_card_val());
     __ br(Assembler::EQ, done);

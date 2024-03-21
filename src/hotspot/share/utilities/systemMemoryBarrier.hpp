@@ -54,12 +54,15 @@ template <typename SystemMemoryBarrierImpl>
 class SystemMemoryBarrierType : public AllStatic {
  public:
   static void initialize() {
-    if (UseSystemMemoryBarrier) {
+    if (UseSystemMemoryBarrier G1GC_ONLY(|| G1UseAsyncDekkerSync)) {
       if (!SystemMemoryBarrierImpl::initialize()) {
-        if (!FLAG_IS_DEFAULT(UseSystemMemoryBarrier)) {
-          warning("UseSystemMemoryBarrier specified, but not supported on this OS version. Use -Xlog:os=info for details.");
+        if (!FLAG_IS_DEFAULT(UseSystemMemoryBarrier) G1GC_ONLY(|| FLAG_IS_DEFAULT(UseSystemMemoryBarrier))) {
+          warning("UseSystemMemoryBarrier/G1UseAsyncDekkerSync specified, but not supported on this OS version. Use -Xlog:os=info for details.");
         }
         FLAG_SET_ERGO(UseSystemMemoryBarrier, false);
+#ifdef INCLUDE_G1GC
+        FLAG_SET_ERGO(G1UseAsyncDekkerSync, false);
+#endif
       }
     }
   }

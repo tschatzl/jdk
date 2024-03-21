@@ -1288,7 +1288,7 @@ const int ObjectAlignmentInBytes = 8;
           "supports sub-millisecond resolution with fractional values.")    \
           range(0, max_jlongDouble LP64_ONLY(/MICROUNITS))                  \
                                                                             \
-  product(bool, UseSystemMemoryBarrier, true,                              \
+  product(bool, UseSystemMemoryBarrier, false,                              \
           "Try to enable system memory barrier if supported by OS")         \
                                                                             \
   product(intx, NmethodSweepActivity, 4,                                    \

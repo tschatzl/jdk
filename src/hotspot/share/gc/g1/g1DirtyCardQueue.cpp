@@ -51,8 +51,8 @@
 #include "utilities/nonblockingQueue.inline.hpp"
 #include "utilities/pair.hpp"
 #include "utilities/quickSort.hpp"
-#include "utilities/ticks.hpp"
 #include "utilities/systemMemoryBarrier.hpp"
+#include "utilities/ticks.hpp"
 
 G1DirtyCardQueue::G1DirtyCardQueue(G1DirtyCardQueueSet* qset) :
   PtrQueue(qset),
@@ -448,7 +448,7 @@ public:
     // setting the regions' tops in humongous allocation path).
     // It's okay that reading region's top and reading region's type were racy
     // wrto each other. We need both set, in any order, to proceed.
-    if (!UseNewCode) {
+    if (!G1UseAsyncDekkerSync) {
       OrderAccess::fence();
     } else {
       SystemMemoryBarrier::emit();

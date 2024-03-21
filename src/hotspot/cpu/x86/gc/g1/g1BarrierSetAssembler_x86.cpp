@@ -103,30 +103,33 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
     assert(sizeof(CardTable::CardValue) == 1, "must be");
     
     Label done;
+    // Count may be zero. Nothing to do then.
     __ testptr(count, count);
-    __ jcc(Assembler::equal, done); // nothing to do if empty ref array.
+    __ jcc(Assembler::equal, done);
 
-    // Calculate end address.
+    // Calculate end address in "count".
     __ shlptr(count, LogBytesPerHeapOop);
     __ addptr(count, addr);
+
     // Calculate start card address in "addr".
     __ shrptr(addr, CardTable::card_shift());
     __ movptr(tmp, (intptr_t)barrier_set_cast<CardTableBarrierSet>(BarrierSet::barrier_set())->card_table()->byte_map_base());
     __ addptr(addr, tmp);
 
-    if (!UseNewCode) {
+    if (!G1UseAsyncDekkerSync) {
       // If the object starts in a young region, there is nothing to do.
       __ cmpb(Address(addr, 0), G1CardTable::g1_young_card_val());
       __ jcc(Assembler::equal, done);
       __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
     }
 
-    // Caclulate card address of last word.
+    // Caclulate address of card of last word in the array.
     __ subptr(count, 1);
     __ shrptr(count, CardTable::card_shift());
     __ addptr(count, tmp);
 
     Label loop;
+    // Iterate from start card to end card (inclusive).
     __ bind(loop);
 
     Label next_card;
@@ -382,7 +385,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
   __ movptr(cardtable, (intptr_t)ct->card_table()->byte_map_base());
   __ addptr(card_addr, cardtable);
 
-  if (!UseNewCode) {
+  if (!G1UseAsyncDekkerSync) {
     __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
     __ jcc(Assembler::equal, done);
 
@@ -617,7 +620,7 @@ void G1BarrierSetAssembler::generate_c1_post_barrier_runtime_stub(StubAssembler*
   __ addptr(card_addr, cardtable);
 
   NOT_LP64(__ get_thread(thread);)
-  if (!UseNewCode) {
+  if (!G1UseAsyncDekkerSync) {
     __ cmpb(Address(card_addr, 0), G1CardTable::g1_young_card_val());
     __ jcc(Assembler::equal, done);
 
