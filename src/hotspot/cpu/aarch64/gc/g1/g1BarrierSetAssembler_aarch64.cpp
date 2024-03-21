@@ -38,6 +38,7 @@
 #include "c1/c1_LIRAssembler.hpp"
 #include "c1/c1_MacroAssembler.hpp"
 #include "gc/g1/c1/g1BarrierSetC1.hpp"
+#include "cpu/x86/assembler_x86.hpp"
 #endif
 
 #define __ masm->
@@ -85,10 +86,82 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 }
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
-                                                             Register start, Register count, Register scratch, RegSet saved_regs) {
-  __ push(saved_regs, sp);
+                                                             Register addr, Register count, Register scratch, RegSet saved_regs) {
   assert_different_registers(start, count, scratch);
   assert_different_registers(c_rarg0, count);
+if (UseNewCode) {
+  Label done;
+  // Count may be zero. Nothing to do then.
+  __ cbz(count, done);
+
+  __ load_byte_map_base(tmp);
+
+  __ lsl(count, count, LogBytesPerHeapOop);
+  __ add(count, addr, count);
+  __ subi(count, 1);
+  __ lsr(count, count, CardTable::card_shift());
+  // Calculate end card address (last word in block) in "count".
+  __ add(count, count, tmp);
+
+  // Calculate start card address in "start".
+  __ lsr(addr, addr, CardTable::card_shift());
+  __ add(addr, addr, tmp);
+
+  if (!G1UseAsyncDekkerSync) {
+    // If the object starts in a young region, there is nothing to do.
+    __ ldrb(tmp, Address(addr, 0));
+    __ cmpw(tmp, (int)G1CardTable::g1_young_card_val());
+    __ br(Assembler::eq, done);
+
+    __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+  }
+
+  Label loop;
+  __ bind(loop);
+
+  Label next_card;
+  __ ldrb(tmp, Address(addr, 0));
+  assert(G1CardTable::dirty_card_val() == 0, "must be to use cbz");
+  __ cbz(tmp, next_card);
+
+  // Card was not dirty. Dirty card and enqueue.
+  assert(G1CardTable::dirty_card_val() == 0, "must be to use zr");
+  __ strb(zr, Address(addr, 0));
+
+  Address queue_index(rthread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
+  Address buffer(rthread, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
+
+  __ ldr(tmp, queue_index);
+  __ cbz(tmp, runtime);
+
+  __ subi(tmp, wordSize);
+  __ str(queue_index, tmp);
+
+  __ ldr(rscratch2, buffer);
+  __ str(addr, Address(rscratch2, tmp));
+
+  __ jmp(next_card);
+  
+  Label runtime;
+  __ bind(runtime);
+    
+  __ push(saved_regs, sp);
+  __ mov(c_rarg0, addr);
+  __ mov(c_rarg1, rthread);
+  __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), 2);
+  __ pop(saved_regs, sp);
+
+  __ bind(next_card);
+
+  __ addi(addr, sizeof(CardTable::CardValue));
+  __ cmp(addr, count);
+  __ jmp(Assembler::belowEqual, loop);
+
+  __ bind(done);
+  return;
+}
+    
+  __ push(saved_regs, sp);
   __ mov(c_rarg0, start);
   __ mov(c_rarg1, count);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_array_post_entry), 2);
