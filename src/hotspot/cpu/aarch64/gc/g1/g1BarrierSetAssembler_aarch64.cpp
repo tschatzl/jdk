@@ -38,7 +38,6 @@
 #include "c1/c1_LIRAssembler.hpp"
 #include "c1/c1_MacroAssembler.hpp"
 #include "gc/g1/c1/g1BarrierSetC1.hpp"
-#include "cpu/x86/assembler_x86.hpp"
 #endif
 
 #define __ masm->
@@ -155,7 +154,7 @@ if (UseNewCode) {
 
   __ addi(addr, sizeof(CardTable::CardValue));
   __ cmp(addr, count);
-  __ jmp(Assembler::belowEqual, loop);
+  __ jmp(Assembler::LS, loop);
 
   __ bind(done);
   return;
