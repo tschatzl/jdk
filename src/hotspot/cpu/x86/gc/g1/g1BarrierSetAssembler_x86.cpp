@@ -99,7 +99,7 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register tmp) {
 
-  if (true) {
+  if (UseNewCode) {
     assert(sizeof(CardTable::CardValue) == 1, "must be");
     
     Label done;
