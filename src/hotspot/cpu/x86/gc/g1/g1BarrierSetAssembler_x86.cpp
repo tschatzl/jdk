@@ -108,8 +108,8 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
     __ jcc(Assembler::equal, done);
 
     // Calculate end address in "count".
-    __ shlptr(count, LogBytesPerHeapOop);
-    __ addptr(count, addr);
+    Address::ScaleFactor scale = UseCompressedOops ? Address::times_4 : Address::times_8;
+    __ leaq(count, Address(addr, count, scale));
 
     // Calculate start card address in "addr".
     __ shrptr(addr, CardTable::card_shift());
@@ -132,11 +132,18 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
     // Iterate from start card to end card (inclusive).
     __ bind(loop);
 
-    Label next_card;
+    Label clean_card;
     __ cmpb(Address(addr, 0), G1CardTable::dirty_card_val());
-    __ jcc(Assembler::zero, next_card);
+    __ jcc(Assembler::notEqual, clean_card);
+    Label next_card;
+    __ bind(next_card);
+    __ addptr(addr, sizeof(CardTable::CardValue));
+    __ cmpptr(addr, count);
+    __ jcc(Assembler::belowEqual, loop);
+    __ jmp(done);
 
     // Card was not dirty. Dirty card and enqueue.
+    __ bind(clean_card);
     __ movb(Address(addr, 0), G1CardTable::dirty_card_val());
 
     Address queue_index(r15_thread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
@@ -167,10 +174,7 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
     __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), c_rarg0, c_rarg1);
     __ pop_call_clobbered_registers(false /* save_fpu */);
     
-    __ bind(next_card);
-    __ addptr(addr, sizeof(CardTable::CardValue));
-    __ cmpptr(addr, count);
-    __ jcc(Assembler::belowEqual, loop);
+    __ jmp(next_card);
 
     __ bind(done);
     return;
