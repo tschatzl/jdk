@@ -86,10 +86,10 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register scratch, RegSet saved_regs) {
-  assert_different_registers(scratch, rscratch2);
   assert_different_registers(addr, count, scratch);
   assert_different_registers(c_rarg0, count);
 if (UseNewCode) {
+  assert_different_registers(scratch, rscratch2);
   Label done;
   // Count may be zero. Nothing to do then.
   __ cbz(count, done);
@@ -134,7 +134,7 @@ if (UseNewCode) {
   __ strb(zr, Address(addr, 0));
 
   Address queue_index(rthread, in_bytes(G1ThreadLocalData::dirty_card_queue_index_offset()));
-  Address buffer(rthrG1UseAsyncead, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
+  Address buffer(rthread, in_bytes(G1ThreadLocalData::dirty_card_queue_buffer_offset()));
 
   __ ldr(scratch, queue_index);
   Label runtime;
