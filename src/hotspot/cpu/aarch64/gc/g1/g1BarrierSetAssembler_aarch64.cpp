@@ -85,13 +85,11 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 }
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
-                                                             Register addr, Register count, Register scratch, RegSet saved_regs) {
-  assert_different_registers(scratch, rscratch2);
-  assert_different_registers(addr, count, scratch);
-  assert_different_registers(c_rarg0, count);
-
+                                                             Register start, Register count, Register scratch, RegSet saved_regs) {
   __ push(saved_regs, sp);
-  __ mov(c_rarg0, addr);
+  assert_different_registers(start, count, scratch);
+  assert_different_registers(c_rarg0, count);
+  __ mov(c_rarg0, start);
   __ mov(c_rarg1, count);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_array_post_entry), 2);
   __ pop(saved_regs, sp);

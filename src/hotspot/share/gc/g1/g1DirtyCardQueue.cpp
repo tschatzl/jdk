@@ -453,6 +453,7 @@ public:
     } else {
       SystemMemoryBarrier::emit();
     }
+    compiler_barrier();
     sort_cards(first_clean_index);
     return refine_cleaned_cards(first_clean_index);
   }

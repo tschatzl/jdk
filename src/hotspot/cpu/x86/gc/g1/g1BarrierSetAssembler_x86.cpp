@@ -98,7 +98,6 @@ void G1BarrierSetAssembler::gen_write_ref_array_pre_barrier(MacroAssembler* masm
 
 void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* masm, DecoratorSet decorators,
                                                              Register addr, Register count, Register tmp) {
-
   __ push_call_clobbered_registers(false /* save_fpu */);
 #ifdef _LP64
   if (c_rarg0 == count) { // On win64 c_rarg0 == rcx

@@ -69,7 +69,5 @@ void G1CardTable::initialize(G1RegionToSpaceMapper* mapper) {
 }
 
 bool G1CardTable::is_in_young(const void* p) const {
-//  volatile CardValue* card = byte_for(p);
-  //return *card == G1CardTable::g1_young_card_val();
   return G1CollectedHeap::heap()->heap_region_containing(p)->is_young();
 }
