@@ -98,29 +98,36 @@ if (UseNewCode) {
 
   __ lsl(count, count, LogBytesPerHeapOop);
   __ add(count, addr, count);
+
+  // Calculate start card address in "addr".
+  __ lsr(addr, addr, CardTable::card_shift());
+  __ add(addr, addr, scratch);
+
+  // If the object starts in a young region, there is nothing to do.
+  __ ldrb(rscratch2, Address(addr, 0));
+  __ cmpw(rscratch2, (int)G1CardTable::g1_young_card_val());
+  __ br(Assembler::EQ, done);
+
+  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
+
   __ sub(count, count, 1);
   __ lsr(count, count, CardTable::card_shift());
   // Calculate end card address (last word in block) in "count".
   __ add(count, count, scratch);
 
-  // Calculate start card address in "start".
-  __ lsr(addr, addr, CardTable::card_shift());
-  __ add(addr, addr, scratch);
-
-  // If the object starts in a young region, there is nothing to do.
-  __ ldrb(scratch, Address(addr, 0));
-  __ cmpw(scratch, (int)G1CardTable::g1_young_card_val());
-  __ br(Assembler::EQ, done);
-
-  __ membar(Assembler::Membar_mask_bits(Assembler::StoreLoad));
-
   Label loop;
   __ bind(loop);
 
-  Label next_card;
   __ ldrb(scratch, Address(addr, 0));
-  assert(G1CardTable::dirty_card_val() == 0, "must be to use cbz");
-  __ cbz(scratch, next_card);
+  assert(G1CardTable::dirty_card_val() == 0, "must be to use cbnz");
+  __ cbnz(scratch, loop);
+  Label next_card;
+  __ bind(next_card);
+
+  __ add(addr, addr, sizeof(CardTable::CardValue));
+  __ cmp(addr, count);
+  __ br(Assembler::LS, loop);
+  __ b(done);
 
   // Card was not dirty. Dirty card and enqueue.
   assert(G1CardTable::dirty_card_val() == 0, "must be to use zr");
@@ -149,11 +156,7 @@ if (UseNewCode) {
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, G1BarrierSetRuntime::write_ref_field_post_entry), 2);
   __ pop(saved_regs, sp);
 
-  __ bind(next_card);
-
-  __ add(addr, addr, sizeof(CardTable::CardValue));
-  __ cmp(addr, count);
-  __ br(Assembler::LS, loop);
+  __ b(next_card);
 
   __ bind(done);
   return;
