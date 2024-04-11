@@ -165,11 +165,20 @@ class G1DirtyCardQueueSet: public PtrQueueSet {
   // mutator must start doing some of the concurrent refinement work.
   volatile size_t _mutator_refinement_threshold;
   DEFINE_PAD_MINUS_SIZE(2, DEFAULT_PADDING_SIZE, sizeof(size_t));
-  // Buffers ready for refinement.
+  // Buffers completed, i.e. filled with cards..
   // NonblockingQueue has inner padding of one cache line.
   NonblockingQueue<BufferNode, &BufferNode::next_ptr> _completed;
   // Add a trailer padding after NonblockingQueue.
   DEFINE_PAD_MINUS_SIZE(3, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
+  // Buffers ready for refinement.
+  // NonblockingQueue has inner padding of one cache line.
+  NonblockingQueue<BufferNode, &BufferNode::next_ptr> _ready;
+  // Add a trailer padding after NonblockingQueue.
+  DEFINE_PAD_MINUS_SIZE(4, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
+  // Upper bound on the number of cards in the completed and paused buffers.
+  volatile size_t _num_cards_ready;
+  DEFINE_PAD_MINUS_SIZE(5, DEFAULT_PADDING_SIZE, sizeof(size_t));
+
   // Buffers for which refinement is temporarily paused.
   // PausedBuffers has inner padding, including trailer.
   PausedBuffers _paused;
@@ -219,6 +228,15 @@ class G1DirtyCardQueueSet: public PtrQueueSet {
   // if none available.
   BufferNode* get_completed_buffer();
 
+  // FIXME: Thread-safe attempt to remove and return the first buffer from
+  // the _completed queue.
+  // Returns null if the queue is empty, or if a concurrent push/append
+  // interferes. It uses GlobalCounter critical section to avoid ABA problem.
+  BufferNode* dequeue_ready_buffer();
+  // FIXME: Remove and return a completed buffer from the list, or return null
+  // if none available.
+  BufferNode* get_ready_buffer();
+
   // Called when queue is full or has no buffer.
   void handle_zero_index(G1DirtyCardQueue& queue);
 
@@ -243,6 +261,7 @@ public:
   static void handle_zero_index_for_thread(Thread* t);
 
   virtual void enqueue_completed_buffer(BufferNode* node);
+  void enqueue_ready_buffer(BufferNode* node);
 
   // Upper bound on the number of cards currently in this queue set.
   // Read without synchronization.  The value may be high because there
@@ -258,17 +277,18 @@ public:
   using CardValue = G1CardTable::CardValue;
   void enqueue(G1DirtyCardQueue& queue, volatile CardValue* card_ptr);
 
-  // If there are more than stop_at cards in the completed buffers, pop
+  // FIXME: If there are more than stop_at cards in the completed buffers, pop
   // a buffer, refine its contents, and return true.  Otherwise return
   // false.  Updates stats.
   //
   // Stops processing a buffer if SuspendibleThreadSet::should_yield(),
   // recording the incompletely processed buffer for later processing of
   // the remainder.
-  bool refine_completed_buffer_concurrently(uint worker_id,
-                                            size_t stop_at,
-                                            G1ConcurrentRefineStats* stats);
+  bool refine_ready_buffer_concurrently(uint worker_id,
+                                        size_t stop_at,
+                                        G1ConcurrentRefineStats* stats);
 
+  bool move_from_completed_to_ready_queue(size_t stop_at, size_t min_ready_wanted);
   // If a full collection is happening, reset per-thread refinement stats and
   // partial logs, and release completed logs. The full collection will make
   // them all irrelevant.
