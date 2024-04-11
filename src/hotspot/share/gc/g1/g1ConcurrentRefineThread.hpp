@@ -81,11 +81,11 @@ protected:
     }
   };
 
-  // Helper for do_refinement_step implementations.  Try to perform some
+  // FIXME: Helper for do_refinement_step implementations.  Try to perform some
   // refinement work, limited by stop_at.  Returns true if any refinement work
   // was performed, false if no work available per stop_at.
   // precondition: this is the current thread.
-  bool try_refinement_step(size_t stop_at);
+  bool try_refinement_step();
 
   void report_active(const char* reason) const;
   void report_inactive(const char* reason, const G1ConcurrentRefineStats& stats) const;

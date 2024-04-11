@@ -23,6 +23,7 @@
  */
 
 #include "precompiled.hpp"
+#include "gc/shared/bufferNode.hpp"
 #include "gc/shared/bufferNodeList.hpp"
 #include "utilities/debug.hpp"
 
@@ -34,6 +35,13 @@ BufferNodeList::BufferNodeList(BufferNode* head,
                                size_t entry_count) :
   _head(head), _tail(tail), _entry_count(entry_count)
 {
-  assert((_head == nullptr) == (_tail == nullptr), "invariant");
+  assert((_head == nullptr) == (_tail == nullptr), "invariant " PTR_FORMAT " " PTR_FORMAT, p2i(_head), p2i(_tail));
   assert((_head == nullptr) == (_entry_count == 0), "invariant");
+#ifdef ASSERT
+  size_t actual = 0;
+  for (BufferNode* cur = head; cur != nullptr; cur = cur->next()) {
+    actual += cur->size();
+  }
+  assert(_entry_count == actual, "Expected %zu and actual %zu entry counts differ", _entry_count, actual);
+#endif
 }
