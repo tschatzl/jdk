@@ -182,7 +182,8 @@ public:
   // adjustment period has not expired, or because a timed or requested
   // adjustment could not be performed immediately and so was deferred.
   // precondition: current thread is the primary refinement thread.
-  bool adjust_threads_periodically();
+  bool needs_adjust_threads();
+  void try_adjust_threads();
 
   // The amount of time (in ms) the primary refinement thread should sleep
   // when it is inactive.  It requests adjustment whenever it is reactivated.
@@ -215,6 +216,7 @@ public:
                            size_t stop_at,
                            G1ConcurrentRefineStats* stats);
 
+  bool move_from_completed_to_ready_queue(size_t stop_at);
   // Iterate over all concurrent refinement threads applying the given closure.
   void threads_do(ThreadClosure *tc);
 };

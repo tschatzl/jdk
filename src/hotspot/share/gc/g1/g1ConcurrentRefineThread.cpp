@@ -120,9 +120,9 @@ bool G1ConcurrentRefineThread::maybe_deactivate() {
   }
 }
 
-bool G1ConcurrentRefineThread::try_refinement_step(size_t stop_at) {
+bool G1ConcurrentRefineThread::try_refinement_step() {
   assert(this == Thread::current(), "precondition");
-  return _cr->try_refinement_step(_worker_id, stop_at, &_refinement_stats);
+  return _cr->try_refinement_step(_worker_id, 0, &_refinement_stats);
 }
 
 void G1ConcurrentRefineThread::stop_service() {
@@ -135,6 +135,8 @@ class G1PrimaryConcurrentRefineThread final : public G1ConcurrentRefineThread {
   bool maybe_deactivate() override;
   void do_refinement_step() override;
   void track_usage() override;
+
+  bool move_from_completed_to_ready_queue(size_t stop_at);
 
 public:
   G1PrimaryConcurrentRefineThread(G1ConcurrentRefine* cr) :
@@ -150,7 +152,9 @@ bool G1PrimaryConcurrentRefineThread::wait_for_completed_buffers() {
   if (!requested_active() && !should_terminate()) {
     // Rather than trying to be smart about spurious wakeups, we just treat
     // them as timeouts.
-    ml.wait(cr()->adjust_threads_wait_ms());
+    uint64_t wait_timeout = cr()->adjust_threads_wait_ms();
+    log_debug(gc, refine)("wait timeout %zd", wait_timeout);
+    ml.wait(wait_timeout);
   }
   // Record adjustment needed whenever reactivating.
   cr()->record_thread_adjustment_needed();
@@ -171,13 +175,20 @@ void G1PrimaryConcurrentRefineThread::do_refinement_step() {
   // refinement.  However, adjustment may be pending but temporarily
   // blocked. In that case we *do* try refinement, rather than possibly
   // uselessly spinning while waiting for adjustment to succeed.
-  if (!cr()->adjust_threads_periodically()) {
-    // No adjustment, so try refinement, with the target as a cuttoff.
-    if (!try_refinement_step(cr()->pending_cards_target())) {
+  bool moved = move_from_completed_to_ready_queue(cr()->pending_cards_target());
+  if (cr()->needs_adjust_threads()) {
+    cr()->try_adjust_threads();
+  } else if (!moved) {
+    // No adjustment, so try refinement, with the target as a cut-off.
+    if (!try_refinement_step()) {
       // Refinement was cut off, so proceed with fewer threads.
       cr()->reduce_threads_wanted();
     }
   }
+}
+
+bool G1PrimaryConcurrentRefineThread::move_from_completed_to_ready_queue(size_t stop_at) {
+  return cr()->move_from_completed_to_ready_queue(stop_at);
 }
 
 void G1PrimaryConcurrentRefineThread::track_usage() {
@@ -219,7 +230,7 @@ void G1SecondaryConcurrentRefineThread::do_refinement_step() {
   // useless spinning by secondary threads until the primary thread notices.
   // (Useless spinning is still possible if there are no pending cards, but
   // that should rarely happen.)
-  try_refinement_step(0);
+  try_refinement_step();
 }
 
 G1ConcurrentRefineThread*

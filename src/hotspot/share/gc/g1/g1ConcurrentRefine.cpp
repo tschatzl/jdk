@@ -294,7 +294,7 @@ void G1ConcurrentRefine::adjust_young_list_target_length() {
   }
 }
 
-bool G1ConcurrentRefine::adjust_threads_periodically() {
+bool G1ConcurrentRefine::needs_adjust_threads() {
   assert_current_thread_is_primary_refinement_thread();
 
   // Check whether it's time to do a periodic adjustment.
@@ -305,28 +305,27 @@ bool G1ConcurrentRefine::adjust_threads_periodically() {
     }
   }
 
-  // If needed, try to adjust threads wanted.
-  if (_needs_adjust) {
-    // Getting used young bytes requires holding Heap_lock.  But we can't use
-    // normal lock and block until available.  Blocking on the lock could
-    // deadlock with a GC VMOp that is holding the lock and requesting a
-    // safepoint.  Instead try to lock, and if fail then skip adjustment for
-    // this iteration of the thread, do some refinement work, and retry the
-    // adjustment later.
-    if (Heap_lock->try_lock()) {
-      size_t used_bytes = _policy->estimate_used_young_bytes_locked();
-      Heap_lock->unlock();
-      adjust_young_list_target_length();
-      size_t young_bytes = _policy->young_list_target_length() * HeapRegion::GrainBytes;
-      size_t available_bytes = young_bytes - MIN2(young_bytes, used_bytes);
-      adjust_threads_wanted(available_bytes);
-      _needs_adjust = false;
-      _last_adjust = Ticks::now();
-      return true;
-    }
-  }
+  return _needs_adjust;
+}
 
-  return false;
+void G1ConcurrentRefine::try_adjust_threads() {
+  assert(_needs_adjust, "must be");
+  // Getting used young bytes requires holding Heap_lock.  But we can't use
+  // normal lock and block until available.  Blocking on the lock could
+  // deadlock with a GC VMOp that is holding the lock and requesting a
+  // safepoint.  Instead try to lock, and if fail then skip adjustment for
+  // this iteration of the thread, do some refinement work, and retry the
+  // adjustment later.
+  if (Heap_lock->try_lock()) {
+    size_t used_bytes = _policy->estimate_used_young_bytes_locked();
+    Heap_lock->unlock();
+    adjust_young_list_target_length();
+    size_t young_bytes = _policy->young_list_target_length() * HeapRegion::GrainBytes;
+    size_t available_bytes = young_bytes - MIN2(young_bytes, used_bytes);
+    adjust_threads_wanted(available_bytes);
+    _needs_adjust = false;
+    _last_adjust = Ticks::now();
+  }
 }
 
 bool G1ConcurrentRefine::is_in_last_adjustment_period() const {
@@ -432,5 +431,9 @@ bool G1ConcurrentRefine::try_refinement_step(uint worker_id,
                                              size_t stop_at,
                                              G1ConcurrentRefineStats* stats) {
   uint adjusted_id = worker_id + worker_id_offset();
-  return _dcqs.refine_completed_buffer_concurrently(adjusted_id, stop_at, stats);
+  return _dcqs.refine_ready_buffer_concurrently(adjusted_id, stop_at, stats);
+}
+
+bool G1ConcurrentRefine::move_from_completed_to_ready_queue(size_t stop_at) {
+  return _dcqs.move_from_completed_to_ready_queue(stop_at, Atomic::load(&_threads_wanted) * 7 + 1);
 }
