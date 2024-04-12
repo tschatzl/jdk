@@ -32,12 +32,12 @@ void G1CardTable::g1_mark_as_young(const MemRegion& mr) {
   CardValue *const first = byte_for(mr.start());
   CardValue *const last = byte_after(mr.last());
 
-  memset_with_concurrent_readers(first, g1_young_gen, pointer_delta(last, first, sizeof(CardValue)));
+  memset_with_concurrent_readers(first, !G1UseAsyncDekkerSync ? g1_young_card_val() : dirty_card_val(), pointer_delta(last, first, sizeof(CardValue)));
 }
 
 #ifndef PRODUCT
 void G1CardTable::verify_g1_young_region(MemRegion mr) {
-  verify_region(mr, g1_young_gen,  true);
+  verify_region(mr, !G1UseAsyncDekkerSync ? g1_young_card_val() : dirty_card_val(),  true);
 }
 #endif
 
@@ -69,6 +69,7 @@ void G1CardTable::initialize(G1RegionToSpaceMapper* mapper) {
 }
 
 bool G1CardTable::is_in_young(const void* p) const {
-  volatile CardValue* card = byte_for(p);
-  return *card == G1CardTable::g1_young_card_val();
+//  volatile CardValue* card = byte_for(p);
+  //return *card == G1CardTable::g1_young_card_val();
+  return G1CollectedHeap::heap()->heap_region_containing(p)->is_young();
 }

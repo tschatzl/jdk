@@ -216,7 +216,9 @@ public:
                            size_t stop_at,
                            G1ConcurrentRefineStats* stats);
 
-  bool move_from_completed_to_ready_queue(size_t stop_at);
+  bool move_from_completed_to_ready_queue(uint worker_id,
+                                          size_t stop_at,
+                                          G1ConcurrentRefineStats* stats);
   // Iterate over all concurrent refinement threads applying the given closure.
   void threads_do(ThreadClosure *tc);
 };

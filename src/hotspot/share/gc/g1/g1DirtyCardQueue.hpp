@@ -271,6 +271,8 @@ public:
   void merge_bufferlists(G1RedirtyCardsQueueSet* src);
 
   BufferNodeList take_all_completed_buffers();
+  void redirty_ready_buffers();
+  void print_buffers();
 
   void flush_queue(G1DirtyCardQueue& queue);
 
@@ -288,7 +290,7 @@ public:
                                         size_t stop_at,
                                         G1ConcurrentRefineStats* stats);
 
-  bool move_from_completed_to_ready_queue(size_t stop_at, size_t min_ready_wanted);
+  bool move_from_completed_to_ready_queue(uint worker_id, size_t stop_at, G1ConcurrentRefineStats* stats, size_t min_ready_wanted);
   // If a full collection is happening, reset per-thread refinement stats and
   // partial logs, and release completed logs. The full collection will make
   // them all irrelevant.

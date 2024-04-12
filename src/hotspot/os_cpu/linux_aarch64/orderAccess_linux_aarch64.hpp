@@ -30,6 +30,10 @@
 
 #include "runtime/vm_version.hpp"
 
+static inline void compiler_barrier() {
+  __asm__ volatile ("" : : : "memory");
+}
+
 // Implementation of class OrderAccess.
 
 inline void OrderAccess::loadload()   { acquire(); }

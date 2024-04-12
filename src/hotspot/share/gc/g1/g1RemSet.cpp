@@ -1214,6 +1214,12 @@ class G1MergeHeapRootsTask : public WorkerTask {
     size_t _cards_skipped;
 
     void process_card(CardValue* card_ptr) {
+      // FIXME: With async dekker sync part of the log buffers contain ones that
+      // are cleared already; to avoid special handling them elsewhere for now,
+      // just mark everything in that case
+      if (G1UseAsyncDekkerSync && *card_ptr == G1CardTable::clean_card_val()) {
+        *card_ptr = G1CardTable::dirty_card_val();
+      }
       if (*card_ptr == G1CardTable::dirty_card_val()) {
         uint const region_idx = _ct->region_idx_for(card_ptr);
         _scan_state->add_dirty_region(region_idx);
@@ -1295,6 +1301,10 @@ public:
   {
     if (initial_evacuation) {
       Ticks start = Ticks::now();
+      if (G1UseAsyncDekkerSync) {
+        G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
+        dcqs.print_buffers();
+      }
 
       _dirty_card_buffers = NEW_C_HEAP_ARRAY(BufferNode::Stack, num_workers, mtGC);
       for (uint i = 0; i < num_workers; i++) {

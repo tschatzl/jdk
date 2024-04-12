@@ -52,6 +52,7 @@
 #include "utilities/nonblockingQueue.inline.hpp"
 #include "utilities/pair.hpp"
 #include "utilities/quickSort.hpp"
+#include "utilities/systemMemoryBarrier.hpp"
 #include "utilities/ticks.hpp"
 
 G1DirtyCardQueue::G1DirtyCardQueue(G1DirtyCardQueueSet* qset) :
@@ -396,6 +397,47 @@ BufferNodeList G1DirtyCardQueueSet::take_all_completed_buffers() {
   }
 }
 
+void G1DirtyCardQueueSet::redirty_ready_buffers() {
+  for (BufferNode* cur = _ready.first(); !_ready.is_end(cur); cur = cur->next()) {
+    class DirtyCardsClosure : public G1CardTableEntryClosure {
+      G1CardTable* _ct;
+    public:
+      DirtyCardsClosure() : _ct(G1CollectedHeap::heap()->card_table()) { }
+      void do_card_ptr(CardValue* card_ptr, uint worker_id) override {
+        _ct->mark_clean_as_dirty(card_ptr);
+      }
+    } cl;
+    cl.apply_to_buffer(cur, 0);
+  }
+}
+
+void G1DirtyCardQueueSet::print_buffers() {
+  LogTarget(Trace, gc, refine) lt;
+  LogStream ls(lt);
+
+  class DirtyCardsClosure : public G1CardTableEntryClosure {
+    G1CardTable* _ct;
+    outputStream* _s;
+  public:
+    DirtyCardsClosure(outputStream* s) : _ct(G1CollectedHeap::heap()->card_table()), _s(s) { }
+    void do_card_ptr(CardValue* card_ptr, uint worker_id) override {
+      _s->print(PTR_FORMAT " ", p2i(_ct->addr_for(card_ptr)));
+    }
+  } cl(&ls);
+
+  ls.print_cr("complete");
+  for (BufferNode* cur = _completed.first(); !_completed.is_end(cur); cur = cur->next()) {
+    cl.apply_to_buffer(cur, 0);
+    ls.cr();
+  }
+
+  ls.print_cr("ready");
+  for (BufferNode* cur = _ready.first(); !_ready.is_end(cur); cur = cur->next()) {
+    cl.apply_to_buffer(cur, 0);
+    ls.cr();
+  }
+}
+
 class G1RefineBufferedCards : public StackObj {
   BufferNode* const _node;
   CardTable::CardValue** const _node_buffer;
@@ -412,15 +454,16 @@ class G1RefineBufferedCards : public StackObj {
   // Sorts the cards from start_index to _node_buffer_capacity in *decreasing*
   // address order. Tests showed that this order is preferable to not sorting
   // or increasing address order.
-  void sort_cards(size_t start_index) {
+  void sort_cards() {
+    const size_t start_index = _node->index();
     QuickSort::sort(&_node_buffer[start_index],
                     _node_buffer_capacity - start_index,
                     compare_cards,
                     false);
   }
 
-  // Returns the index to the first clean card in the buffer.
-  size_t clean_cards() {
+  // Removes cards from the buffer, updating the buffer's index..
+  void clean_cards() {
     const size_t start = _node->index();
     assert(start <= _node_buffer_capacity, "invariant");
 
@@ -451,13 +494,15 @@ class G1RefineBufferedCards : public StackObj {
     const size_t first_clean = dst - _node_buffer;
     assert(first_clean >= start && first_clean <= _node_buffer_capacity, "invariant");
     // Discarded cards are considered as refined.
-    _stats->inc_refined_cards(first_clean - start);
-    _stats->inc_precleaned_cards(first_clean - start);
-    return first_clean;
+    const size_t num_cleaned = first_clean - start;
+    _stats->inc_refined_cards(num_cleaned);
+    _stats->inc_precleaned_cards(num_cleaned);
+    _node->set_index(start + num_cleaned);
   }
 
-  bool refine_cleaned_cards(size_t start_index) {
+  bool refine_cleaned_cards() {
     bool result = true;
+    const size_t start_index = _node->index();
     size_t i = start_index;
     for ( ; i < _node_buffer_capacity; ++i) {
       if (SuspendibleThreadSet::should_yield()) {
@@ -489,10 +534,24 @@ public:
     _stats(stats),
     _g1rs(G1CollectedHeap::heap()->rem_set()) {}
 
+  bool clean() {
+    clean_cards();
+    return _node->is_empty();
+  }
+
   bool refine() {
-    size_t first_clean_index = clean_cards();
-    if (first_clean_index == _node_buffer_capacity) {
-      _node->set_index(first_clean_index);
+    sort_cards();
+    return refine_cleaned_cards();
+  }
+};
+
+bool G1DirtyCardQueueSet::refine_buffer(BufferNode* node,
+                                        uint worker_id,
+                                        G1ConcurrentRefineStats* stats) {
+  Ticks start_time = Ticks::now();
+  G1RefineBufferedCards buffered_cards(node, worker_id, stats);
+  if (!G1UseAsyncDekkerSync) {
+    if (buffered_cards.clean()) {
       return true;
     }
     // This fence serves two purposes. First, the cards must be cleaned
@@ -504,16 +563,7 @@ public:
     // It's okay that reading region's top and reading region's type were racy
     // wrto each other. We need both set, in any order, to proceed.
     OrderAccess::fence();
-    sort_cards(first_clean_index);
-    return refine_cleaned_cards(first_clean_index);
   }
-};
-
-bool G1DirtyCardQueueSet::refine_buffer(BufferNode* node,
-                                        uint worker_id,
-                                        G1ConcurrentRefineStats* stats) {
-  Ticks start_time = Ticks::now();
-  G1RefineBufferedCards buffered_cards(node, worker_id, stats);
   bool result = buffered_cards.refine();
   stats->inc_refinement_time(Ticks::now() - start_time);
   return result;
@@ -582,7 +632,7 @@ bool G1DirtyCardQueueSet::refine_ready_buffer_concurrently(uint worker_id,
   return true;
 }
 
-bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(size_t stop_at, size_t min_ready_wanted) {
+bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, size_t stop_at, G1ConcurrentRefineStats* stats, size_t min_ready_wanted) {
   size_t num_ready_start = Atomic::load(&_num_cards_ready);
   if (num_ready_start > min_ready_wanted) {
     return false;
@@ -600,19 +650,20 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(size_t stop_at, siz
     BufferNode* node = get_completed_buffer();
     if (node == nullptr) break; // Didn't get a buffer to move. Means that everything is in the ready buffers anyway?
 
-    capacity = node->capacity();
-    // "random" work
-    class DirtyNodeClosure : public G1CardTableEntryClosure {
-      G1CardTable* _ct;
-    public:
-      DirtyNodeClosure() : _ct(G1CollectedHeap::heap()->card_table()) { }
-      void do_card_ptr(CardValue* card_ptr, uint worker_id) override {
-        _ct->mark_clean_as_dirty(card_ptr);
+    if (G1UseAsyncDekkerSync) {
+      G1RefineBufferedCards buffered_cards(node, worker_id, stats);
+      bool all_cleaned = buffered_cards.clean();
+      // Nothing to do with the buffer counter wrt to cleaned cards. This buffer
+      // is completely independent of those now.
+      if (all_cleaned) {
+        handle_refined_buffer(node, true /* fully_processed */);
+        // Intentionally do not count this buffer as moved.
+        continue;
+      } else {
+        SystemMemoryBarrier::emit();
       }
-      
-    } cl;
-    cl.apply_to_buffer(node, 0);
-    // "random" work
+    }
+    capacity = node->capacity();
     enqueue_ready_buffer(node);
     num_moved++;
   }
