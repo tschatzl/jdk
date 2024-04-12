@@ -93,6 +93,8 @@ class G1YoungCollector {
 
   void wait_for_root_region_scanning();
 
+  void redirty_ready_buffers();
+
   void calculate_collection_set(G1EvacInfo* evacuation_info, double target_pause_time_ms);
 
   void set_young_collection_default_active_worker_threads();

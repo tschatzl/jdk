@@ -193,6 +193,7 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
 
   double _cur_collection_start_sec;
   double _root_region_scan_wait_time_ms;
+  double _redirty_ready_buffers_time_ms;
 
   double _external_accounted_time_ms;
 
@@ -321,6 +322,10 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
   void record_root_region_scan_wait_time(double time_ms) {
     _root_region_scan_wait_time_ms = time_ms;
   }
+  
+  void record_redirty_ready_buffers_time(double time_ms) {
+    _redirty_ready_buffers_time_ms = time_ms;
+  }
 
   void record_serial_free_cset_time_ms(double time_ms) {
     _recorded_serial_free_cset_time_ms = time_ms;
@@ -399,6 +404,10 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
 
   double root_region_scan_wait_time_ms() {
     return _root_region_scan_wait_time_ms;
+  }
+
+  double redirty_ready_buffers_time_ms() {
+    return _redirty_ready_buffers_time_ms;
   }
 
   double young_cset_choice_time_ms() {

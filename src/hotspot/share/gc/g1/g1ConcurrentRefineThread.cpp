@@ -188,7 +188,7 @@ void G1PrimaryConcurrentRefineThread::do_refinement_step() {
 }
 
 bool G1PrimaryConcurrentRefineThread::move_from_completed_to_ready_queue(size_t stop_at) {
-  return cr()->move_from_completed_to_ready_queue(stop_at);
+  return cr()->move_from_completed_to_ready_queue(worker_id(), stop_at, refinement_stats());
 }
 
 void G1PrimaryConcurrentRefineThread::track_usage() {
