@@ -292,8 +292,8 @@ G1CollectedHeap::humongous_obj_allocate_initialize_regions(HeapRegion* first_hr,
   // a bit tricky given that it can happen concurrently with
   // refinement threads refining cards on these regions and
   // potentially wanting to refine the BOT as they are scanning
-  // those cards (this can happen shortly after a cleanup; see CR
-  // 6991377). So we have to set up the region(s) carefully and in
+  // those cards (this can happen shortly after freeing empty regions
+  // during marking). So we have to set up the region(s) carefully and in
   // a specific order.
 
   // The passed in hr will be the "starts humongous" region. The header

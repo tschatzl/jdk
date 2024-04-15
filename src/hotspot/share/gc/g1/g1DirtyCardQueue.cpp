@@ -554,16 +554,16 @@ bool G1DirtyCardQueueSet::refine_buffer(BufferNode* node,
     if (buffered_cards.clean()) {
       return true;
     }
-    // This fence serves two purposes. First, the cards must be cleaned
-    // before processing the contents. Second, we can't proceed with
-    // processing a region until after the read of the region's top in
-    // collect_and_clean_cards(), for synchronization with possibly concurrent
-    // humongous object allocation (see comment at the StoreStore fence before
-    // setting the regions' tops in humongous allocation path).
-    // It's okay that reading region's top and reading region's type were racy
-    // wrto each other. We need both set, in any order, to proceed.
-    OrderAccess::fence();
   }
+  // This fence serves two purposes. First, the cards must be cleaned
+  // before processing the contents. Second, we can't proceed with
+  // processing a region until after the read of the region's top in
+  // collect_and_clean_cards(), for synchronization with possibly concurrent
+  // humongous object allocation (see comment at the StoreStore fence before
+  // setting the regions' tops in humongous allocation path).
+  // It's okay that reading region's top and reading region's type were racy
+  // wrto each other. We need both set, in any order, to proceed.
+  OrderAccess::fence();
   bool result = buffered_cards.refine();
   stats->inc_refinement_time(Ticks::now() - start_time);
   return result;
