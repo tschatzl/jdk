@@ -36,6 +36,9 @@ typedef LinuxSystemMemoryBarrier SystemMemoryBarrierDefault;
 #elif defined(_WINDOWS)
 #include "systemMemoryBarrier_windows.hpp"
 typedef WindowsSystemMemoryBarrier SystemMemoryBarrierDefault;
+#elif defined(__APPLE__)
+#include "systemMemoryBarrier_bsd.hpp"
+typedef BSDSystemMemoryBarrier SystemMemoryBarrierDefault;
 #else
 class NoSystemMemoryBarrier {
  public:
