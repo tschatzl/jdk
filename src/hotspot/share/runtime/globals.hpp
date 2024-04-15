@@ -1299,7 +1299,7 @@ const int ObjectAlignmentInBytes = 8;
           "max number of compiled code units to print in error log")        \
           range(0, VMError::max_error_log_print_code)                       \
                                                                             \
-  develop(int, MaxElementPrintSize, 256,                                    \
+  develop(int, MaxElementPrintSize, 8,                                    \
           "maximum number of elements to print")                            \
                                                                             \
   develop(intx, MaxSubklassPrintSize, 4,                                    \
