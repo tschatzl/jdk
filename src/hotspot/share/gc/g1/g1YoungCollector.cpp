@@ -259,15 +259,6 @@ void G1YoungCollector::wait_for_root_region_scanning() {
   phase_times()->record_root_region_scan_wait_time(wait_time.seconds() * MILLIUNITS);
 }
 
-void G1YoungCollector::redirty_ready_buffers() {
-  Ticks start = Ticks::now();
-
-  G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
-  dcqs.redirty_ready_buffers();
-
-  phase_times()->record_redirty_ready_buffers_time((Ticks::now() - start).seconds() * MILLIUNITS);
-}
-
 class G1PrintCollectionSetClosure : public HeapRegionClosure {
 public:
   virtual bool do_heap_region(HeapRegion* r) {
@@ -1077,9 +1068,10 @@ void G1YoungCollector::collect() {
   // just to do that).
   wait_for_root_region_scanning();
 
-  if (G1UseAsyncDekkerSync && VerifyBeforeGC) {
-    // FIXME: remove; make sure that verification still works!
-    redirty_ready_buffers();
+  if (G1UseAsyncDekkerSync) {
+    log_trace(gc,refine)("print buffers at gc start");
+    G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
+    dcqs.print_buffers();
   }
   
   G1YoungGCVerifierMark vm(this);

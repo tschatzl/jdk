@@ -183,7 +183,6 @@ void G1GCPhaseTimes::reset() {
   _cur_ref_proc_time_ms = 0.0;
   _cur_collection_start_sec = 0.0;
   _root_region_scan_wait_time_ms = 0.0;
-  _redirty_ready_buffers_time_ms = 0.0;
   _external_accounted_time_ms = 0.0;
   _recorded_prepare_heap_roots_time_ms = 0.0;
   _recorded_young_cset_choice_time_ms = 0.0;
@@ -553,10 +552,6 @@ void G1GCPhaseTimes::print(bool evacuation_failed) {
     debug_time("Root Region Scan Waiting", _root_region_scan_wait_time_ms);
   }
 
-  if (G1UseAsyncDekkerSync) {
-    debug_time("Redirty Ready Buffers", _redirty_ready_buffers_time_ms);
-  }
-
   // Check if some time has been recorded for verification and only then print
   // the message. We do not use Verify*GC here to print because VerifyGCType
   // further limits actual verification.
@@ -567,7 +562,6 @@ void G1GCPhaseTimes::print(bool evacuation_failed) {
   double accounted_ms = 0.0;
 
   accounted_ms += _root_region_scan_wait_time_ms;
-  accounted_ms += _redirty_ready_buffers_time_ms;
   accounted_ms += _cur_verify_before_time_ms;
 
   accounted_ms += print_pre_evacuate_collection_set();

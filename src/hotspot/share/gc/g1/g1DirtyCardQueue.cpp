@@ -656,6 +656,7 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
       // Nothing to do with the buffer counter wrt to cleaned cards. This buffer
       // is completely independent of those now.
       if (all_cleaned) {
+        log_trace(gc, refine)("dropped " PTR_FORMAT, p2i(node));
         handle_refined_buffer(node, true /* fully_processed */);
         // Intentionally do not count this buffer as moved.
         continue;
