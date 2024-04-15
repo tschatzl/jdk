@@ -69,7 +69,7 @@ static uint par_ids_start() { return 0; }
 
 G1DirtyCardQueueSet::G1DirtyCardQueueSet(BufferNode::Allocator* allocator) :
   PtrQueueSet(allocator),
-  _num_cards(0),
+  _num_cards_completed(0),
   _mutator_refinement_threshold(SIZE_MAX),
   _completed(),
   _ready(),
@@ -122,14 +122,14 @@ void G1DirtyCardQueueSet::handle_zero_index_for_thread(Thread* t) {
 }
 
 size_t G1DirtyCardQueueSet::num_cards() const {
-  return Atomic::load(&_num_cards) + Atomic::load(&_num_cards_ready);
+  return Atomic::load(&_num_cards_completed) + Atomic::load(&_num_cards_ready);
 }
 
 void G1DirtyCardQueueSet::enqueue_completed_buffer(BufferNode* cbn) {
   assert(cbn != nullptr, "precondition");
   // Increment _num_cards before adding to queue, so queue removal doesn't
   // need to deal with _num_cards possibly going negative.
-  Atomic::add(&_num_cards, cbn->size());
+  Atomic::add(&_num_cards_completed, cbn->size());
   // Perform push in CS.  The old tail may be popped while the push is
   // observing it (attaching it to the new buffer).  We need to ensure it
   // can't be reused until the push completes, to avoid ABA problems.
@@ -165,7 +165,7 @@ BufferNode* G1DirtyCardQueueSet::get_completed_buffer() {
     result = dequeue_completed_buffer();
     if (result == nullptr) return nullptr;
   }
-  Atomic::sub(&_num_cards, result->size());
+  Atomic::sub(&_num_cards_completed, result->size());
   return result;
 }
 
@@ -334,7 +334,7 @@ void G1DirtyCardQueueSet::record_paused_buffer(BufferNode* node) {
   // notification checking after the coming safepoint if it doesn't GC.
   // Note that this means the queue's _num_cards differs from the number
   // of cards in the queued buffers when there are paused buffers.
-  Atomic::add(&_num_cards, node->size());
+  Atomic::add(&_num_cards_completed, node->size());
   _paused.add(node);
 }
 
@@ -357,7 +357,7 @@ void G1DirtyCardQueueSet::enqueue_all_paused_buffers() {
 }
 
 void G1DirtyCardQueueSet::abandon_completed_buffers() {
-  BufferNodeList list = take_all_completed_buffers();
+  BufferNodeList list = take_all_buffers();
   BufferNode* buffers_to_delete = list._head;
   while (buffers_to_delete != nullptr) {
     BufferNode* bn = buffers_to_delete;
@@ -373,8 +373,22 @@ void G1DirtyCardQueueSet::merge_bufferlists(G1RedirtyCardsQueueSet* src) {
   assert(allocator() == src->allocator(), "precondition");
   const BufferNodeList from = src->take_all_completed_buffers();
   if (from._head != nullptr) {
-    Atomic::add(&_num_cards, from._entry_count);
+    Atomic::add(&_num_cards_completed, from._entry_count);
     _completed.append(*from._head, *from._tail);
+  }
+}
+
+BufferNodeList G1DirtyCardQueueSet::take_all_buffers() {
+  BufferNodeList completed = take_all_completed_buffers();
+  BufferNodeList ready = take_all_ready_buffers();
+
+  if (completed._entry_count == 0) {
+    return ready;
+  } else if (ready._entry_count == 0) {
+    return completed;
+  } else {
+    completed._tail = ready._head;
+    return BufferNodeList(completed._head, ready._tail, completed._entry_count + ready._entry_count);
   }
 }
 
@@ -382,19 +396,17 @@ BufferNodeList G1DirtyCardQueueSet::take_all_completed_buffers() {
   enqueue_all_paused_buffers();
   verify_num_cards();
   Pair<BufferNode*, BufferNode*> completed = _completed.take_all();
+  size_t cards_completed = Atomic::load(&_num_cards_completed);
+  Atomic::store(&_num_cards_completed, size_t(0));
+  return BufferNodeList(completed.first, completed.second, cards_completed);
+}
+
+BufferNodeList G1DirtyCardQueueSet::take_all_ready_buffers() {
+  verify_num_cards();
   Pair<BufferNode*, BufferNode*> ready = _ready.take_all();
-  size_t result = num_cards();
-  Atomic::store(&_num_cards, size_t(0));
+  size_t cards_completed = Atomic::load(&_num_cards_ready);
   Atomic::store(&_num_cards_ready, size_t(0));
-  if (completed.first == nullptr) {
-    return BufferNodeList(ready.first, ready.second, result);
-  } else if (ready.first == nullptr) {
-    return BufferNodeList(completed.first, completed.second, result);    
-  } else {
-    assert(completed.second != nullptr, "must be");
-    completed.second->set_next(ready.first);
-    return BufferNodeList(completed.first, ready.second, result);
-  }
+  return BufferNodeList(ready.first, ready.second, cards_completed);
 }
 
 void G1DirtyCardQueueSet::redirty_ready_buffers() {
@@ -414,6 +426,10 @@ void G1DirtyCardQueueSet::redirty_ready_buffers() {
 void G1DirtyCardQueueSet::print_buffers() {
   LogTarget(Trace, gc, refine) lt;
   LogStream ls(lt);
+
+  if (!lt.is_enabled()) {
+    return;
+  }
 
   class DirtyCardsClosure : public G1CardTableEntryClosure {
     G1CardTable* _ct;
@@ -588,7 +604,7 @@ void G1DirtyCardQueueSet::handle_completed_buffer(BufferNode* new_node,
   enqueue_completed_buffer(new_node);
 
   // No need for mutator refinement if number of cards is below limit.
-  if (Atomic::load(&_num_cards) <= Atomic::load(&_mutator_refinement_threshold)) {
+  if (Atomic::load(&_num_cards_completed) <= Atomic::load(&_mutator_refinement_threshold)) {
     return;
   }
 
@@ -670,7 +686,7 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
   }
   if (num_moved > 0) {
     log_debug(gc, refine)("Wanted %zu moved %zu buffers from completed (%zu) to ready (%zu, initial %zu) stop_at %zu (time: %.2fms)",
-                          to_get, num_moved, align_up(Atomic::load(&_num_cards), capacity) / capacity, align_up(Atomic::load(&_num_cards_ready), capacity) / capacity, align_up(num_ready_start, capacity) / capacity, stop_at,
+                          to_get, num_moved, align_up(Atomic::load(&_num_cards_completed), capacity) / capacity, align_up(Atomic::load(&_num_cards_ready), capacity) / capacity, align_up(num_ready_start, capacity) / capacity, stop_at,
                           (Ticks::now() - start).seconds() * MILLIUNITS);
   }
   return true;
