@@ -1301,10 +1301,6 @@ public:
   {
     if (initial_evacuation) {
       Ticks start = Ticks::now();
-      if (G1UseAsyncDekkerSync) {
-        G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
-        dcqs.print_buffers();
-      }
 
       _dirty_card_buffers = NEW_C_HEAP_ARRAY(BufferNode::Stack, num_workers, mtGC);
       for (uint i = 0; i < num_workers; i++) {

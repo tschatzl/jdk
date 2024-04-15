@@ -44,5 +44,5 @@
  * @build vm.mlvm.mixed.func.regression.b7127687.Test
  * @run driver vm.mlvm.share.IndifiedClassesBuilder
  *
- * @run main/othervm -Xmx128m vm.mlvm.mixed.func.regression.b7127687.Test
+ * @run main/othervm -Xlog:gc,gc+refine=trace -Xmx128m vm.mlvm.mixed.func.regression.b7127687.Test
  */

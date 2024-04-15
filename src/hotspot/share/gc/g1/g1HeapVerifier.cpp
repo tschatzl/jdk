@@ -513,6 +513,9 @@ void G1HeapVerifier::prepare_for_verify() {
   if (SafepointSynchronize::is_at_safepoint() || ! UseTLAB) {
     _g1h->ensure_parsability(false);
   }
+
+  G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
+  dcqs.redirty_ready_buffers();
 }
 
 void G1HeapVerifier::verify(VerifyOption vo, const char* msg) {
