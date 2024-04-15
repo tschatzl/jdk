@@ -153,7 +153,7 @@ bool G1PrimaryConcurrentRefineThread::wait_for_completed_buffers() {
     // Rather than trying to be smart about spurious wakeups, we just treat
     // them as timeouts.
     uint64_t wait_timeout = cr()->adjust_threads_wait_ms();
-    log_debug(gc, refine)("wait timeout %zd", wait_timeout);
+    log_debug(gc, refine)("wait timeout %llu", wait_timeout); // FIXME: remove
     ml.wait(wait_timeout);
   }
   // Record adjustment needed whenever reactivating.
