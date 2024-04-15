@@ -159,7 +159,7 @@ class G1DirtyCardQueueSet: public PtrQueueSet {
 
   DEFINE_PAD_MINUS_SIZE(0, DEFAULT_PADDING_SIZE, 0);
   // Upper bound on the number of cards in the completed and paused buffers.
-  volatile size_t _num_cards;
+  volatile size_t _num_cards_completed;
   DEFINE_PAD_MINUS_SIZE(1, DEFAULT_PADDING_SIZE, sizeof(size_t));
   // If the queue contains more cards than configured here, the
   // mutator must start doing some of the concurrent refinement work.
@@ -270,7 +270,11 @@ public:
 
   void merge_bufferlists(G1RedirtyCardsQueueSet* src);
 
+  BufferNodeList take_all_buffers();
+
   BufferNodeList take_all_completed_buffers();
+  BufferNodeList take_all_ready_buffers();
+
   void redirty_ready_buffers();
   void print_buffers();
 
