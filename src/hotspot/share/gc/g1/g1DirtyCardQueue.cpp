@@ -663,26 +663,53 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
   size_t to_get = MAX2(align_up(num_completed_start - stop_at, 256) / 256, min_ready_wanted);
   size_t num_moved = 0;
   while (num_moved != to_get) {
-    BufferNode* node = get_completed_buffer();
-    if (node == nullptr) break; // Didn't get a buffer to move. Means that everything is in the ready buffers anyway?
+
+    size_t const batch_size = to_get;//MIN2(to_get, (size_t)100); // FIXME: smaller batch size?
+    size_t cur_size = 0;
+    BufferNode* batch = nullptr;
+    
+    while (cur_size != batch_size) {
+      BufferNode* node = get_completed_buffer();
+      if (node == nullptr) {
+        break; // Didn't get a buffer to move. Means that everything is in the ready buffers anyway?        
+      }
+
+      if (G1UseAsyncDekkerSync) {
+        G1RefineBufferedCards buffered_cards(node, worker_id, stats);
+        bool all_cleaned = buffered_cards.clean();
+        // Nothing to do with the buffer counter wrt to cleaned cards. This buffer
+        // is completely independent of those now.
+        if (all_cleaned) {
+          log_trace(gc, refine)("dropped " PTR_FORMAT, p2i(node));
+          handle_refined_buffer(node, true /* fully_processed */);
+          continue;
+        }
+      }
+
+      cur_size++;
+
+      node->set_next(batch);
+      batch = node;
+    }
+
+    if (cur_size == 0) {
+      // Did not get anything in this batch. Exit.
+      break;
+    }
 
     if (G1UseAsyncDekkerSync) {
-      G1RefineBufferedCards buffered_cards(node, worker_id, stats);
-      bool all_cleaned = buffered_cards.clean();
-      // Nothing to do with the buffer counter wrt to cleaned cards. This buffer
-      // is completely independent of those now.
-      if (all_cleaned) {
-        log_trace(gc, refine)("dropped " PTR_FORMAT, p2i(node));
-        handle_refined_buffer(node, true /* fully_processed */);
-        // Intentionally do not count this buffer as moved.
-        continue;
-      } else {
-        SystemMemoryBarrier::emit();
-      }
+      SystemMemoryBarrier::emit();
     }
-    capacity = node->capacity();
-    enqueue_ready_buffer(node);
-    num_moved++;
+    
+    capacity = batch->capacity(); // FIXME: remove
+
+    while (batch != nullptr) {
+      BufferNode* node = batch;
+      batch = batch->next();
+      node->set_next(nullptr);
+      enqueue_ready_buffer(node);
+      num_moved++;
+    }
   }
   if (num_moved > 0) {
     log_debug(gc, refine)("Wanted %zu moved %zu buffers from completed (%zu) to ready (%zu, initial %zu) stop_at %zu (time: %.2fms)",
