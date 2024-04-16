@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -69,6 +69,11 @@ void BSDSystemMemoryBarrier::emit() {
     // FIXME: investigate why this does not return KERN_SUCCESS on success but some "random" numbers
     if (kr == KERN_INSUFFICIENT_BUFFER_SIZE) {
       fatal("thread_get_register_pointer_values() failed with %d", kr);
+    }
+
+    kr = mach_port_deallocate(mach_task_self(), threads[i]);
+    if (kr != KERN_SUCCESS) {
+      fatal("mach_port_deallocate() failed with %d", kr);
     }
   }
 
