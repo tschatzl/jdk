@@ -387,7 +387,7 @@ BufferNodeList G1DirtyCardQueueSet::take_all_buffers() {
   } else if (ready._entry_count == 0) {
     return completed;
   } else {
-    completed._tail = ready._head;
+    completed._tail->set_next(ready._head);
     return BufferNodeList(completed._head, ready._tail, completed._entry_count + ready._entry_count);
   }
 }
@@ -404,9 +404,9 @@ BufferNodeList G1DirtyCardQueueSet::take_all_completed_buffers() {
 BufferNodeList G1DirtyCardQueueSet::take_all_ready_buffers() {
   verify_num_cards();
   Pair<BufferNode*, BufferNode*> ready = _ready.take_all();
-  size_t cards_completed = Atomic::load(&_num_cards_ready);
+  size_t cards_ready = Atomic::load(&_num_cards_ready);
   Atomic::store(&_num_cards_ready, size_t(0));
-  return BufferNodeList(ready.first, ready.second, cards_completed);
+  return BufferNodeList(ready.first, ready.second, cards_ready);
 }
 
 void G1DirtyCardQueueSet::redirty_ready_buffers() {
@@ -604,7 +604,7 @@ void G1DirtyCardQueueSet::handle_completed_buffer(BufferNode* new_node,
   enqueue_completed_buffer(new_node);
 
   // No need for mutator refinement if number of cards is below limit.
-  if (Atomic::load(&_num_cards_completed) <= Atomic::load(&_mutator_refinement_threshold)) {
+  if (num_cards() <= Atomic::load(&_mutator_refinement_threshold)) {
     return;
   }
 
