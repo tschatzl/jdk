@@ -29,7 +29,9 @@ G1ConcurrentRefineStats::G1ConcurrentRefineStats() :
   _refinement_time(),
   _refined_cards(0),
   _precleaned_cards(0),
-  _dirtied_cards(0)
+  _dirtied_cards(0),
+  _sysmembarrier_time(),
+  _sysmembarriers_executed(0)
 {}
 
 double G1ConcurrentRefineStats::refinement_rate_ms() const {
@@ -44,6 +46,8 @@ G1ConcurrentRefineStats::operator+=(const G1ConcurrentRefineStats& other) {
   _refined_cards += other._refined_cards;
   _precleaned_cards += other._precleaned_cards;
   _dirtied_cards += other._dirtied_cards;
+  _sysmembarrier_time += other._sysmembarrier_time;
+  _sysmembarriers_executed += other._sysmembarriers_executed;
   return *this;
 }
 
@@ -58,6 +62,8 @@ G1ConcurrentRefineStats::operator-=(const G1ConcurrentRefineStats& other) {
   _refined_cards = clipped_sub(_refined_cards, other._refined_cards);
   _precleaned_cards = clipped_sub(_precleaned_cards, other._precleaned_cards);
   _dirtied_cards = clipped_sub(_dirtied_cards, other._dirtied_cards);
+  _sysmembarrier_time = clipped_sub(_sysmembarrier_time, other._sysmembarrier_time);
+  _sysmembarriers_executed = clipped_sub(_sysmembarriers_executed, other._sysmembarriers_executed);
   return *this;
 }
 

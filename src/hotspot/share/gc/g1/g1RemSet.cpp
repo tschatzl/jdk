@@ -1367,6 +1367,8 @@ public:
       G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
 
       _completed_buffers.distribute_log_buffers_into_array(dcqs.take_all_completed_buffers());
+
+      _ready_buffers.distribute_log_buffers_into_array(dcqs.take_all_cleaning_buffers());
       _ready_buffers.distribute_log_buffers_into_array(dcqs.take_all_ready_buffers());
 
       Tickspan total = Ticks::now() - start;

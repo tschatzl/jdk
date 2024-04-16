@@ -38,6 +38,9 @@ class G1ConcurrentRefineStats : public CHeapObj<mtGC> {
   size_t _precleaned_cards;
   size_t _dirtied_cards;
 
+  Tickspan _sysmembarrier_time;
+  size_t _sysmembarriers_executed;
+
 public:
   G1ConcurrentRefineStats();
 
@@ -57,10 +60,17 @@ public:
   // Number of cards marked dirty and in need of refinement.
   size_t dirtied_cards() const { return _dirtied_cards; }
 
+  Tickspan sysmembarrier_time() const { return _sysmembarrier_time; }
+
+  size_t sysmembarrier_executed() const { return _sysmembarriers_executed; }
+
   void inc_refinement_time(Tickspan t) { _refinement_time += t; }
   void inc_refined_cards(size_t cards) { _refined_cards += cards; }
   void inc_precleaned_cards(size_t cards) { _precleaned_cards += cards; }
   void inc_dirtied_cards(size_t cards) { _dirtied_cards += cards; }
+
+  void inc_sysmembarrier_time(Tickspan t) { _sysmembarrier_time += t; }
+  void inc_sysmembarrier_executed() { _sysmembarriers_executed++; }
 
   G1ConcurrentRefineStats& operator+=(const G1ConcurrentRefineStats& other);
   G1ConcurrentRefineStats& operator-=(const G1ConcurrentRefineStats& other);

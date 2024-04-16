@@ -606,13 +606,16 @@ void G1Policy::record_full_collection_end() {
 
 static void log_refinement_stats(const char* kind, const G1ConcurrentRefineStats& stats) {
   log_debug(gc, refine, stats)
-           ("%s refinement: %.2fms, refined: " SIZE_FORMAT
-            ", precleaned: " SIZE_FORMAT ", dirtied: " SIZE_FORMAT,
+           ("%s refinement: %.2fms, refined: %zu"
+            ", precleaned: %zu, dirtied: %zu"
+            ", sysmembarrier: %.2fms, #sysmembarrier: %zu",
             kind,
             stats.refinement_time().seconds() * MILLIUNITS,
             stats.refined_cards(),
             stats.precleaned_cards(),
-            stats.dirtied_cards());
+            stats.dirtied_cards(),
+            stats.sysmembarrier_time().seconds() * MILLIUNITS,
+            stats.sysmembarrier_executed());
 }
 
 void G1Policy::record_concurrent_refinement_stats(size_t pending_cards,

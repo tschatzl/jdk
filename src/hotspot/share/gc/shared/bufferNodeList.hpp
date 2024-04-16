@@ -36,6 +36,8 @@ struct BufferNodeList {
 
   BufferNodeList();
   BufferNodeList(BufferNode* head, BufferNode* tail, size_t entry_count);
+
+  BufferNodeList append(BufferNodeList& other);
 };
 
 #endif // SHARE_GC_SHARED_BUFFERNODELIST_HPP

@@ -170,14 +170,22 @@ class G1DirtyCardQueueSet: public PtrQueueSet {
   NonblockingQueue<BufferNode, &BufferNode::next_ptr> _completed;
   // Add a trailer padding after NonblockingQueue.
   DEFINE_PAD_MINUS_SIZE(3, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
+  // Buffers currently being cleaned.
+  // NonblockingQueue has inner padding of one cache line.
+  NonblockingQueue<BufferNode, &BufferNode::next_ptr> _cleaning;
+  // Add a trailer padding after NonblockingQueue.
+  DEFINE_PAD_MINUS_SIZE(4, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
+  // Upper bound on the number of cards in the completed and paused buffers.
+  volatile size_t _num_cards_cleaning;
+  DEFINE_PAD_MINUS_SIZE(5, DEFAULT_PADDING_SIZE, sizeof(size_t));
   // Buffers ready for refinement.
   // NonblockingQueue has inner padding of one cache line.
   NonblockingQueue<BufferNode, &BufferNode::next_ptr> _ready;
   // Add a trailer padding after NonblockingQueue.
-  DEFINE_PAD_MINUS_SIZE(4, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
+  DEFINE_PAD_MINUS_SIZE(6, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
   // Upper bound on the number of cards in the completed and paused buffers.
   volatile size_t _num_cards_ready;
-  DEFINE_PAD_MINUS_SIZE(5, DEFAULT_PADDING_SIZE, sizeof(size_t));
+  DEFINE_PAD_MINUS_SIZE(7, DEFAULT_PADDING_SIZE, sizeof(size_t));
 
   // Buffers for which refinement is temporarily paused.
   // PausedBuffers has inner padding, including trailer.
@@ -232,6 +240,15 @@ class G1DirtyCardQueueSet: public PtrQueueSet {
   // the _completed queue.
   // Returns null if the queue is empty, or if a concurrent push/append
   // interferes. It uses GlobalCounter critical section to avoid ABA problem.
+  BufferNode* dequeue_cleaning_buffer();
+  // FIXME: Remove and return a completed buffer from the list, or return null
+  // if none available.
+  BufferNode* get_cleaning_buffer();
+
+  // FIXME: Thread-safe attempt to remove and return the first buffer from
+  // the _completed queue.
+  // Returns null if the queue is empty, or if a concurrent push/append
+  // interferes. It uses GlobalCounter critical section to avoid ABA problem.
   BufferNode* dequeue_ready_buffer();
   // FIXME: Remove and return a completed buffer from the list, or return null
   // if none available.
@@ -261,6 +278,7 @@ public:
   static void handle_zero_index_for_thread(Thread* t);
 
   virtual void enqueue_completed_buffer(BufferNode* node);
+  void enqueue_cleaning_buffer(BufferNode* node);
   void enqueue_ready_buffer(BufferNode* node);
 
   // Upper bound on the number of cards currently in this queue set.
@@ -273,6 +291,7 @@ public:
   BufferNodeList take_all_buffers();
 
   BufferNodeList take_all_completed_buffers();
+  BufferNodeList take_all_cleaning_buffers();
   BufferNodeList take_all_ready_buffers();
 
   void redirty_ready_buffers();

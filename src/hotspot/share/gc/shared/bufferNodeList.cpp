@@ -45,3 +45,13 @@ BufferNodeList::BufferNodeList(BufferNode* head,
   assert(_entry_count == actual, "Expected %zu and actual %zu entry counts differ", _entry_count, actual);
 #endif
 }
+
+BufferNodeList BufferNodeList::append(BufferNodeList& other) {
+  if (_entry_count == 0) {
+    return other;
+  } else if (other._entry_count == 0) {
+    return *this;
+  }
+  _tail->set_next(other._head);
+  return BufferNodeList(_head, other._tail, _entry_count + other._entry_count);
+}
