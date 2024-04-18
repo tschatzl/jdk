@@ -515,7 +515,7 @@ void G1HeapVerifier::prepare_for_verify() {
   }
 
   G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
-  dcqs.redirty_ready_buffers();
+  dcqs.redirty_cleaning_and_ready_buffers();
 }
 
 void G1HeapVerifier::verify(VerifyOption vo, const char* msg) {

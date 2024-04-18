@@ -168,7 +168,7 @@ bool G1PrimaryConcurrentRefineThread::maybe_deactivate() {
 }
 
 void G1PrimaryConcurrentRefineThread::do_refinement_step() {
-  // Try adjustment first.  If it succeeds then don't do any refinement this
+  // FIXME: Try adjustment first.  If it succeeds then don't do any refinement this
   // round.  This thread may have just woken up but no threads are currently
   // needed, which is common.  In this case we want to just go back to
   // waiting, with a minimum of fuss; in particular, don't do any "premature"

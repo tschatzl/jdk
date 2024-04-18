@@ -459,17 +459,24 @@ BufferNodeList G1DirtyCardQueueSet::take_all_ready_buffers() {
   return BufferNodeList(ready.first, ready.second, cards_ready);
 }
 
-void G1DirtyCardQueueSet::redirty_ready_buffers() {
-  for (BufferNode* cur = _ready.first(); !_ready.is_end(cur); cur = cur->next()) {
-    class DirtyCardsClosure : public G1CardTableEntryClosure {
-      G1CardTable* _ct;
-    public:
-      DirtyCardsClosure() : _ct(G1CollectedHeap::heap()->card_table()) { }
-      void do_card_ptr(CardValue* card_ptr, uint worker_id) override {
-        _ct->mark_clean_as_dirty(card_ptr);
-      }
-    } cl;
-    cl.apply_to_buffer(cur, 0);
+void G1DirtyCardQueueSet::redirty_cleaning_and_ready_buffers() {
+  class DirtyCardsClosure : public G1CardTableEntryClosure {
+    G1CardTable* _ct;
+  public:
+    DirtyCardsClosure() : _ct(G1CollectedHeap::heap()->card_table()) { }
+    void do_card_ptr(CardValue* card_ptr, uint worker_id) override {
+      _ct->mark_clean_as_dirty(card_ptr);
+    }
+  } cl;
+  
+  
+  for (BufferNode* node = _cleaning.pop(); node != nullptr; node = _cleaning.pop()) {
+    cl.apply_to_buffer(node, 0);
+    _completed.push(*node);
+  }
+  for (BufferNode* node = _ready.pop(); node != nullptr; node = _ready.pop()) {
+    cl.apply_to_buffer(node, 0);
+    _completed.push(*node);
   }
 }
 
@@ -763,12 +770,22 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
           RendezvousClosure() : HandshakeClosure("G1 Async Dekker Rendezvous") { }
           virtual void do_thread(Thread* thread) { /* nothing to do */ }
         } cl;
+        log_debug(gc, refine)("Enter rendezvous with %zu cleaning buffers (%zu buffers)", cur_size, _cleaning.length());
+        {
+        SuspendibleThreadSetLeaver sts_leave;
         Handshake::execute(&cl);
+        }
+        log_debug(gc, refine)("Exit rendezvous with %zu cleaning buffers (%zu buffers)", cur_size, _cleaning.length());
       }
       stats->inc_sysmembarrier_time(Ticks::now() - start);
       stats->inc_sysmembarrier_executed();
     }
-    
+    if (_cleaning.empty()) {
+      // While rendezvousing there has been a GC that processed the cleaning list.
+      // The whole request to move items can be cancelled. Exit.
+      log_debug(gc, refine)("Rendezvous interrupted by GC.");
+      break;
+    }
     while (true) {
       BufferNode* node = get_cleaning_buffer();
       if (node == nullptr) {

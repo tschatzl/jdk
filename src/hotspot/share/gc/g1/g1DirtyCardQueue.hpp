@@ -294,7 +294,7 @@ public:
   BufferNodeList take_all_cleaning_buffers();
   BufferNodeList take_all_ready_buffers();
 
-  void redirty_ready_buffers();
+  void redirty_cleaning_and_ready_buffers();
   void print_buffers();
 
   void flush_queue(G1DirtyCardQueue& queue);

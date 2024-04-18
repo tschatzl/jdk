@@ -1290,13 +1290,13 @@ class G1MergeHeapRootsTask : public WorkerTask {
     uint _num_workers;
 
     DistributedLogBuffers(uint num_workers) : _log_buffers(nullptr), _num_workers(num_workers) {
-    }
-
-    void distribute_log_buffers_into_array(BufferNodeList const& buffers) {
       _log_buffers = NEW_C_HEAP_ARRAY(BufferNode::Stack, _num_workers, mtGC);
       for (uint i = 0; i < _num_workers; i++) {
         new (&_log_buffers[i]) BufferNode::Stack();
       }
+    }
+
+    void distribute_log_buffers_into_array(BufferNodeList const& buffers) {
 
       size_t entries_per_thread = ceil(buffers._entry_count / (double)_num_workers);
 
@@ -1336,10 +1336,6 @@ class G1MergeHeapRootsTask : public WorkerTask {
     }
 
     ~DistributedLogBuffers() {
-      if (_log_buffers == nullptr) {
-        return;
-      }
-
       using Stack = BufferNode::Stack;
       for (uint i = 0; i < _num_workers; i++) {
         _log_buffers[i].~Stack();
@@ -1368,6 +1364,9 @@ public:
 
       _completed_buffers.distribute_log_buffers_into_array(dcqs.take_all_completed_buffers());
 
+      // Buffers in the cleaning list are similar to ones in the ready list as their
+      // cards marks have already been cleared. So put them into the same processing
+      // queue.
       _ready_buffers.distribute_log_buffers_into_array(dcqs.take_all_cleaning_buffers());
       _ready_buffers.distribute_log_buffers_into_array(dcqs.take_all_ready_buffers());
 
