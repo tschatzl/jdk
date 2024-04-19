@@ -617,7 +617,11 @@ void G1ParScanThreadStateSet::flush_stats() {
   }
 
   G1DirtyCardQueueSet& dcq = G1BarrierSet::dirty_card_queue_set();
-  dcq.merge_bufferlists(rdcqs());
+  if (G1UseAsyncDekkerSync) {
+    dcq.merge_into_ready_queue(rdcqs());
+  } else {
+    dcq.merge_into_completed_queue(rdcqs());
+  }
   rdcqs()->verify_empty();
 
   _flushed = true;

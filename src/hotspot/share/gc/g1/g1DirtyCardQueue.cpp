@@ -412,15 +412,24 @@ void G1DirtyCardQueueSet::abandon_completed_buffers() {
   }
 }
 
-// Merge lists of buffers. The source queue set is emptied as a
-// result. The queue sets must share the same allocator.
-void G1DirtyCardQueueSet::merge_bufferlists(G1RedirtyCardsQueueSet* src) {
-  assert(allocator() == src->allocator(), "precondition");
+static void merge_into_queue(G1RedirtyCardsQueueSet* src, NonblockingQueue<BufferNode, &BufferNode::next_ptr>& queue, volatile size_t& counter) {
   const BufferNodeList from = src->take_all_completed_buffers();
   if (from._head != nullptr) {
-    Atomic::add(&_num_cards_completed, from._entry_count);
-    _completed.append(*from._head, *from._tail);
+    Atomic::add(&counter, from._entry_count, memory_order_relaxed);
+    queue.append(*from._head, *from._tail);
   }
+}
+
+// Merge lists of buffers. The source queue set is emptied as a
+// result. The queue sets must share the same allocator.
+void G1DirtyCardQueueSet::merge_into_completed_queue(G1RedirtyCardsQueueSet* src) {
+  assert(allocator() == src->allocator(), "precondition");
+  merge_into_queue(src, _completed, _num_cards_completed);
+}
+
+void G1DirtyCardQueueSet::merge_into_ready_queue(G1RedirtyCardsQueueSet* src) {
+  assert(allocator() == src->allocator(), "precondition");
+  merge_into_queue(src, _ready, _num_cards_ready);
 }
 
 BufferNodeList G1DirtyCardQueueSet::take_all_buffers() {
@@ -710,25 +719,40 @@ bool G1DirtyCardQueueSet::refine_ready_buffer_concurrently(uint worker_id,
 }
 
 bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, size_t stop_at, G1ConcurrentRefineStats* stats, size_t min_ready_wanted) {
-  size_t num_ready_start = Atomic::load(&_num_cards_ready);
-  if (num_ready_start > min_ready_wanted) {
-    return false;
-  }
-  size_t num_completed_start = num_cards();
-  if (num_completed_start <= stop_at) {
-    return false;
-  }
+  log_debug(gc, refine)("c %zu r %zu m %zu s %zu d %s", _num_cards_completed, _num_cards_ready, min_ready_wanted, stop_at, BOOL_TO_STR(num_cards() > stop_at));
 
+  size_t num_ready_start = Atomic::load(&_num_cards_ready);
+  if (num_ready_start > min_ready_wanted) { // FIXME: want to move every X ms, except just before GC
+    return false;
+  }
+  size_t num_cards_start = num_cards();
+
+  if (num_cards_start <= stop_at) {
+    return false;
+  }
   Ticks start = Ticks::now();
+
+  size_t can_get_cards = num_cards_start - stop_at;
+
+  double cards_move_rate = 30000.0; // "random" value
+  double cards_refine_rate = 1500.0; // "random" value
+
   size_t capacity = 0;
-  size_t to_get = MAX2(align_up(num_completed_start - stop_at, 256) / 256, min_ready_wanted);
+  size_t to_get = MAX2(align_up(can_get_cards, 256) / 256, align_up(min_ready_wanted, 256) / 256);
+
   size_t num_moved = 0;
 
   guarantee(_cleaning.empty(), "must be at start");
 
   while (num_moved != to_get) {
+    Ticks batch_start = Ticks::now();
 
-    size_t const batch_size = to_get;//MIN2(to_get, (size_t)100); // FIXME: smaller batch size?
+    size_t num_cards_ready = _num_cards_ready;
+    double available_time = (double)num_cards_ready / cards_refine_rate;
+    size_t outer_batch_size = MAX2((size_t)((cards_move_rate * available_time) / 256 * 0.5 /* random percentage */), (size_t)cards_move_rate / 256 /* at least spend one ms */);
+    log_debug(gc, refine)("can_get_cards %zu to_get_bufs %zu move-rate %.0f available-time %.2fms batch-size %zu ready %zu", can_get_cards, to_get, cards_move_rate, available_time, outer_batch_size, num_cards_ready);
+
+    size_t const batch_size = MIN2(outer_batch_size, to_get - num_moved);//MIN2(to_get, (size_t)100); // FIXME: smaller batch size?
     size_t cur_size = 0;
     
     while (cur_size != batch_size) {
@@ -753,13 +777,24 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
       cur_size++;
 
       enqueue_cleaning_buffer(node);
+
+      // If we yielded due to a safepoint, one of two situations can be met:
+      // * this was a GC safepoint. Completed buffers are empty, so we will exit the
+      // loop next time we want to get a buffer (or shortly after).
+      // The safepoint will handle the cleaning buffers correctly.
+      // * not a GC safepoint. Continue as normal.
+      if (SuspendibleThreadSet::should_yield()) {
+        log_debug(gc, refine)("yield while cleaning");
+        SuspendibleThreadSet::yield();
+      }
     }
 
     if (cur_size == 0) {
-      // Did not get anything in this batch. Exit.
+      // Did not get any completed buffers in this batch, nothing to do, so exit.
       break;
     }
 
+    // Do the memory synchronization.
     if (G1UseAsyncDekkerSync) {
       Ticks start = Ticks::now();
       if (!UseNewCode) {
@@ -772,20 +807,23 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
         } cl;
         log_debug(gc, refine)("Enter rendezvous with %zu cleaning buffers (%zu buffers)", cur_size, _cleaning.length());
         {
-        SuspendibleThreadSetLeaver sts_leave;
-        Handshake::execute(&cl);
+          SuspendibleThreadSetLeaver sts_leave;
+          Handshake::execute(&cl);
         }
         log_debug(gc, refine)("Exit rendezvous with %zu cleaning buffers (%zu buffers)", cur_size, _cleaning.length());
       }
       stats->inc_sysmembarrier_time(Ticks::now() - start);
       stats->inc_sysmembarrier_executed();
     }
+
     if (_cleaning.empty()) {
-      // While rendezvousing there has been a GC that processed the cleaning list.
+      // While rendezvousing there has been a safepoint/GC that processed the cleaning list.
       // The whole request to move items can be cancelled. Exit.
+      // FIXME: may be subsumed by below loop condition, but for the message...
       log_debug(gc, refine)("Rendezvous interrupted by GC.");
       break;
     }
+    // Enqueue into ready buffer.
     while (true) {
       BufferNode* node = get_cleaning_buffer();
       if (node == nullptr) {
@@ -793,7 +831,12 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
       }
       enqueue_ready_buffer(node);
       num_moved++;
+      if (SuspendibleThreadSet::should_yield()) {
+        log_debug(gc, refine)("yield while enqueuing ready");
+        SuspendibleThreadSet::yield();
+      }
     }
+    log_debug(gc, refine)("Move-size %zu moved %zu to-get %zu ready %zu took %.2fms", cur_size, num_moved, to_get, _num_cards_ready, (Ticks::now() - batch_start).seconds() * MILLIUNITS);
   }
   guarantee(_cleaning.empty(), "must be at end");
   if (num_moved > 0) {

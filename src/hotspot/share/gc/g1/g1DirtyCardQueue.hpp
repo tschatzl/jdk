@@ -286,7 +286,8 @@ public:
   // is a concurrent modification of the set of buffers.
   size_t num_cards() const;
 
-  void merge_bufferlists(G1RedirtyCardsQueueSet* src);
+  void merge_into_completed_queue(G1RedirtyCardsQueueSet* src);
+  void merge_into_ready_queue(G1RedirtyCardsQueueSet* src);
 
   BufferNodeList take_all_buffers();
 

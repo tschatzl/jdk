@@ -247,7 +247,7 @@ class G1ParScanThreadStateSet : public StackObj {
   G1RedirtyCardsQueueSet _rdcqs;
   PreservedMarksSet _preserved_marks_set;
   G1ParScanThreadState** _states;
-  BufferNodeList* _rdc_buffers;
+  BufferNodeList* _rdc_buffers; // FIXME: not used with async dekker sync
   size_t* _surviving_young_words_total;
   uint _num_workers;
   bool _flushed;

@@ -975,9 +975,11 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
     add_parallel_task(new RestorePreservedMarksTask(per_thread_states->preserved_marks_set()));
     add_parallel_task(new ProcessEvacuationFailedRegionsTask(evac_failure_regions));
   }
-  add_parallel_task(new RedirtyLoggedCardsTask(evac_failure_regions,
-                                               per_thread_states->rdc_buffers(),
-                                               per_thread_states->num_workers()));
+  if (!G1UseAsyncDekkerSync) {
+    add_parallel_task(new RedirtyLoggedCardsTask(evac_failure_regions,
+                                                 per_thread_states->rdc_buffers(),
+                                                 per_thread_states->num_workers()));
+  }
 
   if (UseTLAB && ResizeTLAB) {
     add_parallel_task(new ResizeTLABsTask());
