@@ -132,7 +132,7 @@ void G1DirtyCardQueueSet::enqueue_completed_buffer(BufferNode* cbn) {
   assert(cbn != nullptr, "precondition");
   // Increment _num_cards before adding to queue, so queue removal doesn't
   // need to deal with _num_cards possibly going negative.
-  Atomic::add(&_num_cards_completed, cbn->size());
+  Atomic::add(&_num_cards_completed, cbn->size(), memory_order_relaxed);
   // Perform push in CS.  The old tail may be popped while the push is
   // observing it (attaching it to the new buffer).  We need to ensure it
   // can't be reused until the push completes, to avoid ABA problems.
@@ -168,7 +168,7 @@ BufferNode* G1DirtyCardQueueSet::get_completed_buffer() {
     result = dequeue_completed_buffer();
     if (result == nullptr) return nullptr;
   }
-  Atomic::sub(&_num_cards_completed, result->size());
+  Atomic::sub(&_num_cards_completed, result->size(), memory_order_relaxed);
   return result;
 }
 
@@ -176,7 +176,7 @@ void G1DirtyCardQueueSet::enqueue_cleaning_buffer(BufferNode* cbn) {
   assert(cbn != nullptr, "precondition");
   // Increment _num_cards before adding to queue, so queue removal doesn't
   // need to deal with _num_cards possibly going negative.
-  Atomic::add(&_num_cards_cleaning, cbn->size());
+  Atomic::add(&_num_cards_cleaning, cbn->size(), memory_order_relaxed);
 
   GlobalCounter::CriticalSection cs(Thread::current());
   _cleaning.push(*cbn);
@@ -207,7 +207,7 @@ BufferNode* G1DirtyCardQueueSet::dequeue_cleaning_buffer() {
 BufferNode* G1DirtyCardQueueSet::get_cleaning_buffer() {
   BufferNode* result = dequeue_cleaning_buffer();
   if (result == nullptr) return nullptr;
-  Atomic::sub(&_num_cards_cleaning, result->size());
+  Atomic::sub(&_num_cards_cleaning, result->size(), memory_order_relaxed);
   return result;
 }
 
@@ -215,7 +215,7 @@ void G1DirtyCardQueueSet::enqueue_ready_buffer(BufferNode* cbn) {
   assert(cbn != nullptr, "precondition");
   // Increment _num_cards before adding to queue, so queue removal doesn't
   // need to deal with _num_cards possibly going negative.
-  Atomic::add(&_num_cards_ready, cbn->size());
+  Atomic::add(&_num_cards_ready, cbn->size(), memory_order_relaxed);
   // Perform push in CS.  The old tail may be popped while the push is
   // observing it (attaching it to the new buffer).  We need to ensure it
   // can't be reused until the push completes, to avoid ABA problems.
@@ -247,7 +247,7 @@ BufferNode* G1DirtyCardQueueSet::dequeue_ready_buffer() {
 BufferNode* G1DirtyCardQueueSet::get_ready_buffer() {
   BufferNode* result = dequeue_ready_buffer();
   if (result == nullptr) return nullptr;
-  Atomic::sub(&_num_cards_ready, result->size());
+  Atomic::sub(&_num_cards_ready, result->size(), memory_order_relaxed);
   return result;
 }
 
@@ -379,7 +379,7 @@ void G1DirtyCardQueueSet::record_paused_buffer(BufferNode* node) {
   // notification checking after the coming safepoint if it doesn't GC.
   // Note that this means the queue's _num_cards differs from the number
   // of cards in the queued buffers when there are paused buffers.
-  Atomic::add(&_num_cards_completed, node->size());
+  Atomic::add(&_num_cards_completed, node->size(), memory_order_relaxed);
   _paused.add(node);
 }
 
