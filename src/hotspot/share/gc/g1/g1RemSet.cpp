@@ -1616,10 +1616,17 @@ void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
   // fence, because top is stable for old and unfiltered humongous
   // regions, so it must return the same value as the previous load when
   // cleaning the card. Also cleaning the card and refinement of the card
-  // cannot span across safepoint, so we don't need to worry about top being
-  // changed during safepoint.
+  // cannot span across GC pauses, so we don't need to worry about top being
+  // changed during GC pasuses.
+  // FIXME: Even with G1UseAsyncDekkerSync, this should hold: we reclaim regions
+  // during the Remark pause, but SATB should keep alive all objects that were
+  // live at start of marking - the application can only set references in
+  // objects that were live.
+  // Regions that have been allocated during marking can not get their top
+  // reduced (ie. reclaimed) without a garbage collection where G1 re-evaluates
+  // all cards anyway.
   HeapWord* scan_limit = r->top();
-  assert(scan_limit > start, "sanity");
+  assert(scan_limit > start, "sanity scan limit " PTR_FORMAT " start " PTR_FORMAT " type %s", p2i(scan_limit), p2i(start), r->get_short_type_str());
 
   // Don't use addr_for(card_ptr + 1) which can ask for
   // a card beyond the heap.
