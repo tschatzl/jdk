@@ -199,7 +199,7 @@ BufferNode* G1DirtyCardQueueSet::dequeue_cleaning_buffer() {
     // one CS could defer releasing buffer to the free list for reuse,
     // leading to excessive allocations.
     // Only a single thread will ever pop, so no synchronization required.
-    GlobalCounter::CriticalSection cs(Thread::current());
+    GlobalCounter::CriticalSection cs(current_thread);
     if (_cleaning.try_pop(&result)) return result;
   }
 }

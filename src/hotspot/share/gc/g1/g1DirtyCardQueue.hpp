@@ -172,7 +172,7 @@ class G1DirtyCardQueueSet: public PtrQueueSet {
   DEFINE_PAD_MINUS_SIZE(3, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
   // Buffers currently being cleaned.
   // NonblockingQueue has inner padding of one cache line.
-  NonblockingQueue<BufferNode, &BufferNode::next_ptr> _cleaning;
+  NonblockingQueue<BufferNode, &BufferNode::next_ptr> _cleaning;  // FIXME: the cleaning buffer need not be a NBQ one as it is only ever accessed by a single-thread
   // Add a trailer padding after NonblockingQueue.
   DEFINE_PAD_MINUS_SIZE(4, DEFAULT_PADDING_SIZE, sizeof(BufferNode*));
   // Upper bound on the number of cards in the completed and paused buffers.
