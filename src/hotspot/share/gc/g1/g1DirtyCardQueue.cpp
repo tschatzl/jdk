@@ -720,8 +720,12 @@ bool G1DirtyCardQueueSet::refine_ready_buffer_concurrently(uint worker_id,
   return true;
 }
 
+#define ENABLE_PREDICTION 1
+
 bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, size_t stop_at, G1ConcurrentRefineStats* stats, size_t min_ready_wanted) {
+#ifdef ENABLE_PREDICTION
   log_debug(gc, refine)("c %zu r %zu m %zu s %zu d %s", _num_cards_completed, _num_cards_ready, min_ready_wanted, stop_at, BOOL_TO_STR(num_cards() > stop_at));
+#endif
 
   size_t num_ready_start = Atomic::load(&_num_cards_ready);
   if (num_ready_start > min_ready_wanted) { // FIXME: want to move every X ms, except just before GC
@@ -735,9 +739,10 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
   Ticks start = Ticks::now();
 
   size_t can_get_cards = num_cards_start - stop_at;
-
+#ifdef ENABLE_PREDICTION
   double cards_move_rate = 30000.0; // "random" value
   double cards_refine_rate = 1500.0; // "random" value
+#endif
 
   size_t capacity = 0;
   size_t to_get = MAX2(align_up(can_get_cards, 256) / 256, align_up(min_ready_wanted, 256) / 256);
@@ -747,6 +752,7 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
   guarantee(_cleaning.empty(), "must be at start");
 
   while (num_moved != to_get) {
+#ifdef ENABLE_PREDICTION
     Ticks batch_start = Ticks::now();
 
     size_t num_cards_ready = _num_cards_ready;
@@ -755,6 +761,9 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
     log_debug(gc, refine)("can_get_cards %zu to_get_bufs %zu move-rate %.0f available-time %.2fms batch-size %zu ready %zu", can_get_cards, to_get, cards_move_rate, available_time, outer_batch_size, num_cards_ready);
 
     size_t const batch_size = MIN2(outer_batch_size, to_get - num_moved);//MIN2(to_get, (size_t)100); // FIXME: smaller batch size?
+#else
+    size_t const batch_size = to_get;
+#endif
     size_t cur_size = 0;
     
     while (cur_size != batch_size) {
@@ -838,7 +847,9 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
         SuspendibleThreadSet::yield();
       }
     }
+#ifdef ENABLE_PREDICTION
     log_debug(gc, refine)("Move-size %zu moved %zu to-get %zu ready %zu took %.2fms", cur_size, num_moved, to_get, _num_cards_ready, (Ticks::now() - batch_start).seconds() * MILLIUNITS);
+#endif
   }
   guarantee(_cleaning.empty(), "must be at end");
   if (num_moved > 0) {
