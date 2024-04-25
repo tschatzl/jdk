@@ -28,7 +28,9 @@
 #include "memory/allStatic.hpp"
 
 class BSDSystemMemoryBarrier : public AllStatic {
- public:
+  static ReservedSpace _mprotect_page;
+    
+public:
   static bool initialize();
   static void emit();
 };

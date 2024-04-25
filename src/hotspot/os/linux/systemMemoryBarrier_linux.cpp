@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 #include "logging/log.hpp"
 #include "os_linux.hpp"
+#include "runtime/atomic.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/systemMemoryBarrier.hpp"
 
@@ -58,11 +59,37 @@ enum membarrier_cmd {
   MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED = (1 << 4),
 };
 
+ReservedSpace LinuxSystemMemoryBarrier::_mprotect_page;
+
 static long membarrier(int cmd, unsigned int flags, int cpu_id) {
   return syscall(SYS_membarrier, cmd, flags, cpu_id); // cpu_id only on >= 5.10
 }
 
+bool LinuxSystemMemoryBarrier::initialize_mprotect_page() {
+  _mprotect_page = ReservedSpace(os::vm_page_size());
+  if (!_mprotect_page.is_reserved()) {
+    return false;
+  }
+  if (!os::commit_memory(_mprotect_page.base(), _mprotect_page.size(), false)) {
+    log_error(os)("Failed to commit memory barrier page."); // FIXME: or just bail out?    
+    return false;
+  }
+  if (!os::protect_memory(_mprotect_page.base(), _mprotect_page.size(), os::MEM_PROT_NONE, _mprotect_page.special())) {
+    log_error(os)("Failed to mprotect memory barrier page."); // FIXME: or just bail out?
+    return false;
+  }
+  if (_mprotect_page.is_reserved()) {
+    log_info(os)("Using MPROTECT");
+    return true;
+  } else {
+    return false;
+  }
+}
+
 bool LinuxSystemMemoryBarrier::initialize() {
+  if (UseNewCode2) {
+    return initialize_mprotect_page();
+  }
 #if defined(RISCV)
 // RISCV port was introduced in kernel 4.4.
 // 4.4 also made membar private expedited mandatory.
@@ -72,18 +99,18 @@ bool LinuxSystemMemoryBarrier::initialize() {
   if (!(major > 6 || (major == 6 && minor >= 9))) {
     log_info(os)("Linux kernel %ld.%ld does not support MEMBARRIER PRIVATE_EXPEDITED on RISC-V.",
                  major, minor);
-    return false;
+    return initialize_mprotect_page();
   }
 #endif
   long ret = membarrier(MEMBARRIER_CMD_QUERY, 0, 0);
   if (ret < 0) {
     log_info(os)("MEMBARRIER_CMD_QUERY unsupported");
-    return false;
+    return initialize_mprotect_page();
   }
   if (!(ret & MEMBARRIER_CMD_PRIVATE_EXPEDITED) ||
       !(ret & MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED)) {
     log_info(os)("MEMBARRIER PRIVATE_EXPEDITED unsupported");
-    return false;
+    return initialize_mprotect_page();
   }
   ret = membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0);
   guarantee_with_errno(ret == 0, "MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED failed");
@@ -92,6 +119,16 @@ bool LinuxSystemMemoryBarrier::initialize() {
 }
 
 void LinuxSystemMemoryBarrier::emit() {
-  long s = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
-  guarantee_with_errno(s >= 0, "MEMBARRIER_CMD_PRIVATE_EXPEDITED failed");
+  if (!_mprotect_page.is_reserved()) {
+    long s = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
+    guarantee_with_errno(s >= 0, "MEMBARRIER_CMD_PRIVATE_EXPEDITED failed");
+  } else {
+    if (!os::protect_memory(_mprotect_page.base(), _mprotect_page.size(), os::MEM_PROT_RW, _mprotect_page.special())) {
+      log_error(os)("Failed to mprotect memory barrier page."); // FIXME: or just bail out?
+    }
+    Atomic::store(_mprotect_page.base(), '1');
+    if (!os::protect_memory(_mprotect_page.base(), _mprotect_page.size(), os::MEM_PROT_NONE, _mprotect_page.special())) {
+      log_error(os)("Failed to mprotect memory barrier page."); // FIXME: or just bail out?
+    }
+  }
 }

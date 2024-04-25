@@ -36,6 +36,8 @@ extern "C" {
   #include <mach/vm_map.h>
 #endif
 
+ReservedSpace _mprotect_page;
+
 bool BSDSystemMemoryBarrier::initialize() {
 #ifdef __APPLE__
   return true;

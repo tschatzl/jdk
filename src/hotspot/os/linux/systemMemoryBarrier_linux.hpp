@@ -26,9 +26,14 @@
 #define OS_LINUX_SYSTEMMEMORYBARRIER_LINUX_HPP
 
 #include "memory/allStatic.hpp"
+#include "memory/virtualspace.hpp"
 
 class LinuxSystemMemoryBarrier : public AllStatic {
- public:
+  static ReservedSpace _mprotect_page;
+
+  static bool initialize_mprotect_page();
+
+public:
   static bool initialize();
   static void emit();
 };

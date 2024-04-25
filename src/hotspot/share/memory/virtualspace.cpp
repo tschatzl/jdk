@@ -58,7 +58,7 @@ ReservedSpace::ReservedSpace(size_t size, size_t preferred_page_size) : _fd_for_
   // When a page size is given we don't want to mix large
   // and normal pages. If the size is not a multiple of the
   // page size it will be aligned up to achieve this.
-  size_t alignment = os::vm_allocation_granularity();;
+  size_t alignment = os::vm_allocation_granularity();
   if (preferred_page_size != os::vm_page_size()) {
     alignment = MAX2(preferred_page_size, alignment);
     size = align_up(size, alignment);
