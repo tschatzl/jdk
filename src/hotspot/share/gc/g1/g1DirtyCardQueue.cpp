@@ -765,11 +765,11 @@ bool G1DirtyCardQueueSet::move_from_completed_to_ready_queue(uint worker_id, siz
     size_t const batch_size = to_get;
 #endif
     size_t cur_size = 0;
-    
+
     while (cur_size != batch_size) {
       BufferNode* node = get_completed_buffer();
       if (node == nullptr) {
-        break; // Didn't get a buffer to move. Means that everything is in the ready buffers anyway?        
+        break; // Didn't get a buffer to move. Means that everything is in the ready buffers anyway?
       }
 
       if (G1UseAsyncDekkerSync) {

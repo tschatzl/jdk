@@ -26,10 +26,14 @@
 #define OS_BSD_SYSTEMMEMORYBARRIER_BSD_HPP
 
 #include "memory/allStatic.hpp"
+#include "memory/virtualspace.hpp"
 
 class BSDSystemMemoryBarrier : public AllStatic {
   static ReservedSpace _mprotect_page;
-    
+
+  static bool initialize_mprotect_page();
+  static void emit_mprotect();
+
 public:
   static bool initialize();
   static void emit();

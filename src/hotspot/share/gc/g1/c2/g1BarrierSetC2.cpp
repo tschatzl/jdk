@@ -482,7 +482,7 @@ if (!G1UseAsyncDekkerSync) {
         Node* card_val_reload = __ load(__ ctrl(), card_adr, TypeInt::INT, T_BYTE, Compile::AliasIdxRaw);
         __ if_then(card_val_reload, BoolTest::ne, dirty_card); {
           g1_mark_card(kit, ideal, card_adr, oop_store, alias_idx, index, index_adr, buffer, tf);
-        } __ end_if();    
+        } __ end_if();
 }
       } __ end_if();
     } __ end_if();

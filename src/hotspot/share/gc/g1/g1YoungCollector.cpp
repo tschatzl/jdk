@@ -1073,7 +1073,7 @@ void G1YoungCollector::collect() {
     G1DirtyCardQueueSet& dcqs = G1BarrierSet::dirty_card_queue_set();
     dcqs.print_buffers();
   }
-  
+
   G1YoungGCVerifierMark vm(this);
   {
     // Actual collection work starts and is executed (only) in this scope.

@@ -71,7 +71,7 @@ bool LinuxSystemMemoryBarrier::initialize_mprotect_page() {
     return false;
   }
   if (!os::commit_memory(_mprotect_page.base(), _mprotect_page.size(), false)) {
-    log_error(os)("Failed to commit memory barrier page."); // FIXME: or just bail out?    
+    log_error(os)("Failed to commit memory barrier page."); // FIXME: or just bail out?
     return false;
   }
   if (!os::protect_memory(_mprotect_page.base(), _mprotect_page.size(), os::MEM_PROT_NONE, _mprotect_page.special())) {

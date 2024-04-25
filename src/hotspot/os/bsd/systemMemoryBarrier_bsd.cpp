@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 #include "logging/log.hpp"
 #include "os_bsd.hpp"
+#include "runtime/atomic.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/systemMemoryBarrier.hpp"
 
@@ -36,21 +37,58 @@ extern "C" {
   #include <mach/vm_map.h>
 #endif
 
-ReservedSpace _mprotect_page;
+ReservedSpace BSDSystemMemoryBarrier::_mprotect_page;
+
+bool BSDSystemMemoryBarrier::initialize_mprotect_page() {
+  _mprotect_page = ReservedSpace(os::vm_page_size());
+  if (!_mprotect_page.is_reserved()) {
+    return false;
+  }
+  if (!os::commit_memory(_mprotect_page.base(), _mprotect_page.size(), false)) {
+    log_error(os)("Failed to commit memory barrier page."); // FIXME: or just bail out?
+    return false;
+  }
+  if (!os::protect_memory(_mprotect_page.base(), _mprotect_page.size(), os::MEM_PROT_NONE, _mprotect_page.special())) {
+    log_error(os)("Failed to mprotect memory barrier page."); // FIXME: or just bail out?
+    return false;
+  }
+  if (_mprotect_page.is_reserved()) {
+    log_info(os)("Using MPROTECT");
+    return true;
+  } else {
+    return false;
+  }
+}
 
 bool BSDSystemMemoryBarrier::initialize() {
 #ifdef __APPLE__
+  if (UseNewCode2) {
+    return initialize_mprotect_page();
+  }
   return true;
 #else
-  return false;
+  return initialize_mprotect_page();
 #endif
+}
+
+void BSDSystemMemoryBarrier::emit_mprotect() {
+  if (!os::protect_memory(_mprotect_page.base(), _mprotect_page.size(), os::MEM_PROT_RW, _mprotect_page.special())) {
+    log_error(os)("Failed to mprotect memory barrier page."); // FIXME: or just bail out?
+  }
+  Atomic::store(_mprotect_page.base(), '1');
+  if (!os::protect_memory(_mprotect_page.base(), _mprotect_page.size(), os::MEM_PROT_NONE, _mprotect_page.special())) {
+    log_error(os)("Failed to mprotect memory barrier page."); // FIXME: or just bail out?
+  }
 }
 
 void BSDSystemMemoryBarrier::emit() {
 #ifdef __APPLE__
+  if (UseNewCode2) {
+    emit_mprotect();
+    return;
+  }
   // The idea about the OSX implementation is to execute some function in the context
-  // of every thread that serializes memory, in this case
-  // thread_get_register_pointer_values().
+  // of every thread that serializes memory, in this case thread_get_register_pointer_values().
 
   mach_msg_type_number_t num_threads;
   thread_act_t* threads;
@@ -68,7 +106,7 @@ void BSDSystemMemoryBarrier::emit() {
     size_t actual_num_regs = num_regs;
 
     kr = thread_get_register_pointer_values(threads[i], nullptr, &actual_num_regs, values);
-    // FIXME: investigate why this does not return KERN_SUCCESS on success but some "random" numbers
+    // Some threads return garbage for above call, so only check KERN_INSUFFICIENT_BUFFER_SIZE.
     if (kr == KERN_INSUFFICIENT_BUFFER_SIZE) {
       fatal("thread_get_register_pointer_values() failed with %d", kr);
     }
@@ -83,5 +121,7 @@ void BSDSystemMemoryBarrier::emit() {
   if (kr != KERN_SUCCESS) {
     fatal("vm_deallocate() failed with %d", kr);
   }
+#else
+  emit_mprotect();
 #endif
 }
