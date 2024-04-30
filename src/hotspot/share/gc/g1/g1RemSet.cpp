@@ -1611,22 +1611,35 @@ void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
   // Construct the MemRegion representing the card.
   HeapWord* start = _ct->addr_for(card_ptr);
   // And find the region containing it.
-  HeapRegion* r = _g1h->heap_region_containing(start);
+  HeapRegion* r = _g1h->heap_region_containing_or_null(start);
+  guarantee(G1UseAsyncDekkerSync || r != nullptr, "Can only be null with async dekker sync");
+  if (r == nullptr) {
+    // We may get empty areas with G1AsyncDekkerSync here because G1 collects logged
+    // cards in the pause containing cards from regions that were evacuated (and are
+    // now free). They may have been uncommitted already.
+    log_warning(gc)("null region, already uncommitted");
+    return;
+  }
   // This reload of the top is safe even though it happens after the full
   // fence, because top is stable for old and unfiltered humongous
   // regions, so it must return the same value as the previous load when
-  // cleaning the card. Also cleaning the card and refinement of the card
+  // cleaning the card.
+  // FIXME: Also cleaning the card and refinement of the card
   // cannot span across GC pauses, so we don't need to worry about top being
   // changed during GC pasuses.
-  // FIXME: Even with G1UseAsyncDekkerSync, this should hold: we reclaim regions
-  // during the Remark pause, but SATB should keep alive all objects that were
-  // live at start of marking - the application can only set references in
-  // objects that were live.
-  // Regions that have been allocated during marking can not get their top
-  // reduced (ie. reclaimed) without a garbage collection where G1 re-evaluates
-  // all cards anyway.
   HeapWord* scan_limit = r->top();
-  assert(scan_limit > start, "sanity scan limit " PTR_FORMAT " start " PTR_FORMAT " type %s", p2i(scan_limit), p2i(start), r->get_short_type_str());
+  assert(G1UseAsyncDekkerSync || scan_limit > start, "sanity scan limit " PTR_FORMAT " start " PTR_FORMAT " type %s", p2i(scan_limit), p2i(start), r->get_short_type_str());
+
+  if (G1UseAsyncDekkerSync && scan_limit <= start) {
+    // We may get empty areas with G1AsyncDekkerSync here because G1 collects logged
+    // cards in the pause containing cards from regions that were evacuated (and are
+    // now free). We should not access them here.
+    // Re-reading the top() above is not problematic. For cards from these free regions
+    // the tops were set in the GC pause; for cards from humongous allocation they
+    // must have passed one completed->ready transition which is a process-wide memory
+    // barrier.
+    return;
+  }
 
   // Don't use addr_for(card_ptr + 1) which can ask for
   // a card beyond the heap.

@@ -1335,6 +1335,9 @@ public:
     _g1h->remove_from_old_gen_sets(on_region_cl._num_old_regions_removed,
                                    on_region_cl._num_humongous_regions_removed);
 
+    // Now print the empty regions list.
+    _g1h->hr_printer()->cleanup(&local_cleanup_list);
+
     {
       MutexLocker x(G1RareEvent_lock, Mutex::_no_safepoint_check_flag);
       _g1h->decrement_summary_bytes(on_region_cl._freed_bytes);

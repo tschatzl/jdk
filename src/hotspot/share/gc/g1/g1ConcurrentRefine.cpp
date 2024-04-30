@@ -435,5 +435,5 @@ bool G1ConcurrentRefine::try_refinement_step(uint worker_id,
 }
 
 bool G1ConcurrentRefine::move_from_completed_to_ready_queue(uint worker_id, size_t stop_at, G1ConcurrentRefineStats* stats) {
-  return _dcqs.move_from_completed_to_ready_queue(worker_id, stop_at, stats, Atomic::load(&_threads_wanted) * 1000 + 1);
+  return _dcqs.move_from_completed_to_ready_queue(worker_id, stop_at, stats, Atomic::load(&_threads_wanted));
 }
