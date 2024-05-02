@@ -40,11 +40,11 @@ extern "C" {
 ReservedSpace BSDSystemMemoryBarrier::_mprotect_page;
 
 bool BSDSystemMemoryBarrier::initialize_mprotect_page() {
-  _mprotect_page = ReservedSpace(os::vm_page_size());
+  _mprotect_page = ReservedSpace(os::vm_page_size(), mtInternal); // FIXME
   if (!_mprotect_page.is_reserved()) {
     return false;
   }
-  if (!os::commit_memory(_mprotect_page.base(), _mprotect_page.size(), false)) {
+  if (!os::commit_memory(_mprotect_page.base(), _mprotect_page.size(), false, mtInternal)) {
     log_error(os)("Failed to commit memory barrier page."); // FIXME: or just bail out?
     return false;
   }
