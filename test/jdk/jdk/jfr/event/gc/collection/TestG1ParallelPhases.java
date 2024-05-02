@@ -129,6 +129,8 @@ public class TestG1ParallelPhases {
             "RemoveSelfForwards",
             "RestorePreservedMarks",
             "ProcessEvacuationFailedRegions",
+            // Depends on G1UseAsyncDekkerSync
+            "RedirtyCards",
             // Generally optional phases.
             "OptScanHR",
             "OptMergeRS",
