@@ -1521,12 +1521,13 @@ void G1RemSet::print_coarsen_stats() {
 inline void check_card_ptr(CardTable::CardValue* card_ptr, G1CardTable* ct) {
 #ifdef ASSERT
   G1CollectedHeap* g1h = G1CollectedHeap::heap();
-  assert(g1h->is_in(ct->addr_for(card_ptr)),
+  // With G1UseAsyncDekkerSync the card may be in uncommitted memory.
+  assert(G1UseAsyncDekkerSync || g1h->is_in(ct->addr_for(card_ptr)),
          "Card at " PTR_FORMAT " index " SIZE_FORMAT " representing heap at " PTR_FORMAT " (%u) must be in committed heap",
          p2i(card_ptr),
          ct->index_for(ct->addr_for(card_ptr)),
          p2i(ct->addr_for(card_ptr)),
-         g1h->addr_to_region(ct->addr_for(card_ptr)));
+         g1h->addr_to_region(ct->addr_for(card_ptr)));        
 #endif
 }
 
@@ -1606,18 +1607,20 @@ bool G1RemSet::clean_card_before_refine(CardValue** const card_ptr_addr) {
 void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
                                         const uint worker_id) {
   assert(!_g1h->is_stw_gc_active(), "Only call concurrently");
-  check_card_ptr(card_ptr, _ct);
 
   // Construct the MemRegion representing the card.
   HeapWord* start = _ct->addr_for(card_ptr);
   // And find the region containing it.
-  HeapRegion* r = _g1h->heap_region_containing_or_null(start);
-  guarantee(G1UseAsyncDekkerSync || r != nullptr, "Can only be null with async dekker sync");
-  if (r == nullptr) {
-    // We may get empty areas with G1AsyncDekkerSync here because G1 collects logged
-    // cards in the pause containing cards from regions that were evacuated (and are
-    // now free). They may have been uncommitted already.
-    log_warning(gc)("null region, already uncommitted");
+  HeapRegion* r = _g1h->heap_region_containing(start);
+  if (G1UseAsyncDekkerSync && !r->is_old_or_humongous()) {
+    // We may get non-old non-humongous regions with G1AsyncDekkerSync here because
+    // G1 collects logged cards in the pause containing cards from regions that were
+    // evacuated (and were freed and possibly reallocated). They may have been
+    // uncommitted already too.
+    // For cards that we need to look at, region type and top are consistent due to
+    // either the safepoint before or the memory barrier with the same argument
+    // as below for reloading top().
+    log_debug(gc, region)("");
     return;
   }
   // This reload of the top is safe even though it happens after the full
