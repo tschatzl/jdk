@@ -349,8 +349,12 @@ void G1BarrierSetC2::g1_mark_card(GraphKit* kit,
   Node* zeroX = __ ConX(0);
   Node* no_base = __ top();
   BasicType card_bt = T_BYTE;
-  // Smash the dirty card value into card. MUST BE ORDERED WRT TO STORE
-  __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
+  if (!G1UseAsyncDekkerSync) {
+    // Smash the dirty card value into card. MUST BE ORDERED WRT TO STORE
+    __ storeCM(__ ctrl(), card_adr, zero, oop_store, oop_alias_idx, card_bt, Compile::AliasIdxRaw);
+  } else {
+    __ store(__ ctrl(), card_adr, zero, card_bt, Compile::AliasIdxRaw, MemNode::unordered);
+  }
 
   //  Now do the queue work
   __ if_then(index, BoolTest::ne, zeroX); {

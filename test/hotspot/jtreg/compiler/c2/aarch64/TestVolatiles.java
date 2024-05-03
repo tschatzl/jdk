@@ -275,6 +275,7 @@ public class TestVolatiles {
             // following the fix for 8225776 the G1 barrier is now
             // scheduled out of line after the membar volatile and
             // and subsequent return
+            // FIXME: no membars for card mark
             matches = new String[] {
                 "membar_release \\(elided\\)",
                 useCompressedOops ? "stlrw?" : "stlr",
