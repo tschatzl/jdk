@@ -128,7 +128,7 @@ public class TestEagerReclaimHumongousRegionsClearMarkBits {
             "-XX:InitiatingHeapOccupancyPercent=0", // Want to have as much as possible mark cycles.
             "-Xlog:gc",
             "-XX:+UnlockDiagnosticVMOptions",
-            "-XX:+VerifyAfterGC",
+            "-XX:+VerifyAfterGC", "-XX:+VerifyBeforeGC",
             "-XX:ConcGCThreads=1", // Want to make marking as slow as possible.
             "-XX:+G1VerifyBitmaps",
             TestEagerReclaimHumongousRegionsClearMarkBitsReclaimRegionFast.class.getName());

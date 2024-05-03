@@ -335,7 +335,7 @@
           "scan cost related prediction samples. A sample must involve "    \
           "the same or more than this number of code roots to be used.")    \
                                                                             \
-  product(bool, G1UseAsyncDekkerSync, false, DIAGNOSTIC,                     \
+  product(bool, G1UseAsyncDekkerSync, true, DIAGNOSTIC,                     \
           "Use Asynchronous Dekker Synchronization for write barriers.")    \
                                                                             \
   GC_G1_EVACUATION_FAILURE_FLAGS(develop,                                   \

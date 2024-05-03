@@ -1611,8 +1611,8 @@ void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
   // Construct the MemRegion representing the card.
   HeapWord* start = _ct->addr_for(card_ptr);
   // And find the region containing it.
-  HeapRegion* r = _g1h->heap_region_containing(start);
-  if (G1UseAsyncDekkerSync && !r->is_old_or_humongous()) {
+  HeapRegion* r = _g1h->heap_region_containing_or_null(start);
+  if (G1UseAsyncDekkerSync && (r == nullptr || !r->is_old_or_humongous())) {
     // We may get non-old non-humongous regions with G1AsyncDekkerSync here because
     // G1 collects logged cards in the pause containing cards from regions that were
     // evacuated (and were freed and possibly reallocated). They may have been
@@ -1623,6 +1623,7 @@ void G1RemSet::refine_card_concurrently(CardValue* const card_ptr,
     log_debug(gc, region)("");
     return;
   }
+  assert(G1UseAsyncDekkerSync || r != nullptr, "must be");
   // This reload of the top is safe even though it happens after the full
   // fence, because top is stable for old and unfiltered humongous
   // regions, so it must return the same value as the previous load when
