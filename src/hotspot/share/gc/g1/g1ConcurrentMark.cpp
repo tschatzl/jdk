@@ -1292,7 +1292,9 @@ class G1UpdateRegionLivenessAndSelectForRebuildTask : public WorkerTask {
         hr->note_end_of_marking(_cm->top_at_mark_start(hr), _cm->live_bytes(hr->hrm_index()));
 
         if (hr->live_bytes() != 0) {
-          if (tracker->update_old_before_rebuild(hr)) {
+          bool selected = tracker->update_old_before_rebuild(hr);
+          log_trace(gc,remset,tracking)("region %u live %zu selected %d", hr->hrm_index(), _cm->live_bytes(hr->hrm_index()), selected);
+          if (selected) {
             _num_selected_for_rebuild++;
           }
           _cm->update_top_at_rebuild_start(hr);
