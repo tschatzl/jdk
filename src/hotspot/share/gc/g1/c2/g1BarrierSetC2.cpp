@@ -387,8 +387,8 @@ public:
   }
 
   bool needs_liveness_data(const MachNode* mach) const {
-    return G1PreBarrierStubC2::needs_barrier(mach) ||
-           G1PostBarrierStubC2::needs_barrier(mach);
+    return G1BarrierStubC2::needs_pre_barrier(mach) ||
+            G1BarrierStubC2::needs_post_barrier(mach);
   }
 
   bool needs_livein_data() const {
@@ -402,10 +402,22 @@ static G1BarrierSetC2State* barrier_set_state() {
 
 G1BarrierStubC2::G1BarrierStubC2(const MachNode* node) : BarrierStubC2(node) {}
 
+bool G1BarrierStubC2::needs_pre_barrier(const MachNode* node) {
+  return (node->barrier_data() & G1C2BarrierPre) != 0;
+}
+
+bool G1BarrierStubC2::needs_post_barrier(const MachNode* node) {
+  return (node->barrier_data() & G1C2BarrierPost) != 0;
+}
+
+bool G1BarrierStubC2::post_new_val_maybe_null(const MachNode* node) {
+  return (node->barrier_data() & G1C2BarrierPostNotNull) == 0;
+}
+
 G1PreBarrierStubC2::G1PreBarrierStubC2(const MachNode* node) : G1BarrierStubC2(node) {}
 
 bool G1PreBarrierStubC2::needs_barrier(const MachNode* node) {
-  return (node->barrier_data() & G1C2BarrierPre) != 0;
+  return needs_pre_barrier(node);
 }
 
 G1PreBarrierStubC2* G1PreBarrierStubC2::create(const MachNode* node) {
@@ -447,48 +459,6 @@ Register G1PreBarrierStubC2::tmp2() const {
 void G1PreBarrierStubC2::emit_code(MacroAssembler& masm) {
   G1BarrierSetAssembler* bs = static_cast<G1BarrierSetAssembler*>(BarrierSet::barrier_set()->barrier_set_assembler());
   bs->generate_c2_pre_barrier_stub(&masm, this);
-}
-
-G1PostBarrierStubC2::G1PostBarrierStubC2(const MachNode* node) : G1BarrierStubC2(node) {}
-
-bool G1PostBarrierStubC2::needs_barrier(const MachNode* node) {
-  return (node->barrier_data() & G1C2BarrierPost) != 0;
-}
-
-G1PostBarrierStubC2* G1PostBarrierStubC2::create(const MachNode* node) {
-  G1PostBarrierStubC2* const stub = new (Compile::current()->comp_arena()) G1PostBarrierStubC2(node);
-  if (!Compile::current()->output()->in_scratch_emit_size()) {
-    barrier_set_state()->stubs()->append(stub);
-  }
-  return stub;
-}
-
-void G1PostBarrierStubC2::initialize_registers(Register thread, Register tmp1, Register tmp2, Register tmp3) {
-  _thread = thread;
-  _tmp1 = tmp1;
-  _tmp2 = tmp2;
-  _tmp3 = tmp3;
-}
-
-Register G1PostBarrierStubC2::thread() const {
-  return _thread;
-}
-
-Register G1PostBarrierStubC2::tmp1() const {
-  return _tmp1;
-}
-
-Register G1PostBarrierStubC2::tmp2() const {
-  return _tmp2;
-}
-
-Register G1PostBarrierStubC2::tmp3() const {
-  return _tmp3;
-}
-
-void G1PostBarrierStubC2::emit_code(MacroAssembler& masm) {
-  G1BarrierSetAssembler* bs = static_cast<G1BarrierSetAssembler*>(BarrierSet::barrier_set()->barrier_set_assembler());
-  bs->generate_c2_post_barrier_stub(&masm, this);
 }
 
 void* G1BarrierSetC2::create_barrier_state(Arena* comp_arena) const {

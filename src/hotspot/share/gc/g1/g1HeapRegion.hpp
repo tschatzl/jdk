@@ -38,6 +38,7 @@
 
 class G1CardSet;
 class G1CardSetConfiguration;
+class G1CardTable;
 class G1CollectedHeap;
 class G1CMBitMap;
 class G1Predictions;
@@ -471,6 +472,7 @@ public:
   void hr_clear(bool clear_space);
   // Clear the card table corresponding to this region.
   void clear_cardtable();
+  void clear_refinement_table();
 
   // Notify the region that an evacuation failure occurred for an object within this
   // region.
@@ -550,6 +552,7 @@ public:
   bool verify_code_roots(VerifyOption vo) const;
   bool verify_liveness_and_remset(VerifyOption vo) const;
 
+  void print_cardtable(G1CardTable* ct) const;
   void print() const;
   void print_on(outputStream* st) const;
 

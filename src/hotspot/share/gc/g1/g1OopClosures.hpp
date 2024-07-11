@@ -202,12 +202,19 @@ public:
 class G1ConcurrentRefineOopClosure: public BasicOopIterateClosure {
   G1CollectedHeap* _g1h;
   uint _worker_id;
+  bool _has_to_cset_ref;
+  bool _has_to_old_ref_only;
 
 public:
   G1ConcurrentRefineOopClosure(G1CollectedHeap* g1h, uint worker_id) :
     _g1h(g1h),
-    _worker_id(worker_id) {
+    _worker_id(worker_id),
+    _has_to_cset_ref(false),
+    _has_to_old_ref_only(false) {
   }
+
+  bool has_to_cset_ref() const { return _has_to_cset_ref; }
+  bool has_to_old_ref_only() const { return _has_to_old_ref_only; }
 
   virtual ReferenceIterationMode reference_iteration_mode() { return DO_FIELDS; }
 
@@ -219,6 +226,7 @@ public:
 class G1RebuildRemSetClosure : public BasicOopIterateClosure {
   G1CollectedHeap* _g1h;
   uint _worker_id;
+
 public:
   G1RebuildRemSetClosure(G1CollectedHeap* g1h, uint worker_id) : _g1h(g1h), _worker_id(worker_id) {
   }

@@ -35,7 +35,6 @@ class StubAssembler;
 class G1PreBarrierStub;
 class G1PostBarrierStub;
 class G1PreBarrierStubC2;
-class G1PostBarrierStubC2;
 
 class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
  protected:
@@ -60,10 +59,16 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
  public:
 #ifdef COMPILER1
   void gen_pre_barrier_stub(LIR_Assembler* ce, G1PreBarrierStub* stub);
-  void gen_post_barrier_stub(LIR_Assembler* ce, G1PostBarrierStub* stub);
 
   void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
-  void generate_c1_post_barrier_runtime_stub(StubAssembler* sasm);
+
+  void g1_write_barrier_post_c1(MacroAssembler* masm,
+                                Register store_addr,
+                                Register new_val,
+                                Register thread,
+                                Register tmp1,
+                                Register tmp2);
+
 #endif // COMPILER1
 
 #ifdef COMPILER2
@@ -82,8 +87,6 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
                                 Register tmp1,
                                 Register tmp2,
                                 G1PostBarrierStubC2* c2_stub);
-  void generate_c2_post_barrier_stub(MacroAssembler* masm,
-                                     G1PostBarrierStubC2* stub) const;
 #endif // COMPILER2
 
   virtual void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
