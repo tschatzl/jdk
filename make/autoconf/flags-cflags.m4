@@ -708,7 +708,7 @@ AC_DEFUN([FLAGS_SETUP_CFLAGS_CPU_DEP],
     elif test "x$FLAGS_CPU" = xarm; then
       # -Wno-psabi to get rid of annoying "note: the mangling of 'va_list' has changed in GCC 4.4"
       $1_CFLAGS_CPU="-fsigned-char -Wno-psabi $ARM_ARCH_TYPE_FLAGS $ARM_FLOAT_TYPE_FLAGS -DJDK_ARCH_ABI_PROP_NAME='\"\$(JDK_ARCH_ABI_PROP_NAME)\"'"
-      $1_CFLAGS_CPU_JVM="-DARM"
+      $1_CFLAGS_CPU_JVM="-DARM -Wno-attributes"
     elif test "x$FLAGS_CPU_ARCH" = xppc; then
       $1_CFLAGS_CPU_JVM="-minsert-sched-nops=regroup_exact -mno-multiple -mno-string"
       if test "x$FLAGS_CPU" = xppc64; then

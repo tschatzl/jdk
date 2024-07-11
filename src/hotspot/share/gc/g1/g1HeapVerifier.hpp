@@ -78,11 +78,13 @@ public:
   // Do sanity check on the contents of the in-cset fast test table.
   bool check_region_attr_table() PRODUCT_RETURN_( return true; );
 
-  void verify_card_table_cleanup() PRODUCT_RETURN;
+  void verify_card_table_cleanup();
+  void verify_refinement_table_clean();
 
-  void verify_not_dirty_region(G1HeapRegion* hr) PRODUCT_RETURN;
-  void verify_dirty_region(G1HeapRegion* hr) PRODUCT_RETURN;
-  void verify_dirty_young_regions() PRODUCT_RETURN;
+  void verify_ct_clean_region(G1HeapRegion* hr);
+  void verify_rt_dirty_to_dummy_top(G1HeapRegion* hr);
+  void verify_rt_clean_from_top(G1HeapRegion* hr);
+  void verify_rt_clean_region(G1HeapRegion* hr);
 };
 
 #endif // SHARE_GC_G1_G1HEAPVERIFIER_HPP
