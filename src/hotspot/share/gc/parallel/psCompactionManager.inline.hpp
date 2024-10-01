@@ -131,7 +131,7 @@ inline void ParCompactionManager::follow_contents(const ScannerTask& task) {
     assert(PSParallelCompact::mark_bitmap()->is_marked(task.to_partial_array_state()->source()), "should be marked");
     process_array_chunk(task.to_partial_array_state());
   } else {
-    oop obj = task.obj();
+    oop obj = task.to_oop();
     assert(PSParallelCompact::mark_bitmap()->is_marked(obj), "should be marked");
     if (obj->is_objArray()) {
       push_objArray(obj);

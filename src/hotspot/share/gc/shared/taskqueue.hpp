@@ -609,6 +609,8 @@ class ScannerTask {
 public:
   ScannerTask() : _p(nullptr) {}
 
+  explicit ScannerTask(oop p) : _p(encode(p, OopTag)) {}
+
   explicit ScannerTask(oop* p) : _p(encode(p, OopTag)) {}
 
   explicit ScannerTask(narrowOop* p) : _p(encode(p, NarrowOopTag)) {}
@@ -634,6 +636,10 @@ public:
 
   oop* to_oop_ptr() const {
     return static_cast<oop*>(decode(OopTag));
+  }
+
+  oop to_oop() const {
+    return static_cast<oop>(decode(OopTag));
   }
 
   narrowOop* to_narrow_oop_ptr() const {
