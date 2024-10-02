@@ -83,6 +83,28 @@ void TaskQueueStats::print(outputStream* stream, unsigned int width) const
   #undef FMT
 }
 
+static const char* const pm_stats_hdr[] = {
+  "    ----partial array----     arrays      array",
+  "thr       push      steal    chunked     chunks",
+  "--- ---------- ---------- ---------- ----------"
+};
+
+void PartialArrayTaskStats::print_header(outputStream* const s) {
+  const uint hlines = sizeof(pm_stats_hdr) / sizeof(pm_stats_hdr[0]);
+  for (uint i = 0; i < hlines; ++i) {
+    s->print_cr("%s", pm_stats_hdr[i]);
+  }
+}
+
+void PartialArrayTaskStats::print(outputStream* const s, uint i) const {
+  #define FMT " " SIZE_FORMAT_W(10)
+  s->print_cr("%3u" FMT FMT FMT FMT,
+              i, _array_chunk_pushes, _array_chunk_steals,
+              _arrays_chunked, _array_chunks_processed);
+  #undef FMT
+}
+
+
 #ifdef ASSERT
 // Invariants which should hold after a TaskQueue has been emptied and is
 // quiescent; they do not hold at arbitrary times.

@@ -508,6 +508,7 @@ public:
 #if TASKQUEUE_STATS
 private:
   static void print_taskqueue_stats_hdr(outputStream* const st, const char* label);
+
 public:
   void print_taskqueue_stats(outputStream* const st, const char* label);
   void reset_taskqueue_stats();
@@ -574,6 +575,38 @@ private:
 };
 
 class PartialArrayState;
+
+class PartialArrayTaskStats {
+public:
+  size_t _array_chunk_pushes;
+  size_t _array_chunk_steals;
+  size_t _arrays_chunked;
+  size_t _array_chunks_processed;
+
+  PartialArrayTaskStats() { reset(); }
+
+  void reset() {
+    _array_chunk_pushes = 0;
+    _array_chunk_steals = 0;
+    _arrays_chunked = 0;
+    _array_chunks_processed = 0;
+  }
+
+  void record_array_chunked(uint num_new_chunks) {
+    _arrays_chunked++;
+    _array_chunk_pushes += num_new_chunks;
+  }
+
+  void record_array_chunk_steal() { _array_chunk_steals++; }
+
+  void record_array_chunk_processed(uint num_new_chunks) {
+    _array_chunks_processed++;
+    _array_chunk_pushes += num_new_chunks;
+  }
+
+  static void print_header(outputStream* const s);
+  void print(outputStream* const s, uint i) const;
+};
 
 // Discriminated union over oop/oop*, narrowOop*, and PartialArrayState.
 // Uses a low tag in the associated pointer to identify the category.

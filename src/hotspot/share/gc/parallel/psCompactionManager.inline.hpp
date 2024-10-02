@@ -213,7 +213,7 @@ inline void ParCompactionManager::flush_and_destroy_marking_stats_cache() {
 #if TASKQUEUE_STATS
 void ParCompactionManager::record_steal(ScannerTask task) {
   if (task.is_partial_array_state()) {
-    ++_array_chunk_steals;
+    _partial_array_stats.record_array_chunk_steal();
   }
 }
 #endif // TASKQUEUE_STATS

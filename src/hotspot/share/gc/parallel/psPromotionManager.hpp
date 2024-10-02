@@ -68,15 +68,11 @@ class PSPromotionManager {
   static MutableSpace*                  _young_space;
 
 #if TASKQUEUE_STATS
-  size_t                              _array_chunk_pushes;
-  size_t                              _array_chunk_steals;
-  size_t                              _arrays_chunked;
-  size_t                              _array_chunks_processed;
+  PartialArrayTaskStats                 _partial_array_stats;
 
-  void print_local_stats(outputStream* const out, uint i) const;
-  static void print_taskqueue_stats();
+  void print_and_reset_local_stats(outputStream* const out, uint i);
 
-  void reset_stats();
+  static void print_and_reset_taskqueue_stats();
 #endif // TASKQUEUE_STATS
 
   PSYoungPromotionLAB                 _young_lab;

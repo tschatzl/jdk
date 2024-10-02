@@ -126,8 +126,7 @@ static void steal_work(TaskTerminator& terminator, uint worker_id) {
 
   while (true) {
     ScannerTask task;
-    if (PSPromotionManager::steal_depth(worker_id, task)) {
-      TASKQUEUE_STATS_ONLY(pm->record_steal(task));
+    if (pm->steal_depth(worker_id, task)) {
       pm->process_popped_location_depth(task);
       pm->drain_stacks_depth(true);
     } else {

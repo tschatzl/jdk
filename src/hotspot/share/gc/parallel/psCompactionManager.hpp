@@ -83,13 +83,6 @@ class ParCompactionManager : public CHeapObj<mtGC> {
   uint                          _partial_array_state_allocator_index;
   PSMarkTaskQueue               _marking_stack;
 
-#if TASKQUEUE_STATS
-  size_t                        _array_chunk_pushes;
-  size_t                        _array_chunk_steals;
-  size_t                        _arrays_chunked;
-  size_t                        _array_chunks_processed;
-#endif // TASKQUEUE_STATS
-
   size_t                        _next_shadow_region;
 
   PCMarkAndPushClosure _mark_and_push_closure;
@@ -158,9 +151,10 @@ class ParCompactionManager : public CHeapObj<mtGC> {
   MarkingStatsCache* _marking_stats_cache;
 
 #if TASKQUEUE_STATS
+  PartialArrayTaskStats _partial_array_stats;
+
   static void print_and_reset_taskqueue_stats();
-  void print_local_stats(outputStream* const out, uint i) const;
-  void reset_stats();
+  void print_and_reset_local_stats(outputStream* const out, uint i);
 #endif // TASKQUEUE_STATS
 
 public:
