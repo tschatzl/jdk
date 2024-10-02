@@ -39,7 +39,7 @@
 #if !defined(TASKQUEUE_STATS) && defined(ASSERT)
 #define TASKQUEUE_STATS 1
 #elif !defined(TASKQUEUE_STATS)
-#define TASKQUEUE_STATS 1
+#define TASKQUEUE_STATS 0
 #endif
 
 #if TASKQUEUE_STATS
