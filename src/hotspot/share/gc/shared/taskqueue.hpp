@@ -575,8 +575,10 @@ private:
 
 class PartialArrayState;
 
-// Discriminated union over oop*, narrowOop*, and PartialArrayState.
+// Discriminated union over oop/oop*, narrowOop*, and PartialArrayState.
 // Uses a low tag in the associated pointer to identify the category.
+// Oop/oop* are overloaded using the same tag because they can not appear at the
+// same time.
 // Used as a task queue element type.
 class ScannerTask {
   void* _p;
@@ -639,7 +641,7 @@ public:
   }
 
   oop to_oop() const {
-    return static_cast<oop>(decode(OopTag));
+    return cast_to_oop(decode(OopTag));
   }
 
   narrowOop* to_narrow_oop_ptr() const {
