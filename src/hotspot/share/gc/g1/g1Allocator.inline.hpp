@@ -49,6 +49,10 @@ inline OldGCAllocRegion* G1Allocator::old_gc_alloc_region() {
   return &_old_gc_alloc_region;
 }
 
+inline size_t G1Allocator::retained_size() const {
+  return _retained_old_gc_alloc_region != nullptr ? _retained_old_gc_alloc_region->free() : 0;
+}
+
 inline HeapWord* G1Allocator::attempt_allocation(size_t min_word_size,
                                                  size_t desired_word_size,
                                                  size_t* actual_word_size) {

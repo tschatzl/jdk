@@ -231,6 +231,7 @@ private:
   // Calculate the desired eden length that can fit into the pause time
   // goal before young only gcs.
   uint calculate_desired_eden_length_before_young_only(double base_time_ms,
+                                                       uint free_regions_at_end_of_collection,
                                                        uint min_eden_length,
                                                        uint max_eden_length) const;
 

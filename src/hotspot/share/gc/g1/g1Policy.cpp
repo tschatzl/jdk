@@ -403,6 +403,7 @@ uint G1Policy::calculate_desired_eden_length_by_pause(double base_time_ms,
                                                       uint max_eden_length) const {
   if (!next_gc_should_be_mixed()) {
     return calculate_desired_eden_length_before_young_only(base_time_ms,
+                                                           _free_regions_at_end_of_collection,
                                                            min_eden_length,
                                                            max_eden_length);
   } else {
@@ -413,6 +414,7 @@ uint G1Policy::calculate_desired_eden_length_by_pause(double base_time_ms,
 }
 
 uint G1Policy::calculate_desired_eden_length_before_young_only(double base_time_ms,
+                                                               uint free_regions_at_end_of_collection,
                                                                uint min_eden_length,
                                                                uint max_eden_length) const {
   assert(use_adaptive_young_list_length(), "pre-condition");
@@ -423,7 +425,7 @@ uint G1Policy::calculate_desired_eden_length_before_young_only(double base_time_
   // makes sense fits within the target pause time.
 
   G1YoungLengthPredictor p(base_time_ms,
-                           _free_regions_at_end_of_collection,
+                           free_regions_at_end_of_collection,
                            _mmu_tracker->max_gc_time() * 1000.0,
                            this);
   if (p.will_fit(min_eden_length)) {
@@ -485,11 +487,18 @@ uint G1Policy::calculate_desired_eden_length_before_young_only(double base_time_
   return min_eden_length;
 }
 
+static uint saturated_sub(uint a, uint b) {
+  return a <= b ? 0 : a - b;
+}
+
 uint G1Policy::calculate_desired_eden_length_before_mixed(double base_time_ms,
                                                           uint min_eden_length,
                                                           uint max_eden_length) const {
   uint min_marking_candidates = MIN2(calc_min_old_cset_length(candidates()->last_marking_candidates_length()),
                                      candidates()->marking_regions_length());
+
+  size_t bytes_to_copy_for_old_regions = 0;
+
   double predicted_region_evac_time_ms = base_time_ms;
   for (G1CollectionSetCandidateInfo* ci : candidates()->marking_regions()) {
     // We optimistically assume that any of these marking candidate regions will
@@ -498,10 +507,20 @@ uint G1Policy::calculate_desired_eden_length_before_mixed(double base_time_ms,
       break;
     }
     predicted_region_evac_time_ms += predict_region_total_time_ms(ci->_r, false /* for_young_only_phase */);
+    bytes_to_copy_for_old_regions += predict_bytes_to_copy(ci->_r);
     min_marking_candidates--;
   }
 
+  size_t left_in_retained_alloc_region = _g1h->allocator()->retained_size();
+  size_t bytes_to_copy_for_old = saturated_sub(bytes_to_copy_for_old_regions, left_in_retained_alloc_region);
+  uint regions_to_reserve_for_old = checked_cast<uint>(G1HeapRegion::align_up_to_region_byte_size(bytes_to_copy_for_old) / G1HeapRegion::GrainBytes);
+
+  log_debug(gc,ergo,cset)("desired_eden_length_before_mixed: base time %1.2f regions to reserve %u free regions %u min_eden_length %u max_eden_length %u",
+                          predicted_region_evac_time_ms, regions_to_reserve_for_old, _free_regions_at_end_of_collection, min_eden_length, max_eden_length);
+
+  uint free_regions_for_eden = saturated_sub(_free_regions_at_end_of_collection, regions_to_reserve_for_old);
   return calculate_desired_eden_length_before_young_only(predicted_region_evac_time_ms,
+                                                         free_regions_for_eden,
                                                          min_eden_length,
                                                          max_eden_length);
 }
