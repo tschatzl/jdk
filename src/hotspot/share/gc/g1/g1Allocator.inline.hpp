@@ -49,7 +49,7 @@ inline OldGCAllocRegion* G1Allocator::old_gc_alloc_region() {
   return &_old_gc_alloc_region;
 }
 
-inline size_t G1Allocator::retained_size() const {
+inline size_t G1Allocator::retained_old_region_free() const {
   return _retained_old_gc_alloc_region != nullptr ? _retained_old_gc_alloc_region->free() : 0;
 }
 

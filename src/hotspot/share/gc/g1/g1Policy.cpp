@@ -23,7 +23,7 @@
  */
 
 #include "precompiled.hpp"
-#include "gc/g1/g1Allocator.hpp"
+#include "gc/g1/g1Allocator.inline.hpp"
 #include "gc/g1/g1Analytics.hpp"
 #include "gc/g1/g1Arguments.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
@@ -511,14 +511,18 @@ uint G1Policy::calculate_desired_eden_length_before_mixed(double base_time_ms,
     min_marking_candidates--;
   }
 
-  size_t left_in_retained_alloc_region = _g1h->allocator()->retained_size();
+  size_t left_in_retained_alloc_region = _g1h->allocator()->retained_old_region_free();
   size_t bytes_to_copy_for_old = saturated_sub(bytes_to_copy_for_old_regions, left_in_retained_alloc_region);
   uint regions_to_reserve_for_old = checked_cast<uint>(G1HeapRegion::align_up_to_region_byte_size(bytes_to_copy_for_old) / G1HeapRegion::GrainBytes);
-
-  log_debug(gc,ergo,cset)("desired_eden_length_before_mixed: base time %1.2f regions to reserve %u free regions %u min_eden_length %u max_eden_length %u",
-                          predicted_region_evac_time_ms, regions_to_reserve_for_old, _free_regions_at_end_of_collection, min_eden_length, max_eden_length);
-
   uint free_regions_for_eden = saturated_sub(_free_regions_at_end_of_collection, regions_to_reserve_for_old);
+
+  log_trace(gc, ergo, heap)("Desired eden length before mixed: bytes to copy %zu retained left %zu regions to reserve for old %u total free regions %u free regions for eden %u",
+                            bytes_to_copy_for_old_regions,
+                            left_in_retained_alloc_region,
+                            regions_to_reserve_for_old,
+                            _free_regions_at_end_of_collection,
+                            free_regions_for_eden);
+
   return calculate_desired_eden_length_before_young_only(predicted_region_evac_time_ms,
                                                          free_regions_for_eden,
                                                          min_eden_length,

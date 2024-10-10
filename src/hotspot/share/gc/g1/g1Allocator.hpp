@@ -109,7 +109,7 @@ public:
   void release_gc_alloc_regions(G1EvacInfo* evacuation_info);
   void abandon_gc_alloc_regions();
   bool is_retained_old_region(G1HeapRegion* hr);
-  size_t retained_size() const;
+  size_t retained_old_region_free() const;
 
   // Allocate blocks of memory during mutator time.
 
