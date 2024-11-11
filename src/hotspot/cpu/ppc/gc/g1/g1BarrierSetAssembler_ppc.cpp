@@ -244,7 +244,9 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
     __ block_comment(err_msg("same store_addr/new_val due to self-referential store with imprecise card mark %s", store_addr->name()));
     return;
   }
-  assert_different_registers(store_addr, new_val, thread, tmp1, tmp2, noreg);
+
+  assert_different_registers(store_addr, new_val, tmp1, R0);
+  assert_different_registers(store_addr, tmp1, tmp2, R0);
 
   __ xorr(R0, store_addr, new_val);                          // tmp1 := store address ^ new value
   __ srdi_(R0, R0, G1HeapRegion::LogOfHRGrainBytes);         // tmp1 := ((store address ^ new value) >> LogOfHRGrainBytes)
@@ -279,7 +281,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm, Decorato
   bool not_null = (decorators & IS_NOT_NULL) != 0;
 
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, R16_thread, tmp1, tmp2, done, not_null);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, R16_thread, tmp1, tmp2, done, !not_null);
   __ bind(done);
 }
 
@@ -504,7 +506,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c1(MacroAssembler* masm,
                                                      Register tmp1,
                                                      Register tmp2) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, false /* new_val_maybe_null */);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, true /* new_val_maybe_null */);
   masm->bind(done);
 }
 
