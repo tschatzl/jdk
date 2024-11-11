@@ -70,11 +70,14 @@ class LIRAccess: public StackObj {
   LIR_Opr       _resolved_addr;
   CodeEmitInfo* _patch_emit_info;
   CodeEmitInfo* _access_emit_info;
+  ciMethod*     _profiled_method;
+  int           _profiled_bci;
 
 public:
   LIRAccess(LIRGenerator* gen, DecoratorSet decorators,
             LIRAddressOpr base, LIRAddressOpr offset, BasicType type,
-            CodeEmitInfo* patch_emit_info = nullptr, CodeEmitInfo* access_emit_info = nullptr) :
+            CodeEmitInfo* patch_emit_info = nullptr, CodeEmitInfo* access_emit_info = nullptr,
+            ciMethod* profiled_method = nullptr, int profiled_bci = 0) :
     _gen(gen),
     _decorators(AccessInternal::decorator_fixup(decorators, type)),
     _base(base),
@@ -82,7 +85,9 @@ public:
     _type(type),
     _resolved_addr(),
     _patch_emit_info(patch_emit_info),
-    _access_emit_info(access_emit_info) {}
+    _access_emit_info(access_emit_info),
+    _profiled_method(profiled_method),
+    _profiled_bci(profiled_bci) {}
 
   void load_base()   { _base.item().load_item(); }
   void load_offset() { _offset.item().load_nonconstant(); }
@@ -95,6 +100,8 @@ public:
   LIRGenerator* gen() const              { return _gen; }
   CodeEmitInfo*& patch_emit_info()       { return _patch_emit_info; }
   CodeEmitInfo*& access_emit_info()      { return _access_emit_info; }
+  ciMethod* profiled_method()            { return _profiled_method; }
+  int profiled_bci()                     { return _profiled_bci; }
   LIRAddressOpr& base()                  { return _base; }
   LIRAddressOpr& offset()                { return _offset; }
   BasicType type() const                 { return _type; }

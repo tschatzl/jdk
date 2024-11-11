@@ -35,17 +35,18 @@ public class DataLayout {
   public static final int noTag = 0;
   public static final int bitDataTag = 1;
   public static final int counterDataTag = 2;
-  public static final int jumpDataTag= 3;
-  public static final int receiverTypeDataTag = 4;
-  public static final int virtualCallDataTag = 5;
-  public static final int retDataTag = 6;
-  public static final int branchDataTag = 7;
-  public static final int multiBranchDataTag = 8;
-  public static final int argInfoDataTag = 9;
-  public static final int callTypeDataTag = 10;
-  public static final int virtualCallTypeDataTag = 11;
-  public static final int parametersTypeDataTag = 12;
-  public static final int speculativeTrapDataTag = 13;
+  public static final int g1CounterDataTag = 3;
+  public static final int jumpDataTag= 4;
+  public static final int receiverTypeDataTag = 5;
+  public static final int virtualCallDataTag = 6;
+  public static final int retDataTag = 7;
+  public static final int branchDataTag = 8;
+  public static final int multiBranchDataTag = 9;
+  public static final int argInfoDataTag = 10;
+  public static final int callTypeDataTag = 11;
+  public static final int virtualCallTypeDataTag = 12;
+  public static final int parametersTypeDataTag = 13;
+  public static final int speculativeTrapDataTag = 14;
 
   // The trap state breaks down as [recompile:1 | reason:31].
   // This further breakdown is defined in deoptimization.cpp.

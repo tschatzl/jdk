@@ -335,6 +335,12 @@
           "scan cost related prediction samples. A sample must involve "    \
           "the same or more than this number of code roots to be used.")    \
                                                                             \
+  product(bool, XXXSkipPreBarrier, false,         \
+          "Skip pre-barrier generation")    \
+                                                                            \
+  product(bool, XXXDoYoungPreDirty, false,         \
+          "Pre-Dirty young gen. Allows in-young-gen profiling.")    \
+                                                                            \
   GC_G1_EVACUATION_FAILURE_FLAGS(develop,                                   \
                     develop_pd,                                             \
                     product,                                                \

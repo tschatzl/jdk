@@ -222,7 +222,20 @@ void G1BarrierSetAssembler::g1_write_barrier_pre(MacroAssembler* masm,
   __ pop_call_clobbered_registers();
 
   __ bind(done);
+}
 
+static void generate_post_barrier_same_region_check(MacroAssembler* masm, const Register store_addr, const Register new_val, const Register tmp1, Label& done) {
+  __ block_comment("cross-region");
+
+  // Does store cross heap regions?
+  __ eor(tmp1, store_addr, new_val);                     // tmp1 := store address ^ new value
+  __ lsr(tmp1, tmp1, G1HeapRegion::LogOfHRGrainBytes);   // tmp1 := ((store address ^ new value) >> LogOfHRGrainBytes)
+  __ cbz(tmp1, done);
+}
+
+static void generate_post_barrier_null_new_value_check(MacroAssembler* masm, const Register new_val, const Register tmp1, Label& done) {
+  __ block_comment("null-new-val");
+  __ cbz(new_val, done);
 }
 
 static void generate_post_barrier_fast_path(MacroAssembler* masm,
@@ -232,19 +245,35 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
                                             const Register tmp1,
                                             const Register tmp2,
                                             Label& done,
-                                            bool new_val_maybe_null) {
+                                            uint ext_barrier_data) {
   assert(thread == rthread, "must be");
   assert_different_registers(store_addr, new_val, thread, tmp1, tmp2, noreg);
 
-  // Does store cross heap regions?
-  __ eor(tmp1, store_addr, new_val);                     // tmp1 := store address ^ new value
-  __ lsr(tmp1, tmp1, G1HeapRegion::LogOfHRGrainBytes);   // tmp1 := ((store address ^ new value) >> LogOfHRGrainBytes)
-  __ cbz(tmp1, done);
 
-  // Crosses regions, storing null?
-  if (new_val_maybe_null) {
-    __ cbz(new_val, done);
+  bool gen_cross_region_check = ((ext_barrier_data & G1C2BarrierPostGenCrossCheck) != 0) || !UseNewCode;
+  bool gen_null_new_val_check = ((ext_barrier_data & G1C2BarrierPostGenNullCheck) != 0) || !UseNewCode;
+  bool gen_card_table_check = ((ext_barrier_data & G1C2BarrierPostGenCardCheck) != 0) || !UseNewCode;
+  bool null_check_first = ((ext_barrier_data & G1C2BarrierPostNullCheckFirst) != 0) || !UseNewCode;
+
+  bool new_val_maybe_null = ((ext_barrier_data & G1C2BarrierPostNotNull) != 0);
+
+  __ block_comment(err_msg("barrier parts: gen_same_region %d gen_null_new %d gen_card_table %d maybe_null %d swap_same_null %d", gen_cross_region_check, gen_null_new_val_check, gen_card_table_check, new_val_maybe_null, null_check_first));
+
+  if (!null_check_first) {
+    if (gen_cross_region_check) {
+      generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done);
+    }
+    // Crosses regions, storing null?
+    if (gen_null_new_val_check && new_val_maybe_null) {
+      generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done);
+    }
+  } else {
+    assert(gen_cross_region_check, "must be");
+    assert(gen_null_new_val_check, "must be");
+    generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done);
+    generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done);
   }
+
   // Storing region crossing non-null, is card young?
 
   __ lsr(tmp1, store_addr, CardTable::card_shift());     // tmp1 := card address relative to card table base
@@ -252,7 +281,7 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
   Address card_table_addr(thread, in_bytes(G1ThreadLocalData::card_table_base_offset()));
   __ ldr(tmp2, card_table_addr);                         // tmp2 := card table base address
   __ add(tmp1, tmp1, tmp2);                              // tmp1 := card address
-  if (UseCondCardMark) {
+  if (gen_card_table_check && UseCondCardMark) {
     __ ldrb(tmp2, Address(tmp1));                        // tmp2 := card
     // Instead of loading clean_card_val and comparing, we exploit the fact that
     // the LSB of non-clean cards is always 0, and the LSB of clean cards 1.
@@ -262,6 +291,14 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
   __ strb(zr, Address(tmp1));                            // *(card address) := dirty_card_val
 }
 
+static uint8_t gen_all_barrier_parts() {
+  return G1C2BarrierPostNotNull | G1C2BarrierPostGenCrossCheck | G1C2BarrierPostGenNullCheck | G1C2BarrierPostGenCardCheck;
+}
+
+static uint8_t gen_no_barrier_parts() {
+  return 0;
+}
+
 void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
                                                   Register store_addr,
                                                   Register new_val,
@@ -269,7 +306,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
                                                   Register tmp1,
                                                   Register tmp2) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, false /* new_val_maybe_null */);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, gen_all_barrier_parts());
   __ bind(done);
 }
 
@@ -329,9 +366,9 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c2(MacroAssembler* masm,
                                                      Register thread,
                                                      Register tmp1,
                                                      Register tmp2,
-                                                     bool new_val_maybe_null) {
+                                                     uint8_t ext_barrier_data) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, new_val_maybe_null);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, ext_barrier_data);
   __ bind(done);
 }
 
@@ -430,6 +467,63 @@ void G1BarrierSetAssembler::gen_pre_barrier_stub(LIR_Assembler* ce, G1PreBarrier
 
 #undef __
 
+#define __ masm->
+
+void G1BarrierSetAssembler::g1_write_barrier_post_profile_c1(ciMethodData* md,
+                                                             int bci,
+                                                             MacroAssembler* masm,
+                                                             Register store_addr,
+                                                             Register new_val,
+                                                             Register thread,
+                                                             Register tmp1,
+                                                             Register tmp2) {
+  assert(md != nullptr, "must be");
+
+  ciProfileData* data = md->bci_to_data(bci);
+  assert(data != nullptr, "must be");
+  if (!data->is_G1CounterData()) {
+    assert(!UseNewCode, "must be");
+    return;
+  }
+
+  
+  data = data->as_G1CounterData();
+  assert_different_registers(store_addr, new_val, thread, tmp1, tmp2, rscratch1 /* FIXME: move rscratch1 to regular tmp register */);
+
+  Register mdp = tmp2;
+  __ mov_metadata(mdp, md->constant_encoding());
+  __ increment(Address(mdp, md->byte_offset_of_slot(data, G1CounterData::visits_counter_offset())));
+
+  if (UseCompressedOops) {
+    __ decode_heap_oop(tmp1, new_val);
+    __ xorptr(tmp1, tmp1, store_addr);
+  } else {
+    __ xorptr(tmp1, new_val, store_addr);
+  }
+  __ shrptr(tmp1, tmp1, G1HeapRegion::LogOfHRGrainBytes);
+  __ cmp(tmp1, zr);
+  __ cset(tmp1, Assembler::EQ);
+  __ addptr(Address(mdp, md->byte_offset_of_slot(data, G1CounterData::same_region_counter_offset())), tmp1); // How many same-region pointers
+  
+  __ cmp(new_val, zr);
+  __ cset(tmp1, Assembler::EQ);
+  __ addptr(Address(mdp, md->byte_offset_of_slot(data, G1CounterData::null_new_val_counter_offset())), tmp1); // How many zeros
+
+  __ movptr(rscratch1, Address(thread, in_bytes(G1ThreadLocalData::card_table_base_offset())));
+  __ shrptr(tmp1, store_addr, G1CardTable::card_shift());
+  __ cmpb(Address(tmp1, rscratch1), G1CardTable::clean_card_val());
+  __ cset(tmp1, Assembler::EQ);
+  __ addptr(Address(mdp, md->byte_offset_of_slot(data, G1CounterData::clean_cards_counter_offset())), tmp1); // How many clean cards
+
+  if (XXXDoYoungPreDirty) {
+    __ movptr(rscratch1, Address(thread, in_bytes(G1ThreadLocalData::card_table_base_offset())));
+    __ shrptr(tmp1, store_addr, G1CardTable::card_shift());
+    __ cmpb(Address(tmp1, rscratch1), G1CardTable::g1_young_card);
+    __ cset(tmp1, Assembler::EQ);
+    __ addptr(Address(mdp, md->byte_offset_of_slot(data, G1CounterData::from_young_counter_offset())), tmp1); // How many from-young cards
+  }
+}
+
 void G1BarrierSetAssembler::g1_write_barrier_post_c1(MacroAssembler* masm,
                                                      Register store_addr,
                                                      Register new_val,
@@ -437,9 +531,11 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c1(MacroAssembler* masm,
                                                      Register tmp1,
                                                      Register tmp2) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, true /* new_val_maybe_null */);
-  masm->bind(done);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, gen_all_barrier_parts());
+  __ bind(done);
 }
+
+#undef __
 
 #define __ sasm->
 

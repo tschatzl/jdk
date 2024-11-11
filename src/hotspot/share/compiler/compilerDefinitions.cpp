@@ -520,10 +520,12 @@ bool CompilerConfig::check_args_consistency(bool status) {
       FLAG_SET_CMDLINE(UseCompiler, false);
     }
     if (ProfileInterpreter) {
+      /*
       if (!FLAG_IS_DEFAULT(ProfileInterpreter)) {
         warning("ProfileInterpreter disabled due to -Xint.");
       }
       FLAG_SET_CMDLINE(ProfileInterpreter, false);
+       */
     }
     if (TieredCompilation) {
       if (!FLAG_IS_DEFAULT(TieredCompilation)) {
@@ -586,10 +588,12 @@ void CompilerConfig::ergo_initialize() {
   }
 
   if (ProfileInterpreter && CompilerConfig::is_c1_simple_only()) {
+    /*
     if (!FLAG_IS_DEFAULT(ProfileInterpreter)) {
         warning("ProfileInterpreter disabled due to client emulation mode");
     }
     FLAG_SET_CMDLINE(ProfileInterpreter, false);
+     */
   }
 
 #ifdef COMPILER2

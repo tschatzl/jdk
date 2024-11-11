@@ -1148,7 +1148,7 @@ void TemplateTable::aastore() {
 
   // Generate subtype check.  Blows rcx, rdi
   // Superklass in rax.  Subklass in rbx.
-  __ gen_subtype_check(rbx, ok_is_subtype);
+  __ gen_subtype_check(rbx, ok_is_subtype, true /* is_aastore */);
 
   // Come here on failure
   // object is at TOS
@@ -1158,15 +1158,15 @@ void TemplateTable::aastore() {
   __ bind(ok_is_subtype);
 
   // Get the value we will store
-  __ movptr(rax, at_tos());
-  __ movl(rcx, at_tos_p1()); // index
+  __ movptr(rax, at_tos()); // reload value
+  __ movl(rcx, at_tos_p1()); // reload index
   // Now store using the appropriate barrier
   do_oop_store(_masm, element_address, rax, IS_ARRAY);
   __ jmp(done);
 
   // Have a null in rax, rdx=array, ecx=index.  Store null at ary[idx]
   __ bind(is_null);
-  __ profile_null_seen(rbx);
+  __ profile_null_seen(rbx, true /* is_aastore */);
 
   // Store a null
   do_oop_store(_masm, element_address, noreg, IS_ARRAY);
@@ -3245,6 +3245,8 @@ void TemplateTable::putfield_or_static(int byte_no, bool is_static, RewriteContr
   putfield_or_static_helper(byte_no, is_static, rc, obj, off, tos_state);
 
   __ bind(Done);
+
+  __ profile_putfield_fix_mdp();
 }
 
 void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, RewriteControl rc,
@@ -3299,6 +3301,7 @@ void TemplateTable::putfield_or_static_helper(int byte_no, bool is_static, Rewri
     __ pop(atos);
     if (!is_static) pop_and_check_object(obj);
     // Store into the field
+    __ profile_oop_store(field, rax);
     do_oop_store(_masm, field, rax);
     if (!is_static && rc == may_rewrite) {
       patch_bytecode(Bytecodes::_fast_aputfield, bc, rbx, true, byte_no);
@@ -3517,6 +3520,8 @@ void TemplateTable::fast_storefield(TosState state) {
   fast_storefield_helper(field, rax);
 
   __ bind(Done);
+
+  __ profile_putfield_fix_mdp();
 }
 
 void TemplateTable::fast_storefield_helper(Address field, Register rax) {
@@ -3524,6 +3529,7 @@ void TemplateTable::fast_storefield_helper(Address field, Register rax) {
   // access field
   switch (bytecode()) {
   case Bytecodes::_fast_aputfield:
+    __ profile_oop_store(field, rax);
     do_oop_store(_masm, field, rax);
     break;
   case Bytecodes::_fast_lputfield:

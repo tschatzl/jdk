@@ -59,6 +59,16 @@ public:
   ciCounterData(DataLayout* layout) : CounterData(layout) {};
 };
 
+class ciG1CounterData : public G1CounterData {
+public:
+  ciG1CounterData(DataLayout* layout) : G1CounterData(layout) {};
+};
+
+class ciCombinedData : public CombinedData {
+public:
+  ciCombinedData(DataLayout* layout) : CombinedData(layout) { }
+};
+
 class ciJumpData : public JumpData {
 public:
   ciJumpData(DataLayout* layout) : JumpData(layout) {};
@@ -120,7 +130,7 @@ public:
   }
 
 #ifndef PRODUCT
-  void print_data_on(outputStream* st) const;
+  void print_data_on(outputStream* st, bool cr = true) const;
 #endif
 };
 
@@ -137,7 +147,7 @@ public:
   }
 
 #ifndef PRODUCT
-  void print_data_on(outputStream* st) const;
+  void print_data_on(outputStream* st, bool cr = true) const;
 #endif
 };
 
@@ -186,7 +196,7 @@ public:
   }
 
 #ifndef PRODUCT
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool cr = true) const;
 #endif
 };
 
@@ -213,8 +223,8 @@ public:
   }
   void translate_receiver_data_from(const ProfileData* data);
 #ifndef PRODUCT
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
-  void print_receiver_data_on(outputStream* st) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool cr = true) const;
+  void print_receiver_data_on(outputStream* st, bool cr = true) const;
 #endif
 };
 
@@ -238,7 +248,7 @@ public:
     rtd_super()->translate_receiver_data_from(data);
   }
 #ifndef PRODUCT
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool cr = true) const;
 #endif
 };
 
@@ -295,7 +305,7 @@ public:
   }
 
 #ifndef PRODUCT
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool cr = true) const;
 #endif
 };
 
@@ -339,7 +349,7 @@ public:
   }
 
 #ifndef PRODUCT
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool cr = true) const;
 #endif
 };
 
@@ -358,7 +368,7 @@ public:
   }
 
 #ifndef PRODUCT
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool cr = true) const;
 #endif
 };
 

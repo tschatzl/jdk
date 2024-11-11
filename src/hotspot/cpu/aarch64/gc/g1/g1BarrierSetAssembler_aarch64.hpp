@@ -90,7 +90,7 @@ public:
                                 Register thread,
                                 Register tmp1,
                                 Register tmp2,
-                                bool new_val_maybe_null);
+                                uint ext_barrier_data);
 #endif
 
   void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

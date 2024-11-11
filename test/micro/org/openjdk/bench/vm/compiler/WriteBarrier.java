@@ -167,6 +167,7 @@ public class WriteBarrier {
     }
 
     @Benchmark()
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testFieldWriteBarrierFastPath() {
         // Shuffle everything around
         this.tail.append(this.head);

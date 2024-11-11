@@ -606,6 +606,7 @@ inline HeapWord* G1CollectedHeap::attempt_allocation(size_t min_word_size,
 
   assert_heap_not_locked();
   if (result != nullptr) {
+    dirty_young_block(result, *actual_word_size);
     assert(*actual_word_size != 0, "Actual size must have been set here");
   } else {
     *actual_word_size = 0;

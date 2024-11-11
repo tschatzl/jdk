@@ -73,7 +73,8 @@ public:
     g1_dirty_card = dirty_card,
     g1_card_already_scanned = 0x1,
     g1_to_cset_card = 0x2,
-    g1_from_remset_card = 0x4
+    g1_from_remset_card = 0x4,
+    g1_young_card = 0xf0
   };
 
   static const size_t WordAllClean = SIZE_MAX;

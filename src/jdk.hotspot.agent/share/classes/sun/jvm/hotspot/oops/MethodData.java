@@ -284,6 +284,8 @@ public class MethodData extends Metadata implements MethodDataInterface<Klass,Me
       return new BitData(dataLayout);
     case DataLayout.counterDataTag:
       return new CounterData(dataLayout);
+    case DataLayout.g1CounterDataTag:
+      return new G1CounterData(dataLayout);
     case DataLayout.jumpDataTag:
       return new JumpData(dataLayout);
     case DataLayout.receiverTypeDataTag:
