@@ -167,6 +167,15 @@ public:
     Register tmp1 = _tmp1->as_pointer_register();
     Register tmp2 = _tmp2->as_pointer_register();
    
+    // This may happen for a store of x.a = x - we do not need a post barrier for those
+    // as the cross-region test will always exit early anyway.
+    // The post barrier implementations can assume that addr and new_val are different
+    // then.
+    if (addr == new_val) {
+      ce->masm()->block_comment(err_msg("same addr/new_val due to self-referential store with imprecise card mark %s", addr->name()));
+      return;
+    }
+
     G1BarrierSetAssembler* bs_asm = static_cast<G1BarrierSetAssembler*>(BarrierSet::barrier_set()->barrier_set_assembler());
     bs_asm->g1_write_barrier_post_c1(ce->masm(), addr, new_val, thread, tmp1, tmp2);
   }

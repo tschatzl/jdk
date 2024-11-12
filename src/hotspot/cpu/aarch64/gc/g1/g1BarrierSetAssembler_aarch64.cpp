@@ -233,12 +233,6 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
                                             const Register tmp2,
                                             Label& done,
                                             bool new_val_maybe_null) {
-  // This may happen for a store of x.a = x - we do not need a post barrier for those
-  // as the cross-region test will always exit early anyway.
-  if (store_addr == new_val) {
-    __ block_comment(err_msg("same store_addr/new_val due to self-referential store with imprecise card mark %s", store_addr->name()));
-    return;
-  }
   assert(thread == rthread, "must be");
   assert_different_registers(store_addr, new_val, thread, tmp1, tmp2, noreg);
 
