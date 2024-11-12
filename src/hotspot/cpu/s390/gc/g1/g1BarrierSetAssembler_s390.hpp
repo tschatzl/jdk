@@ -33,7 +33,6 @@
 class LIR_Assembler;
 class StubAssembler;
 class G1PreBarrierStub;
-class G1PostBarrierStub;
 class G1PreBarrierStubC2;
 
 class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
@@ -86,7 +85,7 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
                                 Register thread,
                                 Register tmp1,
                                 Register tmp2,
-                                G1PostBarrierStubC2* c2_stub);
+                                bool new_val_maybe_null);
 #endif // COMPILER2
 
   virtual void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,
