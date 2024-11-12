@@ -87,7 +87,6 @@ void G1ConcurrentRefineThreadsNeeded::update(uint active_threads,
   // No concurrent refinement needed.
   if (total_cards <= target_num_cards) {
     // We don't expect to exceed the target before the next GC.
-    log_debug(gc, ergo, refine)("threadsNeeded update: target not exceeded"); // FIXME: remove
     _threads_needed = 0;
     return;
   }
@@ -99,7 +98,6 @@ void G1ConcurrentRefineThreadsNeeded::update(uint active_threads,
   // already reasonably close.
   if (_predicted_time_until_next_gc_ms <= _update_period_ms) {
     _threads_needed = MAX2(active_threads, 1u);
-    log_debug(gc, ergo, refine)("threadsNeeded update: close to GC"); // FIXME: remove
     return;
   }
 
@@ -114,7 +112,6 @@ void G1ConcurrentRefineThreadsNeeded::update(uint active_threads,
   // prediction machinery will warm up and we'll be able to get estimates.
   double refine_rate = analytics->predict_concurrent_refine_rate_ms();
   if (refine_rate == 0.0) {
-    log_debug(gc, ergo, refine)("threadsNeeded update: refine rate unavailable"); // FIXME: remove
     _threads_needed = 1;
     return;
   }
@@ -137,5 +134,4 @@ void G1ConcurrentRefineThreadsNeeded::update(uint active_threads,
   }
 
   _threads_needed = static_cast<uint>(MIN2<size_t>(rthreads, UINT_MAX));
-  log_debug(gc, ergo, refine)("threadsNeeded update: selected %u (initial %1.2f)", _threads_needed, nthreads); // FIXME: remove
 }

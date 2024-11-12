@@ -53,8 +53,6 @@ uint G1CardTableClaimTable::claim_all_cards(uint region) {
 uint G1CardTableClaimTable::scan_chunk_size_in_cards() const { return (uint)1 << _scan_chunks_shift; }
 
 bool G1CardTableChunkClaimer::has_next() {
-  // FIXME: maybe not do the indexing every time here, but store a reference to
-  // the claim value directly.
   _cur_claim = _scan_state->claim_cards(_region_idx, size());
   return (_cur_claim < G1HeapRegion::CardsPerRegion);
 }

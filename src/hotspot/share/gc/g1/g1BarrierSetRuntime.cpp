@@ -57,7 +57,7 @@ JRT_END
 // G1 post write barrier slowpath
 JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTable::CardValue* card_addr,
                                                                JavaThread* thread))
-  // FIXME: remove after all references have been removed since nothing to do (JVMCI, s390, ppc).
+  // FIXME: remove after all references have been removed since nothing to do (JVMCI, s390).
 JRT_END
 
 JRT_LEAF(void, G1BarrierSetRuntime::clone(oopDesc* src, oopDesc* dst, size_t size))
