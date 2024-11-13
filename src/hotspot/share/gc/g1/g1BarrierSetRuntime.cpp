@@ -54,12 +54,6 @@ JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_pre_entry(oopDesc* orig, Jav
   G1BarrierSet::satb_mark_queue_set().enqueue_known_active(queue, orig);
 JRT_END
 
-// G1 post write barrier slowpath
-JRT_LEAF(void, G1BarrierSetRuntime::write_ref_field_post_entry(volatile G1CardTable::CardValue* card_addr,
-                                                               JavaThread* thread))
-  // FIXME: remove after all references have been removed since nothing to do (JVMCI, s390).
-JRT_END
-
 JRT_LEAF(void, G1BarrierSetRuntime::clone(oopDesc* src, oopDesc* dst, size_t size))
   HeapAccess<>::clone(src, dst, size);
 JRT_END

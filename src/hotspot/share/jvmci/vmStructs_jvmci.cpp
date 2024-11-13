@@ -880,7 +880,6 @@
   declare_function(JVMCIRuntime::vm_error)                                \
   declare_function(JVMCIRuntime::load_and_clear_exception)                \
   G1GC_ONLY(declare_function(JVMCIRuntime::write_barrier_pre))            \
-  G1GC_ONLY(declare_function(JVMCIRuntime::write_barrier_post))           \
   declare_function(JVMCIRuntime::validate_object)                         \
                                                                           \
   declare_function(JVMCIRuntime::test_deoptimize_call_int)
@@ -895,6 +894,7 @@
   declare_constant_with_value("G1ThreadLocalData::satb_mark_queue_active_offset", in_bytes(G1ThreadLocalData::satb_mark_queue_active_offset())) \
   declare_constant_with_value("G1ThreadLocalData::satb_mark_queue_index_offset", in_bytes(G1ThreadLocalData::satb_mark_queue_index_offset())) \
   declare_constant_with_value("G1ThreadLocalData::satb_mark_queue_buffer_offset", in_bytes(G1ThreadLocalData::satb_mark_queue_buffer_offset())) \
+  declare_constant_with_value("G1ThreadLocalData::card_table_base_offset", in_bytes(G1ThreadLocalData::card_table_base_offset())) \
 
 #endif // INCLUDE_G1GC
 
