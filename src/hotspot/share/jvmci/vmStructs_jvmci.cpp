@@ -537,6 +537,7 @@
   declare_constant(BranchData::not_taken_off_set)                         \
                                                                           \
   declare_constant_with_value("CardTable::dirty_card", CardTable::dirty_card_val()) \
+  declare_constant_with_value("CardTable::clean_card", CardTable::clean_card_val()) \
   declare_constant_with_value("LockStack::_end_offset", LockStack::end_offset()) \
   declare_constant_with_value("OMCache::oop_to_oop_difference", OMCache::oop_to_oop_difference()) \
   declare_constant_with_value("OMCache::oop_to_monitor_difference", OMCache::oop_to_monitor_difference()) \
