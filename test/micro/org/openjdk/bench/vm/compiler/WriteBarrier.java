@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,7 @@ package org.openjdk.bench.vm.compiler;
 
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
@@ -41,7 +42,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @Warmup(iterations = 4, time = 2, timeUnit = TimeUnit.SECONDS)
 @Measurement(iterations = 4, time = 2, timeUnit = TimeUnit.SECONDS)
-@Fork(value = 3)
+@Fork(value = 3, jvmArgs = {"-XX:LoopUnrollLimit=1"})
 public class WriteBarrier {
 
     // For array references
@@ -51,13 +52,14 @@ public class WriteBarrier {
     // For array update tests
     private Object[] theArraySmall;
     private Object[] realReferencesSmall;
-    private Object[] nullReferencesSmall;
     private int[] indicesSmall;
 
     private Object[] theArrayLarge;
     private Object[] realReferencesLarge;
-    private Object[] nullReferencesLarge;
     private int[] indicesLarge;
+
+    private Object nullRef;
+    private Object realRef;
 
     // For field update tests
     public Referencer head = null;
@@ -85,12 +87,10 @@ public class WriteBarrier {
     public void setup() {
         theArraySmall = new Object[NUM_REFERENCES_SMALL];
         realReferencesSmall = new Object[NUM_REFERENCES_SMALL];
-        nullReferencesSmall = new Object[NUM_REFERENCES_SMALL];
         indicesSmall = new int[NUM_REFERENCES_SMALL];
 
         theArrayLarge = new Object[NUM_REFERENCES_LARGE];
         realReferencesLarge = new Object[NUM_REFERENCES_LARGE];
-        nullReferencesLarge = new Object[NUM_REFERENCES_LARGE];
         indicesLarge = new int[NUM_REFERENCES_LARGE];
 
         m_w = (int) System.currentTimeMillis();
@@ -106,6 +106,8 @@ public class WriteBarrier {
             indicesLarge[i] = get_random() % (NUM_REFERENCES_LARGE - 1);
             realReferencesLarge[i] = new Object();
         }
+
+        realRef = realReferencesLarge[42];
 
         // Build a small linked structure
         this.head = new Referencer();
@@ -125,6 +127,7 @@ public class WriteBarrier {
     }
 
     @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testArrayWriteBarrierFastPathRealSmall() {
         for (int i = 0; i < NUM_REFERENCES_SMALL; i++) {
             theArraySmall[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = realReferencesSmall[indicesSmall[i]];
@@ -132,13 +135,15 @@ public class WriteBarrier {
     }
 
     @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testArrayWriteBarrierFastPathNullSmall() {
         for (int i = 0; i < NUM_REFERENCES_SMALL; i++) {
-            theArraySmall[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = nullReferencesSmall[indicesSmall[i]];
+            theArraySmall[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = nullRef;
         }
     }
 
     @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testArrayWriteBarrierFastPathRealLarge() {
         for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
             theArrayLarge[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = realReferencesLarge[indicesLarge[i]];
@@ -146,9 +151,18 @@ public class WriteBarrier {
     }
 
     @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathRealLargeFixed() {
+        for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
+            theArrayLarge[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = realRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testArrayWriteBarrierFastPathNullLarge() {
         for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
-            theArrayLarge[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = nullReferencesLarge[indicesLarge[i]];
+            theArrayLarge[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = nullRef;
         }
     }
 
