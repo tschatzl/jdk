@@ -299,7 +299,9 @@ uint G1BarrierSetC2::estimated_barrier_size(const Node* node) const {
     nodes += 50;
   }
   if ((barrier_data & G1C2BarrierPost) != 0) {
-    nodes += 60;
+    // Approximate the number of nodes needed with the number of Assembly instructions
+    // since we do not have real nodes.
+    nodes += 12;
   }
   return nodes;
 }
