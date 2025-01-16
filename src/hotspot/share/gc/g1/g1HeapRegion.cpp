@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -142,17 +142,6 @@ void G1HeapRegion::clear_cardtable() {
 void G1HeapRegion::clear_refinement_table() {
   G1CardTable* ct = G1CollectedHeap::heap()->refinement_table();
   ct->clear_MemRegion(MemRegion(bottom(), end()));
-}
-
-void G1HeapRegion::print_cardtable(G1CardTable* ct) const {
-  LogTarget(Warning, gc) lt;
-  if (!lt.is_enabled()) { return; }
-  LogStream ls(lt);
-  ls.print("%u (" PTR_FORMAT "): ", hrm_index(), p2i(ct));
-  for (HeapWord* s = bottom(); s < end(); s += 512 / HeapWordSize) {
-    ls.print("%c", '0' + (*ct->byte_for_const(s) & 0x3));
-  }
-  ls.cr();
 }
 
 double G1HeapRegion::calc_gc_efficiency() {

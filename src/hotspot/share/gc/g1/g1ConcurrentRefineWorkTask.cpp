@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,7 @@ class G1RefineRegionClosure : public G1HeapRegionClosure {
   size_t _num_collections_at_start;
 
   bool has_work(G1HeapRegion* r) {
-    return _scan_state->has_cards_to_scan(r->hrm_index());
+    return _scan_state->has_unclaimed_cards(r->hrm_index());
   }
 
   void do_dirty_card(CardValue* source_card, CardValue* dest_card) {
@@ -99,7 +99,7 @@ public:
     G1CollectedHeap* g1h = G1CollectedHeap::heap();
 
     if (r->is_young()) {
-      if (_scan_state->claim_cards(r->hrm_index(), (uint)G1HeapRegion::CardsPerRegion) == 0) {
+      if (_scan_state->claim_all_cards(r->hrm_index()) == 0) {
         // Clear the pre-dirtying information.
         r->clear_refinement_table();
       }

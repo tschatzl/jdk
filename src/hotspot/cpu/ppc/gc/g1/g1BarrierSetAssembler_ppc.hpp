@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, 2021 SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -76,7 +76,7 @@ public:
                                 Register new_val,
                                 Register tmp1,
                                 Register tmp2,
-                                bool new_val_maybe_null,
+                                bool new_val_may_be_null,
                                 bool decode_new_val);
 #endif
 #ifdef COMPILER1

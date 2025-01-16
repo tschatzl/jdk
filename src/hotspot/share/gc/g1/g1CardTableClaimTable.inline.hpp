@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2025 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,34 +31,39 @@
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "runtime/atomic.hpp"
 
-bool G1CardTableClaimTable::has_cards_to_scan(uint region) {
+bool G1CardTableClaimTable::has_unclaimed_cards(uint region) {
   assert(region < _max_reserved_regions, "Tried to access invalid region %u", region);
-  return Atomic::load(&_card_table_scan_state[region]) < G1HeapRegion::CardsPerRegion;
+  return Atomic::load(&_card_claims[region]) < G1HeapRegion::CardsPerRegion;
 }
 
 void G1CardTableClaimTable::reset_to_unclaimed(uint region) {
   assert(region < _max_reserved_regions, "Tried to access invalid region %u", region);
-  Atomic::store(&_card_table_scan_state[region], 0u);
+  Atomic::store(&_card_claims[region], 0u);
 }
 
 uint G1CardTableClaimTable::claim_cards(uint region, uint increment) {
   assert(region < _max_reserved_regions, "Tried to access invalid region %u", region);
-  return Atomic::fetch_then_add(&_card_table_scan_state[region], increment, memory_order_relaxed);
+  return Atomic::fetch_then_add(&_card_claims[region], increment, memory_order_relaxed);
+}
+
+uint G1CardTableClaimTable::claim_chunk(uint region) {
+  assert(region < _max_reserved_regions, "Tried to access invalid region %u", region);
+  return Atomic::fetch_then_add(&_card_claims[region], cards_per_chunk(), memory_order_relaxed);
 }
 
 uint G1CardTableClaimTable::claim_all_cards(uint region) {
   return claim_cards(region, (uint)G1HeapRegion::CardsPerRegion);
 }
 
-uint G1CardTableClaimTable::scan_chunk_size_in_cards() const { return (uint)1 << _scan_chunks_shift; }
+uint G1CardTableClaimTable::cards_per_chunk() const { return _cards_per_chunk; }
 
 bool G1CardTableChunkClaimer::has_next() {
-  _cur_claim = _scan_state->claim_cards(_region_idx, size());
+  _cur_claim = _claim_values->claim_chunk(_region_idx);
   return (_cur_claim < G1HeapRegion::CardsPerRegion);
 }
 
 uint G1CardTableChunkClaimer::value() const { return _cur_claim; }
-uint G1CardTableChunkClaimer::size() const { return _scan_state->scan_chunk_size_in_cards(); }
+uint G1CardTableChunkClaimer::size() const { return _claim_values->cards_per_chunk(); }
 
 bool G1ChunkScanner::is_card_dirty(const CardValue* const card) const {
   return (*card & ToScanMask) == 0;

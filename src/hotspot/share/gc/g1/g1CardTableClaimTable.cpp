@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,37 +29,37 @@
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "gc/shared/workerThread.hpp"
 #include "memory/allocation.hpp"
+#include "utilities/checkedCast.hpp"
 #include "utilities/powerOfTwo.hpp"
 
 G1CardTableClaimTable::G1CardTableClaimTable(uint chunks_per_region) :
   _max_reserved_regions(0),
-  _card_table_scan_state(nullptr),
-  _log_scan_chunks_per_region(log2i(chunks_per_region)),
-  _scan_chunks_shift((uint8_t)log2i(G1HeapRegion::CardsPerRegion / chunks_per_region))
+  _card_claims(nullptr),
+  _cards_per_chunk(checked_cast<uint>(G1HeapRegion::CardsPerRegion / chunks_per_region))
 {
   guarantee(chunks_per_region > 0, "%u chunks per region", chunks_per_region);
 }
 
 G1CardTableClaimTable::~G1CardTableClaimTable() {
-  FREE_C_HEAP_ARRAY(uint, _card_table_scan_state);
+  FREE_C_HEAP_ARRAY(uint, _card_claims);
 }
 
 void G1CardTableClaimTable::initialize(size_t max_reserved_regions) {
-  assert(_card_table_scan_state == nullptr, "Must not be initialized twice");
-  _card_table_scan_state = NEW_C_HEAP_ARRAY(uint, max_reserved_regions, mtGC);
+  assert(_card_claims == nullptr, "Must not be initialized twice");
+  _card_claims = NEW_C_HEAP_ARRAY(uint, max_reserved_regions, mtGC);
   _max_reserved_regions = max_reserved_regions;
-  reset_card_table_unclaimed();
+  reset_all_claims_to_unclaimed();
 }
 
-void G1CardTableClaimTable::reset_card_table_unclaimed() {
+void G1CardTableClaimTable::reset_all_claims_to_unclaimed() {
   for (size_t i = 0; i < _max_reserved_regions; i++) {
-    _card_table_scan_state[i] = 0;
+    _card_claims[i] = 0;
   }
 }
 
-void G1CardTableClaimTable::reset_card_table_claimed() {
+void G1CardTableClaimTable::reset_all_claims_to_claimed() {
   for (size_t i = 0; i < _max_reserved_regions; i++) {
-    _card_table_scan_state[i] = (uint)G1HeapRegion::CardsPerRegion;
+    _card_claims[i] = (uint)G1HeapRegion::CardsPerRegion;
   }
 }
 
@@ -73,7 +73,7 @@ void G1CardTableClaimTable::heap_region_iterate_from_worker_offset(G1HeapRegionC
     const uint index = (start_index + count) % n_regions;
     assert(index < n_regions, "sanity");
     // Skip over fully processed regions
-    if (!has_cards_to_scan(index)) {
+    if (!has_unclaimed_cards(index)) {
       continue;
     }
     G1HeapRegion* r = G1CollectedHeap::heap()->region_at(index);
@@ -85,7 +85,7 @@ void G1CardTableClaimTable::heap_region_iterate_from_worker_offset(G1HeapRegionC
 }
 
 G1CardTableChunkClaimer::G1CardTableChunkClaimer(G1CardTableClaimTable* scan_state, uint region_idx) :
-  _scan_state(scan_state),
+  _claim_values(scan_state),
   _region_idx(region_idx),
   _cur_claim(0) {
   guarantee(size() <= G1HeapRegion::CardsPerRegion, "Should not claim more space than possible.");

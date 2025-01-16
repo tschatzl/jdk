@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -109,7 +109,7 @@ void G1BarrierSet::write_region(JavaThread* thread, MemRegion mr) {
 
   // Skip writes to young gen.
   if (G1CollectedHeap::heap()->heap_region_containing(mr.start())->is_young()) {
-    // MemRegion should not span multiple regions for the young gen.
+    // MemRegion should not span multiple regions for arrays in young gen.
     DEBUG_ONLY(G1HeapRegion* containing_hr = G1CollectedHeap::heap()->heap_region_containing(mr.start());)
     assert(containing_hr->is_young(), "it should be young");
     assert(containing_hr->is_in(mr.start()), "it should contain start");
@@ -120,10 +120,10 @@ void G1BarrierSet::write_region(JavaThread* thread, MemRegion mr) {
   volatile CardValue* byte = _card_table->byte_for(mr.start());
   CardValue* last_byte = _card_table->byte_for(mr.last());
 
-  // Dirty cards if necessary.
+  // Dirty cards only if necessary.
   for (; byte <= last_byte; byte++) {
     CardValue bv = *byte;
-    if (bv != G1CardTable::dirty_card_val()) {
+    if (bv == G1CardTable::clean_card_val()) {
       *byte = G1CardTable::dirty_card_val();
     }
   }
@@ -150,9 +150,9 @@ void G1BarrierSet::on_thread_attach(Thread* thread) {
   // copying the global is_active value to this thread's queue.
   satbq.set_active(_satb_mark_queue_set.is_active());
 
-  // Between creation and attaching there may be a safepoint (and/or the thread
-  // is not visible to the handshake), so (re-)do the card table base address
-  // assignment here.
+  // Between thread creation and attaching it to the (Java-)Thread there may be a
+  // safepoint (and/or the thread is not visible to the handshake), and might
+  // have changed, so (re-)do the card table base address assignment here.
   G1ThreadLocalData::set_byte_map_base(thread, G1CollectedHeap::heap()->card_table_base());
 }
 

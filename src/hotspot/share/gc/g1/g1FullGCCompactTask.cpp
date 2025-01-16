@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -149,7 +149,7 @@ void G1FullGCCompactTask::free_non_overlapping_regions(uint src_start_idx, uint 
   for (uint i = non_overlapping_start; i <= src_end_idx; ++i) {
     G1HeapRegion* hr = _g1h->region_at(i);
     if (VerifyDuringGC) {
-    // Only there to satisfy some asserts in free_..._region
+      // Satisfy some asserts in free_..._region
       hr->clear_cardtable();
       hr->clear_refinement_table();
     }
