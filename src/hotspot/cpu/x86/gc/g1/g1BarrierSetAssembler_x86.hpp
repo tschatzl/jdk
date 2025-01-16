@@ -100,7 +100,8 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
                                 Register tmp,
                                 Register tmp2,
                                 uint8_t barrier_data,
-                                uint ext_barrier_data);
+                                uint ext_barrier_data,
+                                bool new_val_is_compressed);
 #endif // COMPILER2
 };
 

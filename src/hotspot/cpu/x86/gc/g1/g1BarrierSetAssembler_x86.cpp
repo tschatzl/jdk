@@ -316,19 +316,25 @@ void G1BarrierSetAssembler::g1_write_barrier_pre(MacroAssembler* masm,
   __ bind(done);
 }
 
-static void generate_post_barrier_same_region_check(MacroAssembler* masm, const Register store_addr, const Register new_val, const Register tmp1, Label& done) {
+static void generate_post_barrier_same_region_check(MacroAssembler* masm, const Register store_addr, const Register new_val, const Register tmp1, Label& done, bool new_val_is_compressed) {
   __ block_comment("cross-region");
 
-  // Does store cross heap regions?
-  __ movptr(tmp1, store_addr);                                    // tmp1 := store address
-  __ xorptr(tmp1, new_val);                                       // tmp1 := store address ^ new value
+    __ movptr(tmp1, new_val);                                     // tmp1 := store address
+  if (new_val_is_compressed) {
+    __ decode_heap_oop(tmp1);
+  }
+  __ xorptr(tmp1, store_addr);                                    // tmp1 := store address ^ new value
   __ shrptr(tmp1, G1HeapRegion::LogOfHRGrainBytes);               // ((store address ^ new value) >> LogOfHRGrainBytes) == 0?
   __ jcc(Assembler::equal, done);
 }
 
-static void generate_post_barrier_null_new_value_check(MacroAssembler* masm, const Register new_val, const Register tmp1, Label& done) {
+static void generate_post_barrier_null_new_value_check(MacroAssembler* masm, const Register new_val, const Register tmp1, Label& done, bool new_val_is_compressed) {
   __ block_comment("null-new-val");
-  __ cmpptr(new_val, NULL_WORD);                                // new value == null?
+  if (new_val_is_compressed) {
+    __ cmp32(new_val, NULL_WORD); 
+  } else {
+    __ cmpptr(new_val, NULL_WORD);                                // new value == null?
+  }
   __ jcc(Assembler::equal, done);
 }
 
@@ -339,7 +345,8 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
                                             const Register tmp1,
                                             const Register tmp2,
                                             Label& done,
-                                            uint ext_barrier_data) {
+                                            uint ext_barrier_data,
+                                            bool new_val_is_compressed) {
 #ifdef _LP64
   assert(thread == r15_thread, "must be");
 #endif // _LP64
@@ -356,19 +363,19 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
 
   if (!null_check_first) {
     if (gen_cross_region_check) {
-      generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done);
+      generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done, new_val_is_compressed);
     }
     // Crosses regions, storing null?
     if (gen_null_new_val_check || new_val_maybe_null) { /* fixme: new_val_maybe_null is very very inaccurate; maybe only use if no other information is available */
-      generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done);
+      generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done, new_val_is_compressed);
     }
   } else {
     assert(gen_cross_region_check, "must be");
     assert(gen_null_new_val_check, "must be");
     if (gen_null_new_val_check || new_val_maybe_null) { /* fixme: new_val_maybe_null is very very inaccurate; maybe only use if no other information is available */
-      generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done);
+      generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done, new_val_is_compressed);
     }
-    generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done);
+    generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done, new_val_is_compressed);
   }
 
   __ movptr(tmp1, store_addr);                                    // tmp1 := store address
@@ -401,7 +408,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post(MacroAssembler* masm,
                                                   Register tmp,
                                                   Register tmp2) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp, tmp2, done, XXXNoWriteBarrierFilters ? gen_no_barrier_parts() : gen_all_barrier_parts());
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp, tmp2, done, XXXNoWriteBarrierFilters ? gen_no_barrier_parts() : gen_all_barrier_parts(), false /* new_val_is_compressed */);
   __ bind(done);
 }
 
@@ -475,10 +482,11 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c2(MacroAssembler* masm,
                                                      Register tmp,
                                                      Register tmp2,
                                                      uint8_t barrier_data,
-                                                     uint ext_barrier_data) {
+                                                     uint ext_barrier_data,
+                                                     bool new_val_is_compressed) {
   Label done;
   assert((barrier_data & ext_barrier_data) == 0, "no overlapping bits");
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp, tmp2, done, barrier_data | ext_barrier_data);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp, tmp2, done, barrier_data | ext_barrier_data, new_val_is_compressed);
   __ bind(done);
 }
 
@@ -641,7 +649,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c1(MacroAssembler* masm,
                                                      Register tmp1,
                                                      Register tmp2) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, XXXNoWriteBarrierFilters ? gen_no_barrier_parts() : gen_all_barrier_parts());
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, XXXNoWriteBarrierFilters ? gen_no_barrier_parts() : gen_all_barrier_parts(), false /* new_val_is_compressed */);
   __ bind(done);
 }
 
