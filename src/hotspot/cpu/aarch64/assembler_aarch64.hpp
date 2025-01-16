@@ -243,7 +243,7 @@ public:
 
   void f(unsigned val, int msb, int lsb) {
     int nbits = msb - lsb + 1;
-    guarantee(val < (1ULL << nbits), "Field too big for insn");
+    guarantee(val < (1ULL << nbits), "Value %u too big for insn", val);
     assert_cond(msb >= lsb);
     val <<= lsb;
     insn |= val;

@@ -107,6 +107,7 @@ protected:
   Node*             _raw_access;
   BasicType         _type;
   uint8_t           _barrier_data;
+  uint8_t           _ext_barrier_data;
 
   void fixup_decorators();
 
@@ -118,7 +119,8 @@ public:
     _addr(addr),
     _raw_access(nullptr),
     _type(type),
-    _barrier_data(0)
+    _barrier_data(0),
+    _ext_barrier_data(0)
   {}
 
   DecoratorSet decorators() const { return _decorators; }
@@ -131,6 +133,8 @@ public:
 
   uint8_t barrier_data() const        { return _barrier_data; }
   void set_barrier_data(uint8_t data) { _barrier_data = data; }
+  uint8_t ext_barrier_data() const        { return _ext_barrier_data; }
+  void set_ext_barrier_data(uint8_t data) { _ext_barrier_data = data; }
 
   void set_raw_access(Node* raw_access) { _raw_access = raw_access; }
   virtual void set_memory() {} // no-op for normal accesses, but not for atomic accesses.
@@ -254,8 +258,6 @@ public:
   Label* entry();
   // Return point from the stub (typically end of barrier).
   Label* continuation();
-  // High-level, GC-specific barrier flags.
-  uint8_t barrier_data() const;
 
   // Preserve the value in reg across runtime calls in this barrier.
   void preserve(Register reg);

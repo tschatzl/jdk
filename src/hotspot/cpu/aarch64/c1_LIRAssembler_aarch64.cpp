@@ -1218,6 +1218,7 @@ void LIR_Assembler::emit_alloc_array(LIR_OpAllocArray* op) {
 void LIR_Assembler::type_profile_helper(Register mdo,
                                         ciMethodData *md, ciProfileData *data,
                                         Register recv, Label* update_done) {
+  assert(!data->is_CombinedData(), "must be");
   for (uint i = 0; i < ReceiverTypeData::row_limit(); i++) {
     Label next_test;
     // See if the receiver is receiver[n].
@@ -1273,6 +1274,8 @@ void LIR_Assembler::emit_typecheck_helper(LIR_OpTypeCheck *op, Label* success, L
     data = md->bci_to_data(bci);
     assert(data != nullptr,                "need data for type check");
     assert(data->is_ReceiverTypeData(), "need ReceiverTypeData for type check");
+    // Forward to receivertypedata
+    data = data->as_ReceiverTypeData();
   }
   Label* success_target = success;
   Label* failure_target = failure;
@@ -1401,6 +1404,7 @@ void LIR_Assembler::emit_opTypeCheck(LIR_OpTypeCheck* op) {
       data = md->bci_to_data(bci);
       assert(data != nullptr,                "need data for type check");
       assert(data->is_ReceiverTypeData(), "need ReceiverTypeData for type check");
+      data = data->as_ReceiverTypeData(); // Forward
     }
     Label done;
     Label* success_target = &done;
@@ -2547,6 +2551,7 @@ void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
 
       // NOTE: we should probably put a lock around this search to
       // avoid collisions by concurrent compilations
+      assert(!data->is_CombinedData(), "must be");
       ciVirtualCallData* vc_data = (ciVirtualCallData*) data;
       uint i;
       for (i = 0; i < VirtualCallData::row_limit(); i++) {
