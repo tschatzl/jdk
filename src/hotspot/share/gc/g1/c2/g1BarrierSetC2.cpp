@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -394,7 +394,7 @@ public:
 
   bool needs_liveness_data(const MachNode* mach) const {
     return G1BarrierStubC2::needs_pre_barrier(mach) ||
-            G1BarrierStubC2::needs_post_barrier(mach);
+           G1BarrierStubC2::needs_post_barrier(mach);
   }
 
   bool needs_livein_data() const {
@@ -416,7 +416,7 @@ bool G1BarrierStubC2::needs_post_barrier(const MachNode* node) {
   return (node->barrier_data() & G1C2BarrierPost) != 0;
 }
 
-bool G1BarrierStubC2::post_new_val_maybe_null(const MachNode* node) {
+bool G1BarrierStubC2::post_new_val_may_be_null(const MachNode* node) {
   return (node->barrier_data() & G1C2BarrierPostNotNull) == 0;
 }
 

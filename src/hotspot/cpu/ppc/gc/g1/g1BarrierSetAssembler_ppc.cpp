@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, 2024 SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -237,7 +237,7 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
                                             const Register tmp1,
                                             const Register tmp2,
                                             Label& done,
-                                            bool new_val_maybe_null) {
+                                            bool new_val_may_be_null) {
   assert_different_registers(store_addr, new_val, tmp1, R0);
   assert_different_registers(store_addr, tmp1, tmp2, R0);
 
@@ -246,7 +246,7 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
   __ beq(CCR0, done);
 
   // Crosses regions, storing null?
-  if (!new_val_maybe_null) {
+  if (!new_val_may_be_null) {
 #ifdef ASSERT
     __ cmpdi(CCR0, new_val, 0);
     __ asm_assert_ne("null oop not allowed (G1 post)"); // Checked by caller.
@@ -430,7 +430,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c2(MacroAssembler* masm,
                                                      Register new_val,
                                                      Register tmp1,
                                                      Register tmp2,
-                                                     bool new_val_maybe_null,
+                                                     bool new_val_may_be_null,
                                                      bool decode_new_val) {
   assert_different_registers(store_addr, new_val, tmp1, R0);
   assert_different_registers(store_addr, tmp1, tmp2, R0);
@@ -441,17 +441,17 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c2(MacroAssembler* masm,
 
   if (decode_new_val) {
     assert(UseCompressedOops, "or should not be here");
-    if (new_val_maybe_null && CompressedOops::base() != nullptr) {
+    if (new_val_may_be_null && CompressedOops::base() != nullptr) {
       // We prefer doing the null check after the region crossing check.
       // Only compressed oop modes with base != null require a null check here.
       __ cmpwi(CCR0, new_val, 0);
       __ beq(CCR0, done);
-      new_val_maybe_null = false;
+      new_val_may_be_null = false;
     }
     new_val_decoded = __ decode_heap_oop_not_null(tmp2, new_val);
   }
 
-  generate_post_barrier_fast_path(masm, store_addr, new_val_decoded, R16_thread, tmp1, tmp2, done, new_val_maybe_null);
+  generate_post_barrier_fast_path(masm, store_addr, new_val_decoded, R16_thread, tmp1, tmp2, done, new_val_may_be_null);
   __ bind(done);
 }
 
@@ -499,7 +499,7 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c1(MacroAssembler* masm,
                                                      Register tmp1,
                                                      Register tmp2) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, true /* new_val_maybe_null */);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, tmp2, done, true /* new_val_may_be_null */);
   masm->bind(done);
 }
 

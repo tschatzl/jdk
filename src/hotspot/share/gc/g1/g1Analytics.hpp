@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,7 +48,7 @@ class G1Analytics: public CHeapObj<mtGC> {
 
   TruncatedSeq _concurrent_refine_rate_ms_seq;
   TruncatedSeq _dirtied_cards_rate_ms_seq;
-  // The ratio between the number of scanned cards and actually merged cards for
+  // The ratio between the number of actually merged cards and scanned cards for
   // card based remembered sets, for young-only and mixed gcs.
   G1PhaseDependentSeq _card_merge_to_scan_ratio_seq;
 
@@ -65,7 +65,7 @@ class G1Analytics: public CHeapObj<mtGC> {
   G1PhaseDependentSeq _card_rs_length_seq;
   G1PhaseDependentSeq _code_root_rs_length_seq;
 
-  // Prediction for merging refinement table to card table during GC.
+  // Prediction for merging the refinement table to the card table during GC.
   TruncatedSeq _merge_refinement_table_ms_seq;
   TruncatedSeq _constant_other_time_ms_seq;
   TruncatedSeq _young_other_cost_per_region_ms_seq;

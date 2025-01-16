@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,44 +30,62 @@
 
 class G1HeapRegionClosure;
 
+// Helper class representing claim values for the cards in the card tabel corresponding
+// to a region.
+// Ie. for every region this class stores an atomic counter that represents the
+// number of cards from 0 to the number of cards per region already claimed for
+// this region.
+// If the claimed value is >= the number of cards of a region, the region can be
+// considered fully claimed.
+//
+// Claiming works on full region (all cards in region) or a range of contiguous cards
+// (chunk). Chunk size is given at construction time.
 class G1CardTableClaimTable : public CHeapObj<mtGC> {
   size_t _max_reserved_regions;
 
-  // Card table iteration claim for each heap region, from 0 (completely unscanned)
-  // to (>=) G1HeapRegion::CardsPerRegion (completely scanned).
-  uint volatile* _card_table_scan_state;
+  // Card table iteration claim values for every heap region, from 0 (completely unclaimed)
+  // to (>=) G1HeapRegion::CardsPerRegion (completely claimed).
+  uint volatile* _card_claims;
 
-  uint8_t _log_scan_chunks_per_region;  // Log of number of chunks per region.
-  uint8_t _scan_chunks_shift;           // For conversion between card index and chunk index.
+  uint _cards_per_chunk;           // For conversion between card index and chunk index.
+
+  // Claim increment number of cards, returning the previous claim value.
+  inline uint claim_cards(uint region, uint increment);
 
 public:
   G1CardTableClaimTable(uint chunks_per_region);
-  virtual ~G1CardTableClaimTable();
+  ~G1CardTableClaimTable();
 
-  virtual void initialize(size_t max_reserved_regions);
-  void reset_card_table_unclaimed();
-  void reset_card_table_claimed();
+  // Allocates the data structure and initializes the claims to unclaimed.
+  void initialize(size_t max_reserved_regions);
 
-  inline bool has_cards_to_scan(uint region);
-  inline uint claim_cards(uint region, uint increment);
+  void reset_all_claims_to_unclaimed();
+  void reset_all_claims_to_claimed();
+
+  inline bool has_unclaimed_cards(uint region);
   inline void reset_to_unclaimed(uint region);
+
+  // Claims all cards in that region, returning the previous claim value.
   inline uint claim_all_cards(uint region);
 
-  inline uint scan_chunk_size_in_cards() const;
+  // Claim a single chunk in that region, returning the previous claim value.
+  inline uint claim_chunk(uint region);
+  inline uint cards_per_chunk() const;
 
   size_t max_reserved_regions() { return _max_reserved_regions; }
 
   void heap_region_iterate_from_worker_offset(G1HeapRegionClosure* cl, uint worker_id, uint max_workers);
 };
 
-// Helper class to claim dirty chunks within the card table.
+// Helper class to claim dirty chunks within the card table for a given region.
 class G1CardTableChunkClaimer {
-  G1CardTableClaimTable* _scan_state;
+  G1CardTableClaimTable* _claim_values;
+
   uint _region_idx;
   uint _cur_claim;
 
 public:
-  G1CardTableChunkClaimer(G1CardTableClaimTable* scan_state, uint region_idx);
+  G1CardTableChunkClaimer(G1CardTableClaimTable* claim_table, uint region_idx);
 
   inline bool has_next();
 
@@ -75,7 +93,7 @@ public:
   inline uint size() const;
 };
 
-// To locate consecutive dirty cards inside a chunk.
+// Helper class to locate consecutive dirty cards inside a range of cards.
 class G1ChunkScanner {
   using Word = size_t;
   using CardValue = G1CardTable::CardValue;

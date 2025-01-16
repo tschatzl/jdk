@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -552,7 +552,6 @@ public:
   bool verify_code_roots(VerifyOption vo) const;
   bool verify_liveness_and_remset(VerifyOption vo) const;
 
-  void print_cardtable(G1CardTable* ct) const;
   void print() const;
   void print_on(outputStream* st) const;
 

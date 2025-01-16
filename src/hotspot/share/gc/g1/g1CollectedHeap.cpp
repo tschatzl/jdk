@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1140,8 +1140,6 @@ G1CollectedHeap::G1CollectedHeap() :
   _periodic_gc_task(nullptr),
   _free_arena_memory_task(nullptr),
   _workers(nullptr),
-  _card_table(nullptr),
-  _refinement_table(nullptr),
   _refinement_epoch(0),
   _last_synchronized_start(0),
   _safepoint_duration(0),
@@ -1320,10 +1318,10 @@ jint G1CollectedHeap::initialize() {
   initialize_reserved_region(heap_rs);
 
   // Create the barrier set for the entire reserved region.
-  _card_table = new G1CardTable(_reserved);
-  _refinement_table = new G1CardTable(_reserved);
+  G1CardTable* card_table = new G1CardTable(_reserved);
+  G1CardTable* refinement_table = new G1CardTable(_reserved);
 
-  G1BarrierSet* bs = new G1BarrierSet(_card_table, _refinement_table);
+  G1BarrierSet* bs = new G1BarrierSet(card_table, refinement_table);
   bs->initialize();
   assert(bs->is_a(BarrierSet::G1BarrierSet), "sanity");
 
@@ -1370,8 +1368,8 @@ jint G1CollectedHeap::initialize() {
     create_aux_memory_mapper("Mark Bitmap", bitmap_size, G1CMBitMap::heap_map_factor());
 
   _hrm.initialize(heap_storage, bitmap_storage, bot_storage, cardtable_storage, refinement_cards_storage);
-  _card_table->initialize(cardtable_storage);
-  _refinement_table->initialize(refinement_cards_storage);
+  card_table->initialize(cardtable_storage);
+  refinement_table->initialize(refinement_cards_storage);
 
   BarrierSet::set_barrier_set(bs);
 
@@ -2216,6 +2214,38 @@ void G1CollectedHeap::print_on_error(outputStream* st) const {
   }
 }
 
+void G1CollectedHeap::print_worker_threads_elapsed_time(outputStream* st) const {
+
+  class GatherCPUTimeClosure : public ThreadClosure {
+    jlong _sum;
+
+  public:
+    GatherCPUTimeClosure() : ThreadClosure(), _sum(0) { }
+
+    void do_thread(Thread* thread) override {
+      _sum += os::thread_cpu_time(thread);
+    }
+
+    double sum() const { return TimeHelper::counter_to_millis(_sum); }
+  };
+
+  GatherCPUTimeClosure gcwt;
+  workers()->threads_do(&gcwt);
+  st->print_cr("GC worker threads CPU time: %.2f", gcwt.sum());
+
+  GatherCPUTimeClosure mwt;
+  concurrent_mark()->threads_do(&mwt);
+  st->print_cr("Marking worker threads CPU time: %.2f", mwt.sum());
+
+  GatherCPUTimeClosure rct;
+  concurrent_refine()->control_thread_do(&rct);
+  st->print_cr("Refinement control thread CPU time: %.2f", rct.sum());
+
+  GatherCPUTimeClosure rwt;
+  concurrent_refine()->worker_threads_do(&rwt);
+  st->print_cr("Refinement worker thread CPU time: %.2f", rwt.sum());
+}
+
 void G1CollectedHeap::gc_threads_do(ThreadClosure* tc) const {
   workers()->threads_do(tc);
   tc->do_thread(_cm_thread);
@@ -2296,35 +2326,10 @@ void G1CollectedHeap::gc_epilogue(bool full) {
 
   _refinement_epoch++;
 
-  class GatherCPUTimeClosure : public ThreadClosure {
-    jlong _sum;
-
-  public:
-    GatherCPUTimeClosure() : ThreadClosure(), _sum(0) { }
-
-    void do_thread(Thread* thread) override {
-      _sum += os::thread_cpu_time(thread);
-    }
-
-    double sum() const { return TimeHelper::counter_to_millis(_sum); }
-  };
-
-  if (log_is_enabled(Debug, gc, cpu)) {
-    GatherCPUTimeClosure gcwt;
-    workers()->threads_do(&gcwt);
-    log_debug(gc, cpu)("GC worker threads CPU time: %.2f", gcwt.sum());
-
-    GatherCPUTimeClosure mwt;
-    concurrent_mark()->threads_do(&mwt);
-    log_debug(gc, cpu)("Marking worker threads CPU time: %.2f", mwt.sum());
-
-    GatherCPUTimeClosure rct;
-    concurrent_refine()->control_thread_do(&rct);
-    log_debug(gc, cpu)("Refinement control thread CPU time: %.2f", rct.sum());
-
-    GatherCPUTimeClosure rwt;
-    concurrent_refine()->worker_threads_do(&rwt);
-    log_debug(gc, cpu)("Refinement worker thread CPU time: %.2f", rwt.sum());
+  LogTarget(Debug, gc, cpu) lt;
+  if (lt.is_enabled()) {
+    LogStream ls(lt);
+    print_worker_threads_elapsed_time(&ls);
   }
 }
 

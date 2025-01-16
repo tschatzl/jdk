@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -323,7 +323,7 @@ bool G1ConcurrentRefineWorkState::complete(bool concurrent, bool print_log) {
 }
 
 void G1ConcurrentRefineWorkState::snapshot_heap_into(G1CardTableClaimTable* sweep_state) {
-  sweep_state->reset_card_table_claimed();
+  sweep_state->reset_all_claims_to_claimed();
 
   class SnapshotRegionsClosure : public G1HeapRegionClosure {
     G1CardTableClaimTable* _sweep_state;

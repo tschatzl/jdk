@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -269,7 +269,7 @@ public:
     // regions.
     //assert(_next_dirty_regions->size() == 0, "next dirty regions must be empty");
 
-    _card_state.reset_card_table_unclaimed();
+    _card_state.reset_all_claims_to_unclaimed();
   }
 
   void complete_evac_phase(bool merge_dirty_regions) {
@@ -332,11 +332,7 @@ public:
   }
 
   bool has_cards_to_scan(uint region) {
-    return _card_state.has_cards_to_scan(region);
-  }
-
-  uint claim_cards_to_scan(uint region, uint increment) {
-    return _card_state.claim_cards(region, increment);
+    return _card_state.has_unclaimed_cards(region);
   }
 
   void add_dirty_region(uint const region) {
@@ -796,7 +792,7 @@ class MergeRefinementTableTask : public WorkerTask {
     G1CardTableClaimTable* _scan_state;
 
     bool do_heap_region(G1HeapRegion* r) override {
-      if (!_scan_state->has_cards_to_scan(r->hrm_index())) {
+      if (!_scan_state->has_unclaimed_cards(r->hrm_index())) {
         return false;
       }
 
@@ -807,7 +803,7 @@ class MergeRefinementTableTask : public WorkerTask {
       // card marks of other collection set region's refinement tables are also
       // uninteresting.
       if (r->in_collection_set()) {
-        uint claim = _scan_state->claim_cards(r->hrm_index(), (uint)G1HeapRegion::CardsPerRegion);
+        uint claim = _scan_state->claim_all_cards(r->hrm_index());
         // Concurrent refinement may have started merging this region (we also
         // get here for non-young regions), the claim may be non-zero for those.
         // We could get away here with just clearing the area from the current

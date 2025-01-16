@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, 2024 SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -85,7 +85,7 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
                                 Register thread,
                                 Register tmp1,
                                 Register tmp2,
-                                bool new_val_maybe_null);
+                                bool new_val_may_be_null);
 #endif // COMPILER2
 
   virtual void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

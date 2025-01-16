@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -174,8 +174,6 @@ private:
   G1MonotonicArenaFreeMemoryTask* _free_arena_memory_task;
 
   WorkerThreads* _workers;
-  G1CardTable* _card_table;
-  G1CardTable* _refinement_table;
 
   // Counts number of times the refinement table has been swept. Used for detecting
   // whether concurrent refinement has been interrupted by a garbage collection.
@@ -1339,6 +1337,8 @@ public:
 private:
   void print_heap_regions() const;
   void print_regions_on(outputStream* st) const;
+
+  void print_worker_threads_elapsed_time(outputStream* st) const;
 
 public:
   void print_on(outputStream* st) const override;

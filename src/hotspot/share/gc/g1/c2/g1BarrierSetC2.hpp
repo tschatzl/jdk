@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,7 +39,7 @@ class G1BarrierStubC2 : public BarrierStubC2 {
 public:
   static bool needs_pre_barrier(const MachNode* node);
   static bool needs_post_barrier(const MachNode* node);
-  static bool post_new_val_maybe_null(const MachNode* node);
+  static bool post_new_val_may_be_null(const MachNode* node);
 
   G1BarrierStubC2(const MachNode* node);
   virtual void emit_code(MacroAssembler& masm) = 0;

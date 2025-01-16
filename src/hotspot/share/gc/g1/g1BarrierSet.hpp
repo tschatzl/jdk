@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2001, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2001, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,29 +34,31 @@ class G1CardTable;
 
 // This barrier set is specialized to manage two card tables:
 // * one the mutator is currently working on ("card table")
-// * one the refinement threads or GC are working on ("refinement table")
+// * one the refinement threads or GC during pause are working on ("refinement table")
 //
-// The card table acts like a regular card table where the mutator dirties card
+// The card table acts like a regular card table where the mutator dirties cards
 // containing potentially interesting references.
 //
 // When the amount of dirty cards on the card table exceeds a threshold, G1 swaps
-// the card tables and lets the refinement threads try to reduce them by "refining"
+// the card tables and has the refinement threads reduce them by "refining"
 // them.
 // I.e. refinement looks at all dirty cards on the refinement table, and updates
 // the remembered sets accordingly, clearing the cards on the refinement table.
 //
-// This separation of the data the mutator and refinement threads are working on
-// removes the need for any synchronization between them, keeping the write barrier
-// simple.
+// Meanwhile the mutator continues dirtying the now empty card table.
 //
-// The remembered sets for the current collection set are marked specially on the
-// card table - this is fine, because at most the mutator will overwrite it again
-// if there is a race, but G1 will scan the card either way.
+// This separation of data the mutator and refinement threads are working on
+// removes the need for any fine-grained (per mutator write) synchronization between
+// them, keeping the write barrier simple.
+//
+// The refinement threads mark cards in the the current collection set specially on the
+// card table - this is fine wrt to synchronization with the mutator, because at
+// most the mutator will overwrite it again if there is a race, as G1 will scan the
+// entire card either way during the GC pause.
 //
 // During garbage collection, if the refinement table is known to be non-empty, G1
-// merges it back to the card table which is scanned for cards.
-//
-// Meanwhile the mutator continues dirtying the now empty card table.
+// merges it back (and cleaning it) to the card table which is scanned for dirty
+// cards.
 //
 class G1BarrierSet: public CardTableBarrierSet {
   friend class VMStructs;
