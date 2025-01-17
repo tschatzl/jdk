@@ -430,7 +430,15 @@ static uint8_t barrier_data_from_profile(C2Access& access) {
       }
     }
     if (from_young_ratio > 0.9) {
-      result = use_no_filters;
+      // If we have reason, use the null check as it's very cheap. Do not try
+      // the card check in young gen as it's expensive even though it would be really
+      // advantageous (we taint the young gen cards with a non-clean value to detect
+      // references writes in young).
+      if (UseCondCardMark || (null_new_val_ratio > 0.8)) {
+        result = G1C2BarrierPostGenNullCheck;
+      } else {
+        result = use_no_filters;
+      }
     }
   }
 
