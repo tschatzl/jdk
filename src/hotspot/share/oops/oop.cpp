@@ -87,7 +87,16 @@ void oopDesc::print_value_on(outputStream* st) const {
     java_lang_String::print(obj, st);
     print_address_on(st);
   } else {
-    klass()->oop_print_value_on(obj, st);
+    Klass* k = klass_without_asserts();
+    if (k == nullptr) {
+      st->print("null klass");
+    } else if (!Metaspace::contains(k)) {
+      st->print("klass not in Metaspace");
+    } else if (!k->is_klass()) {
+      st->print("klass not a Klass");
+    } else {
+      k->oop_print_value_on(obj, st);
+    }
   }
 }
 
@@ -137,7 +146,7 @@ VerifyOopClosure VerifyOopClosure::verify_oop;
 
 template <class T> void VerifyOopClosure::do_oop_work(T* p) {
   oop obj = RawAccess<>::oop_load(p);
-  guarantee(oopDesc::is_oop_or_null(obj), "invalid oop: " PTR_FORMAT, p2i(obj));
+  guarantee(oopDesc::is_oop_or_null(obj), "invalid oop: from " PTR_FORMAT " to: " PTR_FORMAT, p2i(p), p2i(obj));
 }
 
 void VerifyOopClosure::do_oop(oop* p)       { VerifyOopClosure::do_oop_work(p); }
