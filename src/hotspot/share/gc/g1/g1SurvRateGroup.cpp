@@ -68,13 +68,19 @@ void G1SurvRateGroup::stop_adding_regions() {
     _accum_surv_rate_pred = REALLOC_C_HEAP_ARRAY(double, _accum_surv_rate_pred, _num_added_regions, mtGC);
     _surv_rate_predictors = REALLOC_C_HEAP_ARRAY(TruncatedSeq*, _surv_rate_predictors, _num_added_regions, mtGC);
 
+    // Assume that the prediction for the newly added regions is the same as the
+    // ones at the (current) end of the array. Particularly predictions at the end
+    // of this array fairly seldom get updated, so having a better initial value
+    // than InitialSurvivorRate is better.
+    double last_pred = _stats_arrays_length > 1 ? _accum_surv_rate_pred[_stats_arrays_length - 1] - _accum_surv_rate_pred[_stats_arrays_length - 2] : InitialSurvivorRate;
+
     for (size_t i = _stats_arrays_length; i < _num_added_regions; ++i) {
       // Initialize predictors and accumulated survivor rate predictions.
       _surv_rate_predictors[i] = new TruncatedSeq(10);
-      _surv_rate_predictors[i]->add(InitialSurvivorRate);
-      _accum_surv_rate_pred[i] = ((i == 0) ? 0.0 : _accum_surv_rate_pred[i-1]) + InitialSurvivorRate;
+      _surv_rate_predictors[i]->add(last_pred);
+      _accum_surv_rate_pred[i] = ((i == 0) ? 0.0 : _accum_surv_rate_pred[i-1]) + last_pred;
     }
-    _last_pred = InitialSurvivorRate;
+    _last_pred = last_pred;
 
     _stats_arrays_length = _num_added_regions;
   }
@@ -119,7 +125,7 @@ void G1SurvRateGroup::fill_in_last_surv_rates() {
 void G1SurvRateGroup::finalize_predictions(const G1Predictions& predictor) {
   double accum = 0.0;
   double pred = 0.0;
-  for (size_t i = 0; i < _stats_arrays_length; ++i) {
+  for (uint i = 0; i < _stats_arrays_length; ++i) {
     pred = predictor.predict_in_unit_interval(_surv_rate_predictors[i]);
     accum += pred;
     _accum_surv_rate_pred[i] = accum;
