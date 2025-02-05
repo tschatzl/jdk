@@ -46,6 +46,7 @@
 #include "opto/rootnode.hpp"
 #include "opto/runtime.hpp"
 #include "opto/type.hpp"
+#include "runtime/globals_extension.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/macros.hpp"
 
@@ -295,7 +296,11 @@ uint G1BarrierSetC2::estimated_barrier_size(const Node* node) const {
   uint8_t barrier_data = MemNode::barrier_data(node);
   uint nodes = 0;
   if ((barrier_data & G1C2BarrierPre) != 0) {
-    nodes += 50;
+  if (!FLAG_IS_DEFAULT(G1C2BarrierSize)) {
+    nodes += G1C2BarrierSize;
+  } else {
+
+    nodes += 50;}
   }
   if ((barrier_data & G1C2BarrierPost) != 0) {
     // Approximate the number of nodes needed; an if costs 4 nodes (Cmp, Bool,
