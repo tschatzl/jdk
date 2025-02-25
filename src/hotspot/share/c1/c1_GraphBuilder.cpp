@@ -1771,7 +1771,13 @@ void GraphBuilder::access_field(Bytecodes::Code code) {
         Value mask = append(new Constant(new IntConstant(1)));
         val = append(new LogicOp(Bytecodes::_iand, val, mask));
       }
-      append(new StoreField(append(obj), offset, field, val, true, state_before, needs_patching));
+      ciMethod* profiled_method = nullptr;
+      int profiled_bci = 0;
+      if (field->type()->basic_type() == T_OBJECT) {
+        profiled_method = method();
+        profiled_bci = bci();
+      }
+      append(new StoreField(append(obj), offset, field, val, true, state_before, needs_patching, profiled_method, profiled_bci));
       break;
     }
     case Bytecodes::_getfield: {
@@ -1841,8 +1847,14 @@ void GraphBuilder::access_field(Bytecodes::Code code) {
         val = append(new LogicOp(Bytecodes::_iand, val, mask));
       }
       StoreField* store = new StoreField(obj, offset, field, val, false, state_before, needs_patching);
-      if (!needs_patching) store = _memory->store(store);
+      if (!needs_patching) {
+        store = _memory->store(store);
+      }
       if (store != nullptr) {
+        if (field->type()->basic_type() == T_OBJECT) {
+          store->set_profiled_bci(bci());
+          store->set_profiled_method(method());
+        }
         append(store);
       }
       break;

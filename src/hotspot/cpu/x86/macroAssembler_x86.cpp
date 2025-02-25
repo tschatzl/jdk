@@ -4088,7 +4088,7 @@ Register MacroAssembler::allocate_if_noreg(Register r,
   return r;
 }
 
-void MacroAssembler::check_klass_subtype_slow_path_table(Register sub_klass,
+  void MacroAssembler::check_klass_subtype_slow_path_table(Register sub_klass,
                                                          Register super_klass,
                                                          Register temp_reg,
                                                          Register temp2_reg,

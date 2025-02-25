@@ -369,6 +369,7 @@ void InstructionPrinter::do_StoreField(StoreField* x) {
   print_value(x->value());
   output()->print(" (%c)", type2char(x->field()->type()->basic_type()));
   output()->print(" %s", x->field()->name()->as_utf8());
+  output()->print(" " PTR_FORMAT " (%d)", p2i(x->profiled_method()), x->profiled_bci());
 }
 
 

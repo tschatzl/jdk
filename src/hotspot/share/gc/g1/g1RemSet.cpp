@@ -1088,9 +1088,15 @@ class G1MergeHeapRootsTask : public WorkerTask {
       // make sure the refinement table is clean for all regions either in
       // concurrent refinement or in the merge refinement table phase earlier.
       if (!_initial_evacuation) {
+        assert(!hr->is_young(), "should not be young regions outside of initial evacuation");
         hr->clear_refinement_table();
       } else {
-        assert_refinement_table_clear(hr);
+        if (XXXProfileBarrierFromYoung && hr->is_young()) {
+          // Young gen needs to be cleared.
+          hr->clear_refinement_table();
+        } else {
+          assert_refinement_table_clear(hr);
+        }
       }
       // Evacuation failure uses the bitmap to record evacuation failed objects,
       // so the bitmap for the regions in the collection set must be cleared if not already.

@@ -1428,6 +1428,7 @@
   declare_constant(DataLayout::no_tag)                                    \
   declare_constant(DataLayout::bit_data_tag)                              \
   declare_constant(DataLayout::counter_data_tag)                          \
+  declare_constant(DataLayout::g1counter_data_tag)                        \
   declare_constant(DataLayout::jump_data_tag)                             \
   declare_constant(DataLayout::receiver_type_data_tag)                    \
   declare_constant(DataLayout::virtual_call_data_tag)                     \

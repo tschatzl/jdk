@@ -28,11 +28,12 @@
 #include "asm/macroAssembler.hpp"
 #include "gc/shared/modRefBarrierSetAssembler.hpp"
 
-class LIR_Assembler;
-class StubAssembler;
+class ciMethodData;
 class G1PreBarrierStub;
 class G1BarrierStubC2;
 class G1PreBarrierStubC2;
+class LIR_Assembler;
+class StubAssembler;
 
 class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
  protected:
@@ -63,12 +64,20 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
 
   void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
 
+  void g1_write_barrier_post_profile_c1(ciMethodData* md,
+                                        int bci,
+                                        MacroAssembler* masm,
+                                        Register store_addr,
+                                        Register new_val,
+                                        Register thread,
+                                        Register tmp1,
+                                        Register tmp2);
+
   void g1_write_barrier_post_c1(MacroAssembler* masm,
                                 Register store_addr,
                                 Register new_val,
                                 Register thread,
-                                Register tmp1,
-                                Register tmp2);
+                                Register tmp);
 #endif
 
 #ifdef COMPILER2
@@ -83,7 +92,9 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
                                 Register store_addr,
                                 Register new_val,
                                 Register tmp,
-                                bool new_val_may_be_null);
+                                uint8_t barrier_data,
+                                uint ext_barrier_data,
+                                bool new_val_is_compressed);
 #endif // COMPILER2
 };
 

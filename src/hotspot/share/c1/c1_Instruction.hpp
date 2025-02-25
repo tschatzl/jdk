@@ -826,19 +826,26 @@ LEAF(StoreField, AccessField)
  private:
   Value _value;
 
+  ciMethod* _profiled_method;
+  int       _profiled_bci;
+
  public:
   // creation
   StoreField(Value obj, int offset, ciField* field, Value value, bool is_static,
-             ValueStack* state_before, bool needs_patching)
+             ValueStack* state_before, bool needs_patching, ciMethod* profiled_method = nullptr, int profiled_bci = 0)
   : AccessField(obj, offset, field, is_static, state_before, needs_patching)
-  , _value(value)
-  {
+  , _value(value), _profiled_method(profiled_method), _profiled_bci(profiled_bci)  {
     ASSERT_VALUES
     pin();
   }
 
   // accessors
   Value value() const                            { return _value; }
+
+  ciMethod* profiled_method() const { return _profiled_method; }
+  void set_profiled_method(ciMethod* value) { _profiled_method = value; }
+  int profiled_bci() const { return _profiled_bci; }
+  void set_profiled_bci(int value) { _profiled_bci = value; }
 
   // generic
   virtual void input_values_do(ValueVisitor* f)   { AccessField::input_values_do(f); f->visit(&_value); }

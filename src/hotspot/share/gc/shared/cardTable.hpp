@@ -101,7 +101,7 @@ public:
 
   // Dirty the bytes corresponding to "mr" (not all of which must be
   // covered.)
-  void dirty_MemRegion(MemRegion mr);
+  void dirty_MemRegion(MemRegion mr, CardValue value = dirty_card);
 
   // Clear (to clean_card) the bytes entirely contained within "mr" (not
   // all of which must be covered.)

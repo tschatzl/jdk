@@ -49,6 +49,10 @@
 #include "utilities/growableArray.hpp"
 #include "utilities/macros.hpp"
 
+#include "logging/log.hpp"
+#include "logging/logTagSet.hpp"
+#include "logging/logStream.hpp"
+
 /*
  * Determine if the G1 pre-barrier can be removed. The pre-barrier is
  * required by SATB to make sure all objects live at the start of the
@@ -295,16 +299,26 @@ uint G1BarrierSetC2::estimated_barrier_size(const Node* node) const {
     // The slow path is laid out separately and does not
     // directly affect performance.
     // It has a cost of 6 (AddP, LoadB, Cmp, Bool, If, IfProj).
-    nodes += 6;
+
+    // cmpb/l  marking-active-offset[tls_reg], 0
+    // jz exit
+    nodes += XXXSkipPreBarrier ? 0 : 6;
   }
   if ((barrier_data & G1C2BarrierPost) != 0) {
-    // Approximate the number of nodes needed; an if costs 4 nodes (Cmp, Bool,
-    // If, If projection), any other (Assembly) instruction is approximated with
-    // a cost of 1.
-    nodes +=   4  // base cost for the card write containing getting base offset, address calculation and the card write;
-             + 6  // same region check: Uncompress (new_val) oop, xor, shr, (cmp), jmp
-             + 4  // new_val is null check
-             + (UseCondCardMark ? 4 : 0); // card not clean check.
+    // Base cost for the card write containing getting base offset, address calculation and the card write;
+    nodes += 4;
+    // Same region check: Uncompress (new_val) oop, xor, shr, (cmp), jmp
+    if ((barrier_data & G1C2BarrierPostGenCrossCheck) != 0) {
+      nodes += 6;
+    }
+    // New_val is null check
+    if ((barrier_data & G1C2BarrierPostGenNullCheck) != 0) {
+      nodes += 4;
+    }
+    // Card not clean check.
+    if ((barrier_data & G1C2BarrierPostGenCardCheck) != 0) {
+      nodes += 4;
+    }
   }
   return nodes;
 }
@@ -315,7 +329,7 @@ bool G1BarrierSetC2::can_initialize_object(const StoreNode* store) const {
   // if it does not have any barrier, or if it has barriers that can be safely
   // elided (because of the compensation steps taken on the allocation slow path
   // when ReduceInitialCardMarks is enabled).
-  return (MemNode::barrier_data(store) == 0) || use_ReduceInitialCardMarks();
+  return (MemNode::barrier_data(store) == 0) || use_ReduceInitialCardMarks(); // FIXME :(
 }
 
 void G1BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* ac) const {
@@ -324,6 +338,128 @@ void G1BarrierSetC2::clone_at_expansion(PhaseMacroExpand* phase, ArrayCopyNode* 
     return;
   }
   BarrierSetC2::clone_at_expansion(phase, ac);
+}
+
+template<typename T>
+static T saturated_sub(T x, T y) {
+  return (x < y) ? T() : (x - y);
+}
+
+static uint8_t barrier_data_from_profile(C2Access& access) {
+  LogTarget(Debug, gc, barrier) lt;
+
+  ciProfileData* profile = nullptr;
+  if (access.is_parse_access()) {
+    C2ParseAccess& pa = static_cast<C2ParseAccess&>(access);
+    ciMethod* method = pa.kit()->method();
+    profile = method->method_data()->bci_to_data(pa.kit()->bci());
+  }
+
+  uint8_t use_all_filters = G1C2BarrierPostGenNullCheck | G1C2BarrierPostGenCrossCheck | G1C2BarrierPostGenCardCheck;
+  uint8_t use_no_filters = 0;
+
+  if (profile == nullptr || !profile->is_G1CounterData()) {
+    C2ParseAccess& pa = static_cast<C2ParseAccess&>(access);
+    ciMethod* ci_method = pa.kit()->method();
+
+    LogStream ls(lt);
+    if (ci_method != nullptr) {
+      ResourceMark rm;
+      Method* method = Thread::current()->as_Compiler_thread()->env()->task()->method();
+      ls.print("C2 NO profile: %s @ %d", (method != nullptr) ?  method->method_holder()->internal_name() : "(unknown)", pa.kit()->bci());
+      /*
+      char buf[1024];
+      Thread::current()->as_Compiler_thread()->env()->task()->print_line_on_error(&ls, buf, 1024);
+      // FIXME: below crashes often for one or the other reason... :(
+      //method->print_short_name(&ls);
+               method->holder()->name()->get_symbol() == nullptr ? "{unknown}" : method->holder()->name()->as_utf8(),
+               !Symbol::is_valid(method->name()->get_symbol()) ? "{unknown}" : method->name()->as_utf8(),
+               pa.kit()->bci(), profile == nullptr ? "n/a" : BOOL_TO_STR(profile->is_G1CounterData()));
+      ls.print(" @ %d", pa.kit()->bci());
+      */
+    } else {
+      ls.print("C2 NO profile: (unknown) @ %d", pa.kit()->bci());
+    }
+    ls.cr();
+
+    return (XXXNoWriteBarrierFilters || XXXDefaultNoFilters) ? use_no_filters : use_all_filters;
+  }
+  G1CounterData* data = profile->as_G1CounterData();
+
+  uint8_t result = 0;
+  bool too_few_samples = data->visits_count() <= 10;
+  bool null_check_first = false;
+
+  double same_region_ratio = 0.0;
+  double null_new_val_ratio = 0.0;
+  double not_clean_card_ratio = 0.0;
+  double from_young_ratio = 0.0;
+
+  if (XXXNoWriteBarrierFilters) {
+    result = use_no_filters;
+  } else if (too_few_samples) {        // Too few samples.
+    result = XXXDefaultNoFilters ? use_no_filters : use_all_filters;
+  } else {
+
+    same_region_ratio = clamp_unit((double)data->same_region_count() / data->visits_count());
+    null_new_val_ratio = clamp_unit((double)data->null_new_val_count() / data->visits_count());
+    not_clean_card_ratio = 1.0 - clamp_unit((double)data->clean_cards_count() / data->visits_count());
+    from_young_ratio = clamp_unit((double)data->from_young_count() / data->visits_count());
+
+    if (same_region_ratio > 0.1) {
+      result |= G1C2BarrierPostGenCrossCheck;
+    }
+    if (null_new_val_ratio > 0.1) {
+      result |= G1C2BarrierPostGenNullCheck;
+    }
+    // Override generation of not-clean check with UseCondCardMark, generate always
+    // in that case.
+    if (not_clean_card_ratio > 0.1 || UseCondCardMark) {
+      result |= G1C2BarrierPostGenCardCheck;
+    }
+    uint8_t cross_null_check_flags = G1C2BarrierPostGenCrossCheck | G1C2BarrierPostGenNullCheck;
+    if ((result & cross_null_check_flags) == cross_null_check_flags) {
+      if (null_new_val_ratio > same_region_ratio) {
+        result |= G1C2BarrierPostNullCheckFirst;
+        null_check_first = true;
+      }
+    }
+    if (from_young_ratio > 0.9) {
+      // If we have reason, use the null check as it's very cheap. Do not try
+      // the card check in young gen as it's expensive even though it would be really
+      // advantageous (we taint the young gen cards with a non-clean value to detect
+      // references writes in young).
+      if (UseCondCardMark || (null_new_val_ratio > 0.8)) {
+        result = G1C2BarrierPostGenNullCheck;
+      } else {
+        result = use_no_filters;
+      }
+    }
+  }
+
+  C2ParseAccess& pa = static_cast<C2ParseAccess&>(access);
+  ciMethod* method = pa.kit()->method();
+
+  if (lt.is_enabled()) {
+    LogStream ls(lt);
+
+    ResourceMark rm;
+
+    ls.print_cr("C2 profile (%s): %s::%s @ %d - few-samples %s (%zu) same-region %s (%zu %.2f) null-new-val %s (%zu %.2f) not-clean-card %s (%zu %.2f) null-first %s from-young %s (%zu %.2f)",
+                profile->is_CombinedData() ? "aastore" : "putfield",
+                method->holder()->name()->as_utf8(), method->name()->as_utf8(),
+                pa.kit()->bci(),
+                BOOL_TO_STR(too_few_samples), data->visits_count(),
+                BOOL_TO_STR((result & G1C2BarrierPostGenCrossCheck) != 0), data->same_region_count(), same_region_ratio,
+                BOOL_TO_STR((result & G1C2BarrierPostGenNullCheck) != 0), data->null_new_val_count(), null_new_val_ratio,
+                BOOL_TO_STR((result & G1C2BarrierPostGenCardCheck) != 0), saturated_sub(data->visits_count(), data->clean_cards_count()), not_clean_card_ratio,
+                BOOL_TO_STR(null_check_first),
+                BOOL_TO_STR(from_young_ratio > 0.9), data->from_young_count(), from_young_ratio
+               );
+    profile->print_data_on(&ls);
+  }
+
+  return result;
 }
 
 Node* G1BarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue& val) const {
@@ -346,35 +482,36 @@ Node* G1BarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue& val) co
     // No keep-alive means no need for the pre-barrier.
     access.set_barrier_data(access.barrier_data() & ~G1C2BarrierPre);
   }
+  access.set_ext_barrier_data(barrier_data_from_profile(access));
   return BarrierSetC2::store_at_resolved(access, val);
 }
 
 Node* G1BarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                      Node* new_val, const Type* value_type) const {
-  GraphKit* kit = access.kit();
   if (!access.is_oop()) {
     return BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, new_val, value_type);
   }
   access.set_barrier_data(G1C2BarrierPre | G1C2BarrierPost);
+  access.set_ext_barrier_data(barrier_data_from_profile(access));
   return BarrierSetC2::atomic_cmpxchg_val_at_resolved(access, expected_val, new_val, value_type);
 }
 
 Node* G1BarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicParseAccess& access, Node* expected_val,
                                                       Node* new_val, const Type* value_type) const {
-  GraphKit* kit = access.kit();
   if (!access.is_oop()) {
     return BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, new_val, value_type);
   }
   access.set_barrier_data(G1C2BarrierPre | G1C2BarrierPost);
+  access.set_ext_barrier_data(barrier_data_from_profile(access));
   return BarrierSetC2::atomic_cmpxchg_bool_at_resolved(access, expected_val, new_val, value_type);
 }
 
 Node* G1BarrierSetC2::atomic_xchg_at_resolved(C2AtomicParseAccess& access, Node* new_val, const Type* value_type) const {
-  GraphKit* kit = access.kit();
   if (!access.is_oop()) {
     return BarrierSetC2::atomic_xchg_at_resolved(access, new_val, value_type);
   }
   access.set_barrier_data(G1C2BarrierPre | G1C2BarrierPost);
+  access.set_ext_barrier_data(barrier_data_from_profile(access));
   return BarrierSetC2::atomic_xchg_at_resolved(access, new_val, value_type);
 }
 
@@ -418,6 +555,14 @@ bool G1BarrierStubC2::needs_post_barrier(const MachNode* node) {
 
 bool G1BarrierStubC2::post_new_val_may_be_null(const MachNode* node) {
   return (node->barrier_data() & G1C2BarrierPostNotNull) == 0;
+}
+
+uint8_t G1BarrierStubC2::barrier_data(const MachNode* node) {
+  return node->barrier_data();
+}
+
+uint8_t G1BarrierStubC2::ext_barrier_data(const MachNode* node) {
+  return node->ext_barrier_data();
 }
 
 G1PreBarrierStubC2::G1PreBarrierStubC2(const MachNode* node) : G1BarrierStubC2(node) {}
@@ -592,5 +737,15 @@ void G1BarrierSetC2::dump_barrier_data(const MachNode* mach, outputStream* st) c
   if ((mach->barrier_data() & G1C2BarrierPostNotNull) != 0) {
     st->print("notnull ");
   }
+  /* // FIXME: tests will fail with these additional strings :(
+  if ((mach->ext_barrier_data() & G1C2BarrierPostGenCrossCheck) != 0) {
+    st->print("same-check ");
+  }
+  if ((mach->ext_barrier_data() & G1C2BarrierPostGenNullCheck) != 0) {
+    st->print("not-null-check");
+  }
+  if ((mach->ext_barrier_data() & G1C2BarrierPostGenCardCheck) != 0) {
+    st->print("card-check");
+  }*/
 }
 #endif // !PRODUCT

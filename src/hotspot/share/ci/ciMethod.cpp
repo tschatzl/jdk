@@ -469,9 +469,11 @@ ciCallProfile ciMethod::call_profile_at_bci(int bci) {
       // Every profiled call site has a counter.
       int count = check_overflow(data->as_CounterData()->count(), java_code_at_bci(bci));
 
+      assert(!data->is_CombinedData(), "must be3");
       if (!data->is_ReceiverTypeData()) {
         result._receiver_count[0] = 0;  // that's a definite zero
       } else { // ReceiverTypeData is a subclass of CounterData
+        assert(!data->is_CombinedData(), "must be");
         ciReceiverTypeData* call = (ciReceiverTypeData*)data->as_ReceiverTypeData();
         // In addition, virtual call sites have receiver type information
         int receivers_count_total = 0;

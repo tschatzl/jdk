@@ -1601,7 +1601,8 @@ void LIRGenerator::do_StoreField(StoreField* x) {
   }
 
   access_store_at(decorators, field_type, object, LIR_OprFact::intConst(x->offset()),
-                  value.result(), info != nullptr ? new CodeEmitInfo(info) : nullptr, info);
+                  value.result(), info != nullptr ? new CodeEmitInfo(info) : nullptr, info,
+                  x->profiled_method(), x->profiled_bci());
 }
 
 void LIRGenerator::do_StoreIndexed(StoreIndexed* x) {
@@ -1664,8 +1665,13 @@ void LIRGenerator::do_StoreIndexed(StoreIndexed* x) {
     decorators |= C1_MASK_BOOLEAN;
   }
 
-  access_store_at(decorators, x->elt_type(), array, index.result(), value.result(),
-                  nullptr, null_check_info);
+  if (obj_store) {
+    access_store_at(decorators, x->elt_type(), array, index.result(), value.result(),
+                    nullptr, null_check_info, x->profiled_method(), x->profiled_bci());
+  } else {
+    access_store_at(decorators, x->elt_type(), array, index.result(), value.result(),
+                    nullptr, null_check_info);
+  }
 }
 
 void LIRGenerator::access_load_at(DecoratorSet decorators, BasicType type,
@@ -1694,9 +1700,10 @@ void LIRGenerator::access_load(DecoratorSet decorators, BasicType type,
 
 void LIRGenerator::access_store_at(DecoratorSet decorators, BasicType type,
                                    LIRItem& base, LIR_Opr offset, LIR_Opr value,
-                                   CodeEmitInfo* patch_info, CodeEmitInfo* store_emit_info) {
+                                   CodeEmitInfo* patch_info, CodeEmitInfo* store_emit_info,
+                                   ciMethod* profiled_method, int profiled_bci) {
   decorators |= ACCESS_WRITE;
-  LIRAccess access(this, decorators, base, offset, type, patch_info, store_emit_info);
+  LIRAccess access(this, decorators, base, offset, type, patch_info, store_emit_info, profiled_method, profiled_bci);
   if (access.is_raw()) {
     _barrier_set->BarrierSetC1::store_at(access, value);
   } else {

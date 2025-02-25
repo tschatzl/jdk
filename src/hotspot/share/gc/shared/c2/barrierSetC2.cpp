@@ -108,10 +108,6 @@ Label* BarrierStubC2::continuation() {
   return &_continuation;
 }
 
-uint8_t BarrierStubC2::barrier_data() const {
-  return _node->barrier_data();
-}
-
 void BarrierStubC2::preserve(Register r) {
   const VMReg vm_reg = r->as_VMReg();
   assert(vm_reg->is_Register(), "r must be a general-purpose register");
@@ -151,7 +147,7 @@ Node* BarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue& val) cons
     GraphKit* kit = parse_access.kit();
     store = kit->store_to_memory(kit->control(), access.addr().node(), val.node(), bt,
                                  mo, requires_atomic_access, unaligned, mismatched,
-                                 unsafe, access.barrier_data());
+                                 unsafe, access.barrier_data(), access.ext_barrier_data());
   } else {
     assert(access.is_opt_access(), "either parse or opt access");
     C2OptAccess& opt_access = static_cast<C2OptAccess&>(access);
@@ -170,6 +166,7 @@ Node* BarrierSetC2::store_at_resolved(C2Access& access, C2AccessValue& val) cons
       st->set_mismatched_access();
     }
     st->set_barrier_data(access.barrier_data());
+    st->set_ext_barrier_data(access.ext_barrier_data());
     store = gvn.transform(st);
     if (store == st) {
       mm->set_memory_at(alias, st);

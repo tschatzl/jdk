@@ -256,6 +256,30 @@ inline void G1CollectedHeap::unpin_object(JavaThread* thread, oop obj) {
   G1ThreadLocalData::pin_count_cache(thread).dec_count(obj_region_idx);
 }
 
+// It dirties the cards that cover the block so that the post
+// write barrier never queues anything when updating objects on this
+// block. It is assumed (and in fact we assert) that the block
+// belongs to a young region.
+inline void G1CollectedHeap::dirty_young_block(HeapWord* start, size_t word_size) {
+  assert_heap_not_locked();
+  if (!XXXProfileBarrierFromYoung) { return; }
+
+  // Assign the containing region to containing_hr so that we don't
+  // have to keep calling heap_region_containing() in the
+  // asserts below.
+  DEBUG_ONLY(G1HeapRegion* containing_hr = heap_region_containing(start);)
+  assert(word_size > 0, "pre-condition");
+  assert(containing_hr->is_in(start), "it should contain start");
+  assert(containing_hr->is_young(), "it should be young");
+  assert(!containing_hr->is_humongous(), "it should not be humongous");
+
+  HeapWord* end = start + word_size;
+  assert(containing_hr->is_in(end - 1), "it should also contain end - 1");
+
+  MemRegion mr(start, end);
+  card_table()->dirty_MemRegion(mr, G1CardTable::g1_young_card);
+}
+
 inline bool G1CollectedHeap::is_obj_dead(const oop obj) const {
   assert(obj != nullptr, "precondition");
 

@@ -300,7 +300,13 @@ bool ciMethodData::load_data() {
   return true;
 }
 
+void ciCombinedData::translate_from(const ProfileData* data) {
+  guarantee(data->is_CombinedData(), "must be");
+  as_ReceiverTypeData()->translate_from(data->as_ReceiverTypeData());
+}
+
 void ciReceiverTypeData::translate_receiver_data_from(const ProfileData* data) {
+  assert(!data->is_CombinedData(), "must be 6");
   for (uint row = 0; row < row_limit(); row++) {
     Klass* k = data->as_ReceiverTypeData()->receiver(row);
     if (k != nullptr) {
@@ -366,6 +372,10 @@ ciProfileData* ciMethodData::data_from(DataLayout* data_layout) {
     return new ciBitData(data_layout);
   case DataLayout::counter_data_tag:
     return new ciCounterData(data_layout);
+  case DataLayout::g1counter_data_tag:
+    return new ciG1CounterData(data_layout);
+  case DataLayout::combined_data_tag:
+    return new ciCombinedData(data_layout);
   case DataLayout::jump_data_tag:
     return new ciJumpData(data_layout);
   case DataLayout::receiver_type_data_tag:
@@ -804,7 +814,8 @@ void ciMethodData::dump_replay_data(outputStream* out) {
           dump_replay_data_call_type_helper<ciVirtualCallTypeData>(out, round, count, call_type_data);
         }
       } else if (pdata->is_ReceiverTypeData()) {
-        ciReceiverTypeData* vdata = (ciReceiverTypeData*)pdata;
+        guarantee(!pdata->is_CombinedData(), "must be 4"); // FIXME
+        ciReceiverTypeData* vdata = (ciReceiverTypeData*)pdata->as_ReceiverTypeData();
         dump_replay_data_receiver_type_helper<ciReceiverTypeData>(out, round, count, vdata);
       } else if (pdata->is_CallTypeData()) {
           ciCallTypeData* call_type_data = (ciCallTypeData*)pdata;
@@ -882,86 +893,90 @@ void ciTypeEntries::print_ciklass(outputStream* st, intptr_t k) {
   }
 }
 
-void ciTypeStackSlotEntries::print_data_on(outputStream* st) const {
+void ciTypeStackSlotEntries::print_data_on(outputStream* st, bool cr) const {
   for (int i = 0; i < number_of_entries(); i++) {
     _pd->tab(st);
     st->print("%d: stack (%u) ", i, stack_slot(i));
     print_ciklass(st, type(i));
-    st->cr();
+    if (cr) st->cr();
   }
 }
 
-void ciReturnTypeEntry::print_data_on(outputStream* st) const {
+void ciReturnTypeEntry::print_data_on(outputStream* st, bool cr) const {
   _pd->tab(st);
   st->print("ret ");
   print_ciklass(st, type());
-  st->cr();
+  if (cr) st->cr();
 }
 
-void ciCallTypeData::print_data_on(outputStream* st, const char* extra) const {
+void ciCallTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "ciCallTypeData", extra);
   if (has_arguments()) {
     tab(st, true);
-    st->print_cr("argument types");
-    args()->print_data_on(st);
+    st->print("argument types ");
+    if (cr) st->cr();
+    args()->print_data_on(st, cr);
   }
   if (has_return()) {
     tab(st, true);
-    st->print_cr("return type");
-    ret()->print_data_on(st);
+    st->print("return type ");
+    if (cr) st->cr();
+    ret()->print_data_on(st, cr);
   }
 }
 
-void ciReceiverTypeData::print_receiver_data_on(outputStream* st) const {
+void ciReceiverTypeData::print_receiver_data_on(outputStream* st, bool cr) const {
   uint row;
   int entries = 0;
   for (row = 0; row < row_limit(); row++) {
     if (receiver(row) != nullptr)  entries++;
   }
-  st->print_cr("count(%u) entries(%u)", count(), entries);
+  st->print("count(%u) entries(%u) ", count(), entries);
+  if (cr) st->cr();
   for (row = 0; row < row_limit(); row++) {
     if (receiver(row) != nullptr) {
       tab(st);
       receiver(row)->print_name_on(st);
-      st->print_cr("(%u)", receiver_count(row));
+      st->print("(%u) ", receiver_count(row));
+      if (cr) st->cr();
     }
   }
 }
 
-void ciReceiverTypeData::print_data_on(outputStream* st, const char* extra) const {
+void ciReceiverTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "ciReceiverTypeData", extra);
-  print_receiver_data_on(st);
+  print_receiver_data_on(st, cr);
 }
 
-void ciVirtualCallData::print_data_on(outputStream* st, const char* extra) const {
+void ciVirtualCallData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "ciVirtualCallData", extra);
-  rtd_super()->print_receiver_data_on(st);
+  rtd_super()->print_receiver_data_on(st, cr);
 }
 
-void ciVirtualCallTypeData::print_data_on(outputStream* st, const char* extra) const {
+void ciVirtualCallTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "ciVirtualCallTypeData", extra);
   rtd_super()->print_receiver_data_on(st);
   if (has_arguments()) {
     tab(st, true);
     st->print("argument types");
-    args()->print_data_on(st);
+    args()->print_data_on(st, cr);
   }
   if (has_return()) {
     tab(st, true);
     st->print("return type");
-    ret()->print_data_on(st);
+    ret()->print_data_on(st, cr);
   }
 }
 
-void ciParametersTypeData::print_data_on(outputStream* st, const char* extra) const {
+void ciParametersTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   st->print_cr("ciParametersTypeData");
-  parameters()->print_data_on(st);
+  parameters()->print_data_on(st, cr);
 }
 
-void ciSpeculativeTrapData::print_data_on(outputStream* st, const char* extra) const {
+void ciSpeculativeTrapData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   st->print_cr("ciSpeculativeTrapData");
   tab(st);
   method()->print_short_name(st);
-  st->cr();
+  if (cr) st->cr();
 }
 #endif

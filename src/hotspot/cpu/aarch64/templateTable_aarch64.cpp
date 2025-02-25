@@ -1132,7 +1132,7 @@ void TemplateTable::aastore() {
 
   // Generate subtype check.  Blows r2, r5
   // Superklass in r0.  Subklass in r1.
-  __ gen_subtype_check(r1, ok_is_subtype);
+  __ gen_subtype_check(r1, ok_is_subtype, true /* is_aastore */);
 
   // Come here on failure
   // object is at TOS
@@ -1140,6 +1140,28 @@ void TemplateTable::aastore() {
 
   // Come here on success
   __ bind(ok_is_subtype);
+
+  if (ProfileInterpreter && XXXProfileBarrier) { // FIXME: cleanup
+    // The subtype check above moved the MDP pointer to the next item. Move back to where the G1CounterData is.
+    Register mdp = rscratch1;
+    Label cont1;
+    __ test_method_data_pointer(mdp, cont1);
+
+    __ ldr(r0, at_tos());
+
+    int offset = in_bytes(CombinedData::combined_data_data_size()) - in_bytes(CombinedData::g1_counter_data_offset());
+    assert(offset > 0, "must be? %d", offset);
+    __ sub(mdp, mdp, offset);
+    __ str(mdp, Address(rfp, frame::interpreter_frame_mdp_offset * wordSize));
+
+    __ profile_oop_store(element_address, r0);
+
+    __ ldr(mdp, Address(rfp, frame::interpreter_frame_mdp_offset * wordSize));
+    __ add(mdp, mdp, offset);
+    __ str(mdp, Address(rfp, frame::interpreter_frame_mdp_offset * wordSize));
+
+    __ bind(cont1);
+  }
 
   // Get the value we will store
   __ ldr(r0, at_tos());
@@ -1149,7 +1171,25 @@ void TemplateTable::aastore() {
 
   // Have a null in r0, r3=array, r2=index.  Store null at ary[idx]
   __ bind(is_null);
-  __ profile_null_seen(r2);
+
+  if (ProfileInterpreter && XXXProfileBarrier) { // FIXME: cleanup
+    // The subtype check above moved the MDP pointer to the next item. Move back to where the G1CounterData is.
+    Register mdp = rscratch1;
+    Label cont1;
+    __ test_method_data_pointer(mdp, cont1);
+
+    __ update_mdp_by_constant(mdp, in_bytes(CombinedData::g1_counter_data_offset()));
+
+    __ profile_oop_store(element_address, noreg);
+
+    // Restore mdp pointer...
+    __ ldr(mdp, Address(rfp, frame::interpreter_frame_mdp_offset * wordSize));
+    __ update_mdp_by_constant(mdp, -in_bytes(CombinedData::g1_counter_data_offset()));
+
+    __ bind(cont1);
+  }
+
+  __ profile_null_seen(r2, true /* is_aastore */);
 
   // Store a null
   do_oop_store(_masm, element_address, noreg, IS_ARRAY);
@@ -2877,6 +2917,7 @@ void TemplateTable::putfield_or_static(int byte_no, bool is_static, RewriteContr
     __ pop(atos);
     if (!is_static) pop_and_check_object(obj);
     // Store into the field
+    __ profile_oop_store(field, r0);
     do_oop_store(_masm, field, r0, IN_HEAP);
     if (rc == may_rewrite) {
       patch_bytecode(Bytecodes::_fast_aputfield, bc, r1, true, byte_no);
@@ -2990,6 +3031,8 @@ void TemplateTable::putfield_or_static(int byte_no, bool is_static, RewriteContr
     __ membar(MacroAssembler::StoreLoad | MacroAssembler::StoreStore);
     __ bind(notVolatile);
   }
+
+  __ profile_putfield_fix_mdp();
 }
 
 void TemplateTable::putfield(int byte_no)
@@ -3093,6 +3136,7 @@ void TemplateTable::fast_storefield(TosState state)
   // access field
   switch (bytecode()) {
   case Bytecodes::_fast_aputfield:
+    __ profile_oop_store(field, r0);
     do_oop_store(_masm, field, r0, IN_HEAP);
     break;
   case Bytecodes::_fast_lputfield:
@@ -3129,6 +3173,8 @@ void TemplateTable::fast_storefield(TosState state)
     __ membar(MacroAssembler::StoreLoad | MacroAssembler::StoreStore);
     __ bind(notVolatile);
   }
+
+  __ profile_putfield_fix_mdp();
 }
 
 

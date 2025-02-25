@@ -1598,7 +1598,8 @@ Node* GraphKit::store_to_memory(Node* ctl, Node* adr, Node *val, BasicType bt,
                                 bool unaligned,
                                 bool mismatched,
                                 bool unsafe,
-                                int barrier_data) {
+                                int barrier_data,
+                                int ext_barrier_data) {
   int adr_idx = C->get_alias_index(_gvn.type(adr)->isa_ptr());
   assert(adr_idx != Compile::AliasIdxTop, "use other store_to_memory factory" );
   const TypePtr* adr_type = nullptr;
@@ -1615,6 +1616,7 @@ Node* GraphKit::store_to_memory(Node* ctl, Node* adr, Node *val, BasicType bt,
     st->as_Store()->set_unsafe_access();
   }
   st->as_Store()->set_barrier_data(barrier_data);
+  st->as_Store()->set_ext_barrier_data(ext_barrier_data);
   st = _gvn.transform(st);
   set_memory(st, adr_idx);
   // Back-to-back stores can only remove intermediate store with DU info
@@ -2295,9 +2297,30 @@ Node* GraphKit::record_profiled_receiver_for_speculation(Node* n) {
       method()->method_data()->is_mature()) {
     ciProfileData* data = method()->method_data()->bci_to_data(bci());
     if (data != nullptr) {
-      if (!data->as_BitData()->null_seen()) {
+      // The next code that checks whether there is any non-NULL receiver is completely
+      // broken due to how the ci* and the corresponding non-ci* typedata hierarchy is
+      // done.
+      // I.e. Combineddata contains ReceiverDataType and Klass* references in the
+      // receiverdata, and the receivertypedata stuff contains ci* klasses.
+      // FIXME.
+      if (data->is_CombinedData()) {
+        ReceiverTypeData* call = data->as_ReceiverTypeData();
+        if (!call->as_BitData()->null_seen()) {
+          ptr_kind = ProfileNeverNull;
+        } else {
+          uint i = 0;
+          for (; i < call->row_limit(); i++) {
+            Klass* receiver = call->receiver(i);
+            if (receiver != nullptr) {
+              break;
+            }
+          }
+          ptr_kind = (i == call->row_limit()) ? ProfileAlwaysNull : ProfileMaybeNull;
+        }
+      } else if (!data->as_BitData()->null_seen()) {
         ptr_kind = ProfileNeverNull;
       } else {
+        assert(!data->is_CombinedData(), "must be");
         assert(data->is_ReceiverTypeData(), "bad profile data type");
         ciReceiverTypeData* call = (ciReceiverTypeData*)data->as_ReceiverTypeData();
         uint i = 0;
@@ -3282,6 +3305,9 @@ Node* GraphKit::gen_checkcast(Node *obj, Node* superklass,
            java_bc() == Bytecodes::_checkcast,
            "interpreter profiles type checks only for these BCs");
     data = method()->method_data()->bci_to_data(bci());
+    if (java_bc() == Bytecodes::_aastore && data != nullptr) { // FIXME: remove; check that we were going the right path.
+      data = data->as_ReceiverTypeData();
+    }
     safe_for_replace = true;
   }
 

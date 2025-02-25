@@ -1139,6 +1139,10 @@ inline T clamp(T value, T min, T max) {
   return MIN2(MAX2(value, min), max);
 }
 
+inline double clamp_unit(double value) {
+  return clamp(value, 0.0, 1.0);
+}
+
 inline bool is_odd (intx x) { return x & 1;      }
 inline bool is_even(intx x) { return !is_odd(x); }
 

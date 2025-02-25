@@ -59,14 +59,14 @@ static void write_barrier_post(MacroAssembler* masm,
                                const MachNode* node,
                                Register store_addr,
                                Register new_val,
-                               Register tmp1) {
+                               Register tmp,
+                               bool new_val_is_compressed) {
   if (!G1BarrierStubC2::needs_post_barrier(node)) {
     return;
   }
   Assembler::InlineSkippedInstructionsCounter skip_counter(masm);
   G1BarrierSetAssembler* g1_asm = static_cast<G1BarrierSetAssembler*>(BarrierSet::barrier_set()->barrier_set_assembler());
-  bool new_val_may_be_null = G1BarrierStubC2::post_new_val_may_be_null(node);
-  g1_asm->g1_write_barrier_post_c2(masm, store_addr, new_val, tmp1, new_val_may_be_null);
+  g1_asm->g1_write_barrier_post_c2(masm, store_addr, new_val, tmp, G1BarrierStubC2::barrier_data(node), G1BarrierStubC2::ext_barrier_data(node), new_val_is_compressed);
 }
 
 %}
@@ -94,7 +94,8 @@ instruct g1StoreP(memory mem, any_RegP src, rRegP tmp1, rRegP tmp2, rRegP tmp3, 
     write_barrier_post(masm, this,
                        $tmp1$$Register /* store_addr */,
                        $src$$Register /* new_val */,
-                       $tmp3$$Register /* tmp1 */);
+                       $tmp3$$Register /* tmp */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(ialu_mem_reg);
 %}
@@ -114,18 +115,11 @@ instruct g1StoreN(memory mem, rRegN src, rRegP tmp1, rRegP tmp2, rRegP tmp3, rFl
                       $tmp3$$Register /* tmp */,
                       RegSet::of($tmp1$$Register, $src$$Register) /* preserve */);
     __ movl(Address($tmp1$$Register, 0), $src$$Register);
-    if ((barrier_data() & G1C2BarrierPost) != 0) {
-      __ movl($tmp2$$Register, $src$$Register);
-      if ((barrier_data() & G1C2BarrierPostNotNull) == 0) {
-        __ decode_heap_oop($tmp2$$Register);
-      } else {
-        __ decode_heap_oop_not_null($tmp2$$Register);
-      }
-    }
     write_barrier_post(masm, this,
                        $tmp1$$Register /* store_addr */,
-                       $tmp2$$Register /* new_val */,
-                       $tmp3$$Register /* tmp1 */);
+                       $src$$Register /* new_val */, // JUSTCHANGED!
+                       $tmp3$$Register /* tmp */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(ialu_mem_reg);
 %}
@@ -155,7 +149,8 @@ instruct g1EncodePAndStoreN(memory mem, any_RegP src, rRegP tmp1, rRegP tmp2, rR
     write_barrier_post(masm, this,
                        $tmp1$$Register /* store_addr */,
                        $src$$Register /* new_val */,
-                       $tmp3$$Register /* tmp1 */);
+                       $tmp3$$Register /* tmp */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(ialu_mem_reg);
 %}
@@ -183,7 +178,8 @@ instruct g1CompareAndExchangeP(indirect mem, rRegP newval, rRegP tmp1, rRegP tmp
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
                        $tmp1$$Register /* new_val */,
-                       $tmp2$$Register /* tmp1 */);
+                       $tmp2$$Register /* tmp */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_cmpxchg);
 %}
@@ -205,11 +201,11 @@ instruct g1CompareAndExchangeN(indirect mem, rRegN newval, rRegP tmp1, rRegP tmp
     __ movl($tmp1$$Register, $newval$$Register);
     __ lock();
     __ cmpxchgl($tmp1$$Register, Address($mem$$Register, 0));
-    __ decode_heap_oop($tmp1$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
                        $tmp1$$Register /* new_val */,
-                       $tmp2$$Register /* tmp1 */);
+                       $tmp2$$Register /* tmp */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_cmpxchg);
 %}
@@ -240,7 +236,8 @@ instruct g1CompareAndSwapP(rRegI res, indirect mem, rRegP newval, rRegP tmp1, rR
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
                        $tmp1$$Register /* new_val */,
-                       $tmp2$$Register /* tmp1 */);
+                       $tmp2$$Register /* tmp */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_cmpxchg);
 %}
@@ -268,11 +265,11 @@ instruct g1CompareAndSwapN(rRegI res, indirect mem, rRegN newval, rRegP tmp1, rR
     __ cmpxchgl($tmp1$$Register, Address($mem$$Register, 0));
     __ setb(Assembler::equal, $res$$Register);
     __ movzbl($res$$Register, $res$$Register);
-    __ decode_heap_oop($tmp1$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
                        $tmp1$$Register /* new_val */,
-                       $tmp2$$Register /* tmp1 */);
+                       $tmp2$$Register /* tmp */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_cmpxchg);
 %}
@@ -295,7 +292,8 @@ instruct g1GetAndSetP(indirect mem, rRegP newval, rRegP tmp1, rRegP tmp2, rRegP 
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
                        $tmp1$$Register /* new_val */,
-                       $tmp2$$Register /* tmp1 */);
+                       $tmp2$$Register /* tmp */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_cmpxchg);
 %}
@@ -319,7 +317,8 @@ instruct g1GetAndSetN(indirect mem, rRegN newval, rRegP tmp1, rRegP tmp2, rRegP 
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
                        $tmp1$$Register /* new_val */,
-                       $tmp2$$Register /* tmp1 */);
+                       $tmp2$$Register /* tmp */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_cmpxchg);
 %}

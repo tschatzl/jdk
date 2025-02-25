@@ -162,7 +162,7 @@ class InterpreterMacroAssembler: public MacroAssembler {
 
   // Generate a subtype check: branch to ok_is_subtype if sub_klass is
   // a subtype of super_klass.
-  void gen_subtype_check( Register sub_klass, Label &ok_is_subtype );
+  void gen_subtype_check( Register sub_klass, Label &ok_is_subtype, bool is_aastore = false);
 
   // Dispatching
   void dispatch_prolog(TosState state, int step = 0);
@@ -247,12 +247,15 @@ class InterpreterMacroAssembler: public MacroAssembler {
                             Register scratch2,
                             bool receiver_can_be_null = false);
   void profile_ret(Register return_bci, Register mdp);
-  void profile_null_seen(Register mdp);
-  void profile_typecheck(Register mdp, Register klass, Register scratch);
+  void profile_null_seen(Register mdp, bool is_aastore = false);
+  void profile_typecheck(Register mdp, Register klass, Register scratch, bool is_aastore = false);
 
   void profile_switch_default(Register mdp);
   void profile_switch_case(Register index_in_scratch, Register mdp,
                            Register scratch2);
+
+  void profile_oop_store(Address field, Register new_val, Register tmp);
+  void profile_putfield_fix_mdp();
 
   // Debugging
   // only if +VerifyOops && state == atos

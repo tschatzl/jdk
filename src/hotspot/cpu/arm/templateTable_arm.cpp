@@ -1241,7 +1241,7 @@ void TemplateTable::aastore() {
   __ load_klass(Rtemp, Rarray_3);
   __ ldr(Rsuper_LR, Address(Rtemp, ObjArrayKlass::element_klass_offset()));
 
-  __ gen_subtype_check(Rsub_5, Rsuper_LR, throw_array_store, R0_tmp, R3_tmp);
+  __ gen_subtype_check(Rsub_5, Rsuper_LR, throw_array_store, R0_tmp, R3_tmp, true /* is_aastore */ );
   // Come here on success
 
   // Store value

@@ -45,6 +45,7 @@ private:
   bool _mismatched_access; // Mismatched access from unsafe: byte read in integer array for instance
   bool _unsafe_access;     // Access of unsafe origin.
   uint8_t _barrier_data;   // Bit field with barrier information
+  uint8_t _ext_barrier_data;
 
 protected:
 #ifdef ASSERT
@@ -69,7 +70,7 @@ protected:
       _unaligned_access(false),
       _mismatched_access(false),
       _unsafe_access(false),
-      _barrier_data(0) {
+      _barrier_data(0), _ext_barrier_data(0) {
     init_class_id(Class_Mem);
     debug_only(_adr_type=at; adr_type();)
   }
@@ -78,7 +79,7 @@ protected:
       _unaligned_access(false),
       _mismatched_access(false),
       _unsafe_access(false),
-      _barrier_data(0) {
+      _barrier_data(0), _ext_barrier_data(0) {
     init_class_id(Class_Mem);
     debug_only(_adr_type=at; adr_type();)
   }
@@ -87,7 +88,7 @@ protected:
       _unaligned_access(false),
       _mismatched_access(false),
       _unsafe_access(false),
-      _barrier_data(0) {
+      _barrier_data(0), _ext_barrier_data(0) {
     init_class_id(Class_Mem);
     debug_only(_adr_type=at; adr_type();)
   }
@@ -128,6 +129,7 @@ public:
 
   // Return the barrier data of n, if available, or 0 otherwise.
   static uint8_t barrier_data(const Node* n);
+  static uint8_t ext_barrier_data(const Node* n);
 
   // Map a load or store opcode to its corresponding store opcode.
   // (Return -1 if unknown.)
@@ -145,6 +147,8 @@ public:
 
   uint8_t barrier_data() { return _barrier_data; }
   void set_barrier_data(uint8_t barrier_data) { _barrier_data = barrier_data; }
+  uint8_t ext_barrier_data() { return _ext_barrier_data; }
+  void set_ext_barrier_data(uint8_t barrier_data) { _ext_barrier_data = barrier_data; }
 
   // Search through memory states which precede this node (load or store).
   // Look for an exact match for the address, with no intervening
@@ -812,6 +816,7 @@ private:
   const Type* const _type;      // What kind of value is loaded?
   const TypePtr* _adr_type;     // What kind of memory is being addressed?
   uint8_t _barrier_data;        // Bit field with barrier information
+  uint8_t _ext_barrier_data;
   virtual uint size_of() const; // Size is bigger
 public:
   LoadStoreNode( Node *c, Node *mem, Node *adr, Node *val, const TypePtr* at, const Type* rt, uint required );
@@ -828,6 +833,9 @@ public:
 
   uint8_t barrier_data() { return _barrier_data; }
   void set_barrier_data(uint8_t barrier_data) { _barrier_data = barrier_data; }
+
+  uint8_t ext_barrier_data() { return _ext_barrier_data; }
+  void set_ext_barrier_data(uint8_t barrier_data) { _ext_barrier_data = barrier_data; }
 };
 
 class LoadStoreConditionalNode : public LoadStoreNode {
