@@ -75,6 +75,7 @@ Mutex*   G1RareEvent_lock             = nullptr;
 Mutex*   G1DetachedRefinementStats_lock = nullptr;
 Mutex*   MarkStackFreeList_lock       = nullptr;
 Mutex*   MarkStackChunkList_lock      = nullptr;
+Mutex*   ByteCodeTracer_lock          = nullptr;
 Mutex*   MonitoringSupport_lock       = nullptr;
 Monitor* ConcurrentGCBreakpoints_lock = nullptr;
 Mutex*   Compile_lock                 = nullptr;
@@ -214,6 +215,8 @@ void mutex_init() {
     MUTEX_DEFN(MarkStackFreeList_lock        , PaddedMutex  , nosafepoint);
     MUTEX_DEFN(MarkStackChunkList_lock       , PaddedMutex  , nosafepoint);
   }
+  MUTEX_DEFN(ByteCodeTracer_lock             , PaddedMonitor, nosafepoint);
+
   MUTEX_DEFN(MonitoringSupport_lock          , PaddedMutex  , service-1);        // used for serviceability monitoring support
 
   MUTEX_DEFN(StringDedup_lock                , PaddedMonitor, nosafepoint);

@@ -56,6 +56,11 @@ public abstract class WriteBarrier {
     private Object[] theArrayLarge;
     private int[] indicesLarge;
 
+    private Object[] theArrayInAnotherRegion;
+
+    private Object[] theArraySmallInYoung;
+    private Object[] theArrayLargeInYoung;
+
     private Object nullRef;
     private Object realRef;
 
@@ -83,11 +88,18 @@ public abstract class WriteBarrier {
 
     @Setup
     public void setup() {
+        // Compact existing data as much as possible so that the data
+        // allocated below is less likely to be intermingled with the
+        // existing data.
+        System.gc();
+
         theArraySmall = new Object[NUM_REFERENCES_SMALL];
         indicesSmall = new int[NUM_REFERENCES_SMALL];
 
         theArrayLarge = new Object[NUM_REFERENCES_LARGE];
         indicesLarge = new int[NUM_REFERENCES_LARGE];
+
+        theArrayInAnotherRegion = new Object[4 * 1024 * 1024];
 
         m_w = (int) System.currentTimeMillis();
         Random random = new Random();
@@ -112,6 +124,12 @@ public abstract class WriteBarrier {
         // Run with -XX:+DisableExplicitGC to keep
         // objects in young space
         System.gc();
+
+        // These allocations are supposedly located in the young
+        // generation as they are allocated after the System.gc()
+        // above and "small".
+        theArraySmallInYoung = new Object[NUM_REFERENCES_SMALL];
+        theArrayLargeInYoung = new Object[NUM_REFERENCES_LARGE];
     }
 
     private int get_random() {
@@ -135,9 +153,41 @@ public abstract class WriteBarrier {
 
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathRealSmallInYoung() {
+        for (int i = 0; i < NUM_REFERENCES_SMALL; i++) {
+            theArraySmallInYoung[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = realRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathRealSmallXRegion() {
+        for (int i = 0; i < NUM_REFERENCES_SMALL; i++) {
+            theArrayInAnotherRegion[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = realRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testArrayWriteBarrierFastPathNullSmall() {
         for (int i = 0; i < NUM_REFERENCES_SMALL; i++) {
             theArraySmall[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = nullRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathNullSmallInYoung() {
+        for (int i = 0; i < NUM_REFERENCES_SMALL; i++) {
+            theArraySmallInYoung[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = nullRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathNullConstSmall() {
+        for (int i = 0; i < NUM_REFERENCES_SMALL; i++) {
+            theArraySmall[indicesSmall[NUM_REFERENCES_SMALL - i - 1]] = null;
         }
     }
 
@@ -151,13 +201,46 @@ public abstract class WriteBarrier {
 
     @Benchmark
     @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathRealLargeInYoung() {
+        for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
+            theArrayLargeInYoung[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = realRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathRealLargeXRegion() {
+        for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
+            theArrayInAnotherRegion[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = realRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testArrayWriteBarrierFastPathNullLarge() {
         for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
             theArrayLarge[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = nullRef;
         }
     }
 
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathNullLargeInYoung() {
+        for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
+            theArrayLargeInYoung[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = nullRef;
+        }
+    }
+
+    @Benchmark
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
+    public void testArrayWriteBarrierFastPathNullConstLarge() {
+        for (int i = 0; i < NUM_REFERENCES_LARGE; i++) {
+            theArrayLarge[indicesLarge[NUM_REFERENCES_LARGE - i - 1]] = null;
+        }
+    }
+
     @Benchmark()
+    @CompilerControl(CompilerControl.Mode.DONT_INLINE)
     public void testFieldWriteBarrierFastPath() {
         // Shuffle everything around
         this.tail.append(this.head);

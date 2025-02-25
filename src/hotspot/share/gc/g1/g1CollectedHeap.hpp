@@ -700,6 +700,11 @@ public:
   // Add the given region to the retained regions collection set candidates.
   void retain_region(G1HeapRegion* hr);
 
+  // It dirties the cards that cover the block so that the post
+  // write barrier never queues anything when updating objects on this
+  // block. It is assumed (and in fact we assert) that the block
+  // belongs to a young region.
+  inline void dirty_young_block(HeapWord* start, size_t word_size);
   // Frees a humongous region by collapsing it into individual regions
   // and calling free_region() for each of them. The freed regions
   // will be added to the free list that's passed as a parameter (this

@@ -80,6 +80,7 @@ class ProfileData;
 class DataLayout {
   friend class VMStructs;
   friend class JVMCIVMStructs;
+  friend class CombinedData;
 
 private:
   // Every data layout begins with a header.  This header
@@ -119,6 +120,8 @@ public:
     no_tag,
     bit_data_tag,
     counter_data_tag,
+    g1counter_data_tag,
+    combined_data_tag,
     jump_data_tag,
     receiver_type_data_tag,
     virtual_call_data_tag,
@@ -288,6 +291,8 @@ class         VirtualCallData;
 class           VirtualCallTypeData;
 class       RetData;
 class       CallTypeData;
+class   CombinedData;
+class   G1CounterData;
 class   JumpData;
 class     BranchData;
 class   ArrayData;
@@ -304,6 +309,8 @@ class ProfileData : public ResourceObj {
   friend class TypeEntries;
   friend class ReturnTypeEntry;
   friend class TypeStackSlotEntries;
+  friend class CombinedData;
+
 private:
   enum {
     tab_width_one = 16,
@@ -343,7 +350,7 @@ protected:
   }
   void release_set_intptr_at(int index, intptr_t value);
   intptr_t intptr_at(int index) const {
-    assert(0 <= index && index < cell_count(), "oob");
+    assert(0 <= index && index < cell_count(), "oob %d %d", index, cell_count());
     return data()->cell_at(index);
   }
   void set_uint_at(int index, uint value) {
@@ -386,6 +393,10 @@ protected:
   }
 
   ProfileData(DataLayout* data) {
+      set_data(data);
+  }
+
+  void set_data(DataLayout* data) {
     _data = data;
   }
 
@@ -411,6 +422,8 @@ public:
   // Type checking
   virtual bool is_BitData()         const { return false; }
   virtual bool is_CounterData()     const { return false; }
+  virtual bool is_G1CounterData()   const { return false; }
+  virtual bool is_CombinedData()    const { return false; }
   virtual bool is_JumpData()        const { return false; }
   virtual bool is_ReceiverTypeData()const { return false; }
   virtual bool is_VirtualCallData() const { return false; }
@@ -433,11 +446,19 @@ public:
     assert(is_CounterData(), "wrong type");
     return is_CounterData()     ? (CounterData*)    this : nullptr;
   }
+  virtual G1CounterData* as_G1CounterData() const {
+    assert(is_G1CounterData(), "wrong type");
+    return is_G1CounterData()   ? (G1CounterData*)  this : nullptr;
+  }
+  virtual CombinedData* as_CombinedData() const {
+    assert(is_CombinedData(), "wrong type");
+    return is_CombinedData()   ? (CombinedData*)  this : nullptr;
+  }
   JumpData* as_JumpData() const {
     assert(is_JumpData(), "wrong type");
     return is_JumpData()        ? (JumpData*)       this : nullptr;
   }
-  ReceiverTypeData* as_ReceiverTypeData() const {
+  virtual ReceiverTypeData* as_ReceiverTypeData() const {
     assert(is_ReceiverTypeData(), "wrong type");
     return is_ReceiverTypeData() ? (ReceiverTypeData*)this : nullptr;
   }
@@ -496,7 +517,7 @@ public:
   // translation here, and the required translators are in the ci subclasses.
   virtual void translate_from(const ProfileData* data) {}
 
-  virtual void print_data_on(outputStream* st, const char* extra = nullptr) const {
+  virtual void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const {
     ShouldNotReachHere();
   }
 
@@ -526,8 +547,8 @@ protected:
   };
   enum { bit_cell_count = 0 };  // no additional data fields needed.
 public:
-  BitData(DataLayout* layout) : ProfileData(layout) {
-  }
+  BitData(DataLayout* layout) : ProfileData(layout) { }
+  BitData() : ProfileData() { }
 
   virtual bool is_BitData() const { return true; }
 
@@ -544,7 +565,7 @@ public:
   // The null_seen flag bit is specially known to the interpreter.
   // Consulting it allows the compiler to avoid setting up null_check traps.
   bool null_seen()     { return flag_at(null_seen_flag); }
-  void set_null_seen()    { set_flag_at(null_seen_flag); }
+  //void set_null_seen()    { set_flag_at(null_seen_flag); }
   bool deprecated_method_call_site() const { return flag_at(deprecated_method_callsite_flag); }
   bool set_deprecated_method_call_site() { return data()->set_flag_at(deprecated_method_callsite_flag); }
   bool clear_deprecated_method_call_site() { return data()->clear_flag_at(deprecated_method_callsite_flag); }
@@ -568,7 +589,7 @@ public:
     return cell_offset(bit_cell_count);
   }
 
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // CounterData
@@ -584,6 +605,7 @@ protected:
   };
 public:
   CounterData(DataLayout* layout) : BitData(layout) {}
+  CounterData() : BitData() {}
 
   virtual bool is_CounterData() const { return true; }
 
@@ -618,7 +640,66 @@ public:
     set_int_at(count_off, count);
   }
 
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
+};
+
+// G1CounterData
+//
+// Four counters.
+class G1CounterData : public ProfileData {
+  friend class VMStructs;
+  friend class JVMCIVMStructs;
+protected:
+    enum {
+      count_off,
+      g1count_cell_count = 6
+    };
+
+  intptr_t count(int idx) const {
+    intptr_t raw_data = intptr_at(count_off + idx);
+    return raw_data;
+  }
+
+  enum CountIndexes {
+    Visits = 0,
+    SameRegion,
+    NullNewVal,
+    CleanCards,
+    FromYoung
+  };
+
+  static ByteSize count_offset(CountIndexes idx) {
+    return cell_offset(count_off + idx);
+  }
+
+public:
+  G1CounterData(DataLayout* layout) : ProfileData(layout) {}
+  G1CounterData() : ProfileData() {}
+
+  virtual bool is_G1CounterData() const { return true; }
+
+  static int static_cell_count() { return g1count_cell_count; }
+  int cell_count() const override { return G1CounterData::static_cell_count(); }
+
+  static ByteSize visits_counter_offset() { return count_offset(Visits); }
+  static ByteSize same_region_counter_offset() { return count_offset(SameRegion); }
+  static ByteSize null_new_val_counter_offset() { return count_offset(NullNewVal); }
+  static ByteSize clean_cards_counter_offset() { return count_offset(CleanCards); }
+  static ByteSize from_young_counter_offset() { return count_offset(FromYoung); }
+
+  intptr_t visits_count() const { return count(Visits); }
+  intptr_t same_region_count() const { return count(SameRegion); }
+  intptr_t null_new_val_count() const { return count(NullNewVal); }
+  intptr_t clean_cards_count() const { return count(CleanCards); }
+  intptr_t from_young_count() const { return count(FromYoung); }
+
+  static ByteSize counter_data_size() {
+    return cell_offset(g1count_cell_count);
+  }
+
+  void post_initialize(BytecodeStream* stream, MethodData* mdo) override;
+
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const override;
 };
 
 // JumpData
@@ -691,7 +772,7 @@ public:
   // Specific initialization.
   void post_initialize(BytecodeStream* stream, MethodData* mdo);
 
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // Entries in a ProfileData object to record types: it can either be
@@ -875,7 +956,7 @@ public:
   // GC support
   void clean_weak_klass_links(bool always_clean);
 
-  void print_data_on(outputStream* st) const;
+  void print_data_on(outputStream* st, bool cr = true) const;
 };
 
 // Type entry used for return from a call. A single cell to record the
@@ -918,7 +999,7 @@ public:
   // GC support
   void clean_weak_klass_links(bool always_clean);
 
-  void print_data_on(outputStream* st) const;
+  void print_data_on(outputStream* st, bool cr = true) const;
 };
 
 // Entries to collect type information at a call: contains arguments
@@ -1109,7 +1190,7 @@ public:
     }
   }
 
-  virtual void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  virtual void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // ReceiverTypeData
@@ -1135,8 +1216,10 @@ public:
   ReceiverTypeData(DataLayout* layout) : CounterData(layout) {
     assert(layout->tag() == DataLayout::receiver_type_data_tag ||
            layout->tag() == DataLayout::virtual_call_data_tag ||
-           layout->tag() == DataLayout::virtual_call_type_data_tag, "wrong type");
+           layout->tag() == DataLayout::virtual_call_type_data_tag, "wrong type %d", layout->tag());
   }
+
+  ReceiverTypeData() : CounterData() {}
 
   virtual bool is_ReceiverTypeData() const { return true; }
 
@@ -1219,8 +1302,65 @@ public:
   // GC support
   virtual void clean_weak_klass_links(bool always_clean);
 
-  void print_receiver_data_on(outputStream* st) const;
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_receiver_data_on(outputStream* st, bool add_cr = true) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
+};
+
+
+// CombinedData
+//
+// ....
+class CombinedData : public ProfileData {
+  friend class VMStructs;
+  friend class JVMCIVMStructs;
+
+  G1CounterData _g1_counter;
+  ReceiverTypeData _receiver_data;
+
+public:
+  CombinedData(DataLayout* layout);
+
+  virtual bool is_CombinedData() const { return true; }
+  virtual bool is_G1CounterData() const { return _g1_counter.is_G1CounterData(); }
+  virtual bool is_ReceiverTypeData() const { return _receiver_data.is_ReceiverTypeData(); }
+
+  virtual G1CounterData* as_G1CounterData() const {
+    assert(is_G1CounterData(), "wrong type");
+    return (G1CounterData*)&_g1_counter;
+  }
+  virtual ReceiverTypeData* as_ReceiverTypeData() const {
+    assert(is_ReceiverTypeData(), "wrong type");
+    return (ReceiverTypeData*)&_receiver_data;
+  }
+
+  static int receiver_type_data_cell_offset();
+  static int static_cell_count() { return 2 * DataLayout::header_size_in_cells() + G1CounterData::static_cell_count() + ReceiverTypeData::static_cell_count(); }
+  int cell_count() const override { return CombinedData::static_cell_count(); }
+
+  /*
+  static ByteSize counter_data_size() {
+    return G1CounterData::counter_data_size() + ReceiverTypeData::receiver_type_data_size();
+  }*/
+
+  static ByteSize g1_counter_data_offset() {
+    return in_ByteSize(DataLayout::header_size_in_bytes());
+  }
+
+  static ByteSize receiver_type_data_offset() {
+    return g1_counter_data_offset() + G1CounterData::counter_data_size();
+  }
+
+  static ByteSize receiver_type_data_size() {
+    return ReceiverTypeData::receiver_type_data_size();
+  }
+
+  static ByteSize combined_data_data_size() {
+    return in_ByteSize(DataLayout::header_size_in_bytes()) + G1CounterData::counter_data_size() + ReceiverTypeData::receiver_type_data_size();
+  }
+
+  void post_initialize(BytecodeStream* stream, MethodData* mdo) override;
+
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const override;
 };
 
 // VirtualCallData
@@ -1252,7 +1392,7 @@ public:
   }
 
   void print_method_data_on(outputStream* st) const NOT_JVMCI_RETURN;
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // VirtualCallTypeData
@@ -1384,7 +1524,7 @@ public:
     }
   }
 
-  virtual void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  virtual void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // RetData
@@ -1476,7 +1616,7 @@ public:
   // Specific initialization.
   void post_initialize(BytecodeStream* stream, MethodData* mdo);
 
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // BranchData
@@ -1540,7 +1680,7 @@ public:
   // Specific initialization.
   void post_initialize(BytecodeStream* stream, MethodData* mdo);
 
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // ArrayData
@@ -1699,7 +1839,7 @@ public:
   // Specific initialization.
   void post_initialize(BytecodeStream* stream, MethodData* mdo);
 
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 class ArgInfoData : public ArrayData {
@@ -1724,7 +1864,7 @@ public:
     array_set_int_at(arg, val);
   }
 
-  void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // ParametersTypeData
@@ -1783,7 +1923,7 @@ public:
     _parameters.clean_weak_klass_links(always_clean);
   }
 
-  virtual void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  virtual void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 
   static ByteSize stack_slot_offset(int i) {
     return cell_offset(stack_slot_local_offset(i));
@@ -1853,7 +1993,7 @@ public:
     return cell_offset(speculative_trap_method);
   }
 
-  virtual void print_data_on(outputStream* st, const char* extra = nullptr) const;
+  virtual void print_data_on(outputStream* st, const char* extra = nullptr, bool add_cr = true) const;
 };
 
 // MethodData*

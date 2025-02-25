@@ -81,6 +81,7 @@ public:
   void verify_card_table_cleanup();
   void verify_refinement_table_clean();
 
+  void verify_ct_young_region(G1HeapRegion* hr);
   void verify_ct_clean_region(G1HeapRegion* hr);
   void verify_rt_dirty_to_dummy_top(G1HeapRegion* hr);
   void verify_rt_clean_from_top(G1HeapRegion* hr);

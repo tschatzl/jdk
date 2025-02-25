@@ -42,6 +42,9 @@
 #define __ gen->lir()->
 #endif
 
+#include "logging/log.hpp"
+#include "logging/logStream.hpp"
+
 void G1PreBarrierStub::emit_code(LIR_Assembler* ce) {
   G1BarrierSetAssembler* bs = (G1BarrierSetAssembler*)BarrierSet::barrier_set()->barrier_set_assembler();
   bs->gen_pre_barrier_stub(ce, this);
@@ -52,6 +55,7 @@ void G1BarrierSetC1::pre_barrier(LIRAccess& access, LIR_Opr addr_opr,
   LIRGenerator* gen = access.gen();
   DecoratorSet decorators = access.decorators();
 
+  if (XXXSkipPreBarrier) return;
   // First we test whether marking is in progress.
   BasicType flag_type;
   bool patch = (decorators & C1_NEEDS_PATCHING) != 0;
@@ -114,6 +118,43 @@ void G1BarrierSetC1::pre_barrier(LIRAccess& access, LIR_Opr addr_opr,
   __ branch_destination(slow->continuation());
 }
 
+static void print_profile_data(ciMethod* method, int bci, const char* text) {
+  if (method == nullptr) {
+    return;
+  }
+
+  LogTarget(Debug, gc, barrier) lt;
+  if (!lt.is_enabled()) {
+    return;
+  }
+  LogStream ls(lt);
+
+  ResourceMark rm;
+
+  ciMethodData* md = method->method_data_or_null();
+  if (XXXProfileBarrier && md != nullptr) {  // Do not have profile data with -XX:-XXXProfileBarrier
+    ciProfileData* data = md->bci_to_data(bci);
+    if (data != nullptr) {
+      assert(data->is_G1CounterData(), "must be");
+      G1CounterData* counter_data = data->as_G1CounterData();
+
+      ls.print_cr("C1 %s (%s): %s::%s @ %d - samples (%zu) same-region (%zu) null-new-val (%zu) clean-cards (%zu) from-young (%zu)",
+                  text,
+                  data->is_CombinedData() ? "aastore" : "putfield",
+                  method->holder()->name()->as_utf8(), method->name()->as_utf8(), bci,
+                  (size_t)counter_data->visits_count(),
+                  (size_t)counter_data->same_region_count(),
+                  (size_t)counter_data->null_new_val_count(),
+                  (size_t)counter_data->clean_cards_count(),
+                  (size_t)counter_data->from_young_count());
+
+      data->print_data_on(&ls);
+    }
+  } else {
+    ls.print_cr("C1 NO %s: %s@%d", text, method->name()->as_utf8(), bci);
+  }
+}
+
 class LIR_OpG1PostBarrier : public LIR_Op {
  friend class LIR_OpVisitState;
 
@@ -123,19 +164,29 @@ private:
   LIR_Opr       _thread;
   LIR_Opr       _tmp1;
   LIR_Opr       _tmp2;
+  LIR_Opr       _tmp3;
+
+  ciMethod*     _method;
+  int           _bci;
 
 public:
   LIR_OpG1PostBarrier(LIR_Opr addr,
                       LIR_Opr new_val,
                       LIR_Opr thread,
                       LIR_Opr tmp1,
-                      LIR_Opr tmp2)
+                      LIR_Opr tmp2,
+                      LIR_Opr tmp3,
+                      ciMethod* method,
+                      int bci)
     : LIR_Op(lir_none, lir_none, nullptr),
       _addr(addr),
       _new_val(new_val),
       _thread(thread),
       _tmp1(tmp1),
-      _tmp2(tmp2)
+      _tmp2(tmp2),
+      _tmp3(tmp3),
+      _method(method),
+      _bci(bci)
     {}
 
   virtual void visit(LIR_OpVisitState* state) {
@@ -149,6 +200,7 @@ public:
     state->do_temp(_thread);
     state->do_temp(_tmp1);
     state->do_temp(_tmp2);
+    state->do_temp(_tmp3);
 
     if (_info != nullptr) {
       state->do_info(_info);
@@ -165,17 +217,27 @@ public:
     Register thread = _thread->as_pointer_register();
     Register tmp1 = _tmp1->as_pointer_register();
     Register tmp2 = _tmp2->as_pointer_register();
+    Register tmp3 = _tmp3->as_pointer_register();
 
     // This may happen for a store of x.a = x - we do not need a post barrier for those
     // as the cross-region test will always exit early anyway.
     // The post barrier implementations can assume that addr and new_val are different
     // then.
+    // FIXME: maybe add to the flags? Should we profile anyway?
     if (addr == new_val) {
       ce->masm()->block_comment(err_msg("same addr/new_val due to self-referential store with imprecise card mark %s", addr->name()));
       return;
     }
 
+    print_profile_data(_method, _bci, "emit");
+
+
     G1BarrierSetAssembler* bs_asm = static_cast<G1BarrierSetAssembler*>(BarrierSet::barrier_set()->barrier_set_assembler());
+    if (_method != nullptr &&
+        _method->method_data_or_null() != nullptr &&
+        _method->method_data_or_null()->bci_to_data(_bci) != nullptr) {
+      bs_asm->g1_write_barrier_post_profile_c1(_method->method_data(), _bci, ce->masm(), addr, new_val, thread, tmp1, tmp2);
+    }
     bs_asm->g1_write_barrier_post_c1(ce->masm(), addr, new_val, thread, tmp1, tmp2);
   }
 
@@ -185,6 +247,7 @@ public:
     _thread->print(out);   out->print(" ");
     _tmp1->print(out);     out->print(" ");
     _tmp2->print(out);     out->print(" ");
+    _tmp3->print(out);     out->print(" ");
     out->cr();
   }
 
@@ -202,6 +265,8 @@ void G1BarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_v
   if (!in_heap) {
     return;
   }
+
+  print_profile_data(access.profiled_method(), access.profiled_bci(), "lirgen");
 
   // If the "new_val" is a constant null, no barrier is necessary.
   if (new_val->is_constant() &&
@@ -235,7 +300,10 @@ void G1BarrierSetC1::post_barrier(LIRAccess& access, LIR_Opr addr, LIR_Opr new_v
                                     new_val,
                                     gen->getThreadPointer() /* thread */,
                                     gen->new_pointer_register() /* tmp1 */,
-                                    gen->new_pointer_register() /* tmp2 */));
+                                    gen->new_pointer_register() /* tmp2 */,
+                                    gen->new_pointer_register() /* tmp3 */,
+                                    access.profiled_method(),
+                                    access.profiled_bci()));
 }
 
 void G1BarrierSetC1::load_at_resolved(LIRAccess& access, LIR_Opr result) {

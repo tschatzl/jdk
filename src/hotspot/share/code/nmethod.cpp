@@ -3886,10 +3886,28 @@ void nmethod::print_code_comment_on(outputStream* st, int column, address begin,
               st->print("<UNKNOWN>");
             break;
           }
-        case Bytecodes::_getfield:
+        case Bytecodes::_aastore:
+          {
+            if (sd->method()->method_data() != nullptr) {
+              ProfileData* data = sd->method()->method_data()->bci_to_data(sd->bci());
+              if (data != nullptr) {
+                data->print_data_on(st, "", false);
+              }
+            }
+            break;
+          }
         case Bytecodes::_putfield:
+        case Bytecodes::_putstatic: {
+          if (sd->method()->method_data() != nullptr) {
+            ProfileData* data = sd->method()->method_data()->bci_to_data(sd->bci());
+            if (data != nullptr) {
+              data->print_data_on(st, "", false);
+            }
+          }
+          // fall through.
+        }
+        case Bytecodes::_getfield:
         case Bytecodes::_getstatic:
-        case Bytecodes::_putstatic:
           {
             Bytecode_field field(methodHandle(thread, sd->method()), sd->bci());
             st->print(" ");

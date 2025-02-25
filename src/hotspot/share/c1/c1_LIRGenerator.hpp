@@ -290,7 +290,8 @@ class LIRGenerator: public InstructionVisitor, public BlockClosure {
  public:
   void access_store_at(DecoratorSet decorators, BasicType type,
                        LIRItem& base, LIR_Opr offset, LIR_Opr value,
-                       CodeEmitInfo* patch_info = nullptr, CodeEmitInfo* store_emit_info = nullptr);
+                       CodeEmitInfo* patch_info = nullptr, CodeEmitInfo* store_emit_info = nullptr,
+                       ciMethod* profiled_method = nullptr, int profiled_bci = 0);
 
   void access_load_at(DecoratorSet decorators, BasicType type,
                       LIRItem& base, LIR_Opr offset, LIR_Opr result,

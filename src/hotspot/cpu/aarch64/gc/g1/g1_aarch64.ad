@@ -67,8 +67,7 @@ static void write_barrier_post(MacroAssembler* masm,
   }
   Assembler::InlineSkippedInstructionsCounter skip_counter(masm);
   G1BarrierSetAssembler* g1_asm = static_cast<G1BarrierSetAssembler*>(BarrierSet::barrier_set()->barrier_set_assembler());
-  bool new_val_may_be_null = G1BarrierStubC2::post_new_val_may_be_null(node);
-  g1_asm->g1_write_barrier_post_c2(masm, store_addr, new_val, rthread, tmp1, tmp2, new_val_may_be_null);
+  g1_asm->g1_write_barrier_post_c2(masm, store_addr, new_val, rthread, tmp1, tmp2, G1BarrierStubC2::barrier_data(node), G1BarrierStubC2::ext_barrier_data(node));
 }
 
 %}

@@ -567,7 +567,8 @@ void InterpreterMacroAssembler::load_resolved_klass_at_index(Register klass,
 // Kills:
 //      rcx, rdi
 void InterpreterMacroAssembler::gen_subtype_check(Register Rsub_klass,
-                                                  Label& ok_is_subtype) {
+                                                  Label& ok_is_subtype,
+                                                  bool is_aastore) {
   assert(Rsub_klass != rax, "rax holds superklass");
   LP64_ONLY(assert(Rsub_klass != r14, "r14 holds locals");)
   LP64_ONLY(assert(Rsub_klass != r13, "r13 holds bcp");)
@@ -575,7 +576,7 @@ void InterpreterMacroAssembler::gen_subtype_check(Register Rsub_klass,
   assert(Rsub_klass != rdi, "rdi holds 2ndary super array scan ptr");
 
   // Profile the not-null value's klass.
-  profile_typecheck(rcx, Rsub_klass, rdi); // blows rcx, reloads rdi
+  profile_typecheck(rcx, Rsub_klass, rdi, is_aastore); // blows rcx, reloads rdi
 
   // Do the check.
   check_klass_subtype(Rsub_klass, rax, rcx, ok_is_subtype); // blows rcx
@@ -1860,19 +1861,26 @@ void InterpreterMacroAssembler::profile_ret(Register return_bci,
 }
 
 
-void InterpreterMacroAssembler::profile_null_seen(Register mdp) {
+void InterpreterMacroAssembler::profile_null_seen(Register mdp, bool is_aastore) {
   if (ProfileInterpreter) {
     Label profile_continue;
 
     // If no method data exists, go to profile_continue.
     test_method_data_pointer(mdp, profile_continue);
 
+    if (XXXProfileBarrier && is_aastore) {
+      addptr(mdp, in_bytes(CombinedData::receiver_type_data_offset()));
+    }
     set_mdp_flag_at(mdp, BitData::null_seen_byte_constant());
 
     // The method data pointer needs to be updated.
     int mdp_delta = in_bytes(BitData::bit_data_size());
     if (TypeProfileCasts) {
-      mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+      if (XXXProfileBarrier && is_aastore) {
+        mdp_delta = in_bytes(CombinedData::receiver_type_data_size());
+      } else {
+        mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+      }
     }
     update_mdp_by_constant(mdp, mdp_delta);
 
@@ -1881,25 +1889,41 @@ void InterpreterMacroAssembler::profile_null_seen(Register mdp) {
 }
 
 
-void InterpreterMacroAssembler::profile_typecheck(Register mdp, Register klass, Register reg2) {
+void InterpreterMacroAssembler::profile_typecheck(Register mdp, Register klass, Register reg2, bool is_aastore) {
   if (ProfileInterpreter) {
     Label profile_continue;
 
     // If no method data exists, go to profile_continue.
     test_method_data_pointer(mdp, profile_continue);
 
-    // The method data pointer needs to be updated.
-    int mdp_delta = in_bytes(BitData::bit_data_size());
-    if (TypeProfileCasts) {
-      mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+// do no profiling for aastore here
+    if (TypeProfileCasts && XXXProfileBarrier && is_aastore) {
+      block_comment("aastore-do profiling {");
 
-      // Record the object type.
+      update_mdp_by_constant(mdp, in_bytes(CombinedData::receiver_type_data_offset()));
+
       record_klass_in_profile(klass, mdp, reg2, false);
+
+      update_mdp_by_constant(mdp, in_bytes(CombinedData::receiver_type_data_size()));
+
       NOT_LP64(assert(reg2 == rdi, "we know how to fix this blown reg");)
       NOT_LP64(restore_locals();)         // Restore EDI
-    }
-    update_mdp_by_constant(mdp, mdp_delta);
 
+      block_comment("aastore-do profiling  }");
+    } else {
+
+      // The method data pointer needs to be updated.
+      int mdp_delta = in_bytes(BitData::bit_data_size());
+      if (TypeProfileCasts) {
+        mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+
+        // Record the object type.
+        record_klass_in_profile(klass, mdp, reg2, false);
+        NOT_LP64(assert(reg2 == rdi, "we know how to fix this blown reg");)
+        NOT_LP64(restore_locals();)         // Restore EDI
+      }
+      update_mdp_by_constant(mdp, mdp_delta);
+    }
     bind(profile_continue);
   }
 }
@@ -1956,7 +1980,108 @@ void InterpreterMacroAssembler::profile_switch_case(Register index,
   }
 }
 
+void InterpreterMacroAssembler::profile_oop_store(Address field, Register new_val, Register tmp) {
+  if (!XXXProfileBarrier) {
+    return;
+  }
+  if (!ProfileInterpreter) {
+    return;
+  }
 
+  Label profile_continue;
+
+  assert_different_registers(field.base(), field.index(), new_val, tmp);
+
+  block_comment("profile_oop_store {");
+
+  push(field.base());
+  push(field.index());
+  if (new_val != noreg) {
+    push(new_val);
+  }
+  push(tmp);
+
+  Register addr = field.base();
+  // Register new_val = rax;
+  Register mdp = tmp;
+  // If no method data exists, exit.
+  test_method_data_pointer(mdp, profile_continue);
+
+  increment(Address(mdp, in_bytes(G1CounterData::visits_counter_offset())));
+
+  lea(addr, field);  // now field.index is free as another temp.
+  Register tmp2 = field.index();
+
+  if (new_val != noreg) {
+    movptr(tmp2, addr);
+    xorptr(tmp2, new_val);
+    shrptr(tmp2, G1HeapRegion::LogOfHRGrainBytes);
+    setcc(Assembler::zero, tmp2);
+    addptr(Address(mdp, in_bytes(G1CounterData::same_region_counter_offset())), tmp2);
+
+    testptr(new_val, new_val);
+    setcc(Assembler::zero, tmp2);
+    addptr(Address(mdp, in_bytes(G1CounterData::null_new_val_counter_offset())), tmp2);
+  } else {
+    increment(Address(mdp, in_bytes(G1CounterData::null_new_val_counter_offset())));
+  }
+
+  Register thread = LP64_ONLY(r15_thread) NOT_LP64(tmp2);
+
+  NOT_LP64(get_thread(tmp2));
+  movptr(tmp2, Address(thread, G1ThreadLocalData::card_table_base_offset()));
+  shrptr(addr, G1CardTable::card_shift());
+  cmpb(Address(tmp2, addr), G1CardTable::clean_card_val());
+  setcc(Assembler::equal, tmp2);
+  addptr(Address(mdp, in_bytes(G1CounterData::clean_cards_counter_offset())), tmp2);
+
+  if (XXXProfileBarrierFromYoung) {
+    NOT_LP64(get_thread(tmp2));
+    movptr(tmp2, Address(thread, G1ThreadLocalData::card_table_base_offset()));
+//    shrptr(addr, G1CardTable::card_shift());
+    cmpb(Address(tmp2, addr), G1CardTable::g1_young_card);
+    setcc(Assembler::equal, tmp2);
+    addptr(Address(mdp, in_bytes(G1CounterData::from_young_counter_offset())), tmp2);
+  }
+
+  bind(profile_continue);
+
+  pop(tmp);
+  if (new_val != noreg) {
+    pop(new_val);
+  }
+  pop(field.index());
+  pop(field.base());
+
+  block_comment("}");
+}
+
+void InterpreterMacroAssembler::profile_putfield_fix_mdp() {
+  if (!XXXProfileBarrier) {
+    return;
+  }
+  if (!ProfileInterpreter) {
+    return;
+  }
+
+  Label profile_continue;
+
+  Register mdp = rbx;
+
+  block_comment("profile_putfield_fix_mdp {");
+
+  push(mdp); // Just in case.
+
+  // If no method data exists, go to profile_continue.
+  test_method_data_pointer(mdp, profile_continue);
+
+  update_mdp_by_constant(mdp, in_bytes(G1CounterData::counter_data_size()));
+
+  bind(profile_continue);
+  pop(mdp);
+
+  block_comment("}");
+}
 
 void InterpreterMacroAssembler::_interp_verify_oop(Register reg, TosState state, const char* file, int line) {
   if (state == atos) {

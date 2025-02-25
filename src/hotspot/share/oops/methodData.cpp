@@ -38,6 +38,7 @@
 #include "prims/jvmtiRedefineClasses.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/deoptimization.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/handles.inline.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/safepointVerifiers.hpp"
@@ -161,9 +162,9 @@ void ProfileData::tab(outputStream* st, bool first) const {
 // whether a checkcast bytecode has seen a null value.
 
 
-void BitData::print_data_on(outputStream* st, const char* extra) const {
+void BitData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "BitData", extra);
-  st->cr();
+  if (cr) st->cr();
 }
 
 // ==================================================================
@@ -171,9 +172,53 @@ void BitData::print_data_on(outputStream* st, const char* extra) const {
 //
 // A CounterData corresponds to a simple counter.
 
-void CounterData::print_data_on(outputStream* st, const char* extra) const {
+void CounterData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "CounterData", extra);
-  st->print_cr("count(%u)", count());
+  st->print("count(%u)", count());
+  if (cr) st->cr();
+}
+
+// ==================================================================
+// G1CounterData
+//
+// A G1CounterData corresponds to ...
+
+void G1CounterData::post_initialize(BytecodeStream* stream, MethodData* mdo) {
+  assert(stream->bci() == bci(), "wrong pos");
+}
+
+void G1CounterData::print_data_on(outputStream* st, const char* extra, bool cr) const {
+  print_shared(st, "G1CounterData ", extra);
+  st->print("Samples (%zu) Same-Region (%zu) Zero-Val (%zu) Clean-Cards (%zu) From-Young (%zu)", count(0), count(1), count(2), count(3), count(4));
+  if (cr) st->cr();
+}
+
+// ==================================================================
+// CombinedData
+//
+// A CombinedData corresponds to ...
+
+CombinedData::CombinedData(DataLayout* layout) : ProfileData(layout), _g1_counter(), _receiver_data() {
+  _g1_counter.set_data((DataLayout*)&layout->_cells[0]);
+  assert(_g1_counter.is_G1CounterData(), "must be");
+  _receiver_data.set_data((DataLayout*)(&layout->_cells[0] + receiver_type_data_cell_offset()));
+  assert(_receiver_data.is_ReceiverTypeData(), "must be");
+}
+
+int CombinedData::receiver_type_data_cell_offset() {
+  return in_bytes(G1CounterData::counter_data_size()) / sizeof(intptr_t);
+}
+
+void CombinedData::post_initialize(BytecodeStream* stream, MethodData* mdo) {
+  assert(stream->bci() == bci(), "wrong pos");
+  _g1_counter.post_initialize(stream, mdo);
+  _receiver_data.post_initialize(stream, mdo);
+}
+
+void CombinedData::print_data_on(outputStream* st, const char* extra, bool cr) const {
+  print_shared(st, "CombinedData ", extra);
+  _g1_counter.print_data_on(st, extra, cr);
+  _receiver_data.print_data_on(st, extra, cr);
 }
 
 // ==================================================================
@@ -199,9 +244,10 @@ void JumpData::post_initialize(BytecodeStream* stream, MethodData* mdo) {
   set_displacement(offset);
 }
 
-void JumpData::print_data_on(outputStream* st, const char* extra) const {
+void JumpData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "JumpData", extra);
-  st->print_cr("taken(%u) displacement(%d)", taken(), displacement());
+  st->print("taken(%u) displacement(%d)", taken(), displacement());
+  if (cr) st->cr();
 }
 
 int TypeStackSlotEntries::compute_cell_count(Symbol* signature, bool include_receiver, int max) {
@@ -358,46 +404,46 @@ void TypeEntries::print_klass(outputStream* st, intptr_t k) {
   }
 }
 
-void TypeStackSlotEntries::print_data_on(outputStream* st) const {
+void TypeStackSlotEntries::print_data_on(outputStream* st, bool cr) const {
   for (int i = 0; i < _number_of_entries; i++) {
     _pd->tab(st);
     st->print("%d: stack(%u) ", i, stack_slot(i));
     print_klass(st, type(i));
-    st->cr();
+    if (cr) st->cr();
   }
 }
 
-void ReturnTypeEntry::print_data_on(outputStream* st) const {
+void ReturnTypeEntry::print_data_on(outputStream* st, bool cr) const {
   _pd->tab(st);
   print_klass(st, type());
-  st->cr();
+  if (cr) st->cr();
 }
 
-void CallTypeData::print_data_on(outputStream* st, const char* extra) const {
-  CounterData::print_data_on(st, extra);
+void CallTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
+  CounterData::print_data_on(st, extra, cr);
   if (has_arguments()) {
     tab(st, true);
     st->print("argument types");
-    _args.print_data_on(st);
+    _args.print_data_on(st, cr);
   }
   if (has_return()) {
     tab(st, true);
     st->print("return type");
-    _ret.print_data_on(st);
+    _ret.print_data_on(st, cr);
   }
 }
 
-void VirtualCallTypeData::print_data_on(outputStream* st, const char* extra) const {
-  VirtualCallData::print_data_on(st, extra);
+void VirtualCallTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
+  VirtualCallData::print_data_on(st, extra, cr);
   if (has_arguments()) {
     tab(st, true);
     st->print("argument types");
-    _args.print_data_on(st);
+    _args.print_data_on(st, cr);
   }
   if (has_return()) {
     tab(st, true);
     st->print("return type");
-    _ret.print_data_on(st);
+    _ret.print_data_on(st, cr);
   }
 }
 
@@ -418,7 +464,7 @@ void ReceiverTypeData::clean_weak_klass_links(bool always_clean) {
   }
 }
 
-void ReceiverTypeData::print_receiver_data_on(outputStream* st) const {
+void ReceiverTypeData::print_receiver_data_on(outputStream* st, bool cr) const {
   uint row;
   int entries = 0;
   for (row = 0; row < row_limit(); row++) {
@@ -435,18 +481,20 @@ void ReceiverTypeData::print_receiver_data_on(outputStream* st) const {
     if (receiver(row) != nullptr) {
       tab(st);
       receiver(row)->print_value_on(st);
-      st->print_cr("(%u %4.2f)", receiver_count(row), (float) receiver_count(row) / (float) total);
+      st->print("(%u %4.2f) ", receiver_count(row), (float) receiver_count(row) / (float) total);
+      if (cr) st->cr();
     }
   }
 }
-void ReceiverTypeData::print_data_on(outputStream* st, const char* extra) const {
+
+void ReceiverTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "ReceiverTypeData", extra);
-  print_receiver_data_on(st);
+  print_receiver_data_on(st, cr);
 }
 
-void VirtualCallData::print_data_on(outputStream* st, const char* extra) const {
+void VirtualCallData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "VirtualCallData", extra);
-  print_receiver_data_on(st);
+  print_receiver_data_on(st, cr);
 }
 
 // ==================================================================
@@ -493,19 +541,21 @@ address RetData::fixup_ret(int return_bci, MethodData* h_mdo) {
   return mdp;
 }
 
-void RetData::print_data_on(outputStream* st, const char* extra) const {
+void RetData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "RetData", extra);
   uint row;
   int entries = 0;
   for (row = 0; row < row_limit(); row++) {
     if (bci(row) != no_bci)  entries++;
   }
-  st->print_cr("count(%u) entries(%u)", count(), entries);
+  st->print("count(%u) entries(%u) ", count(), entries);
+  if (cr) st->cr();
   for (row = 0; row < row_limit(); row++) {
     if (bci(row) != no_bci) {
       tab(st);
-      st->print_cr("bci(%d: count(%u) displacement(%d))",
+      st->print("bci(%d: count(%u) displacement(%d)) ",
                    bci(row), bci_count(row), bci_displacement(row));
+      if (cr) st->cr();
     }
   }
 }
@@ -526,12 +576,14 @@ void BranchData::post_initialize(BytecodeStream* stream, MethodData* mdo) {
   set_displacement(offset);
 }
 
-void BranchData::print_data_on(outputStream* st, const char* extra) const {
+void BranchData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "BranchData", extra);
-  st->print_cr("taken(%u) displacement(%d)",
-               taken(), displacement());
+  st->print("taken(%u) displacement(%d) ",
+            taken(), displacement());
+  if (cr) st->cr();
   tab(st);
-  st->print_cr("not taken(%u)", not_taken());
+  st->print("not taken(%u)", not_taken());
+  if (cr) st->cr();
 }
 
 // ==================================================================
@@ -598,25 +650,27 @@ void MultiBranchData::post_initialize(BytecodeStream* stream,
   }
 }
 
-void MultiBranchData::print_data_on(outputStream* st, const char* extra) const {
+void MultiBranchData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "MultiBranchData", extra);
-  st->print_cr("default_count(%u) displacement(%d)",
-               default_count(), default_displacement());
+  st->print("default_count(%u) displacement(%d) ",
+            default_count(), default_displacement());
+  if (cr) st->cr();
   int cases = number_of_cases();
   for (int i = 0; i < cases; i++) {
     tab(st);
-    st->print_cr("count(%u) displacement(%d)",
-                 count_at(i), displacement_at(i));
+    st->print("count(%u) displacement(%d) ",
+              count_at(i), displacement_at(i));
+    if (cr) st->cr();
   }
 }
 
-void ArgInfoData::print_data_on(outputStream* st, const char* extra) const {
+void ArgInfoData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "ArgInfoData", extra);
   int nargs = number_of_args();
   for (int i = 0; i < nargs; i++) {
     st->print("  0x%x", arg_modified(i));
   }
-  st->cr();
+  if (cr) st->cr();
 }
 
 int ParametersTypeData::compute_cell_count(Method* m) {
@@ -639,18 +693,18 @@ bool ParametersTypeData::profiling_enabled() {
   return MethodData::profile_parameters();
 }
 
-void ParametersTypeData::print_data_on(outputStream* st, const char* extra) const {
+void ParametersTypeData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "ParametersTypeData", extra);
   tab(st);
   _parameters.print_data_on(st);
-  st->cr();
+  if (cr) st->cr();
 }
 
-void SpeculativeTrapData::print_data_on(outputStream* st, const char* extra) const {
+void SpeculativeTrapData::print_data_on(outputStream* st, const char* extra, bool cr) const {
   print_shared(st, "SpeculativeTrapData", extra);
   tab(st);
   method()->print_short_name(st);
-  st->cr();
+  if (cr) st->cr();
 }
 
 // ==================================================================
@@ -669,13 +723,30 @@ MethodData* MethodData::allocate(ClassLoaderData* loader_data, const methodHandl
 
 int MethodData::bytecode_cell_count(Bytecodes::Code code) {
   switch (code) {
+  case Bytecodes::_putstatic:
+  case Bytecodes::_putfield:
+    if (XXXProfileBarrier) {
+      return G1CounterData::static_cell_count();
+    } else {
+      return no_profile_data;
+    }
   case Bytecodes::_checkcast:
   case Bytecodes::_instanceof:
-  case Bytecodes::_aastore:
     if (TypeProfileCasts) {
       return ReceiverTypeData::static_cell_count();
     } else {
       return BitData::static_cell_count();
+    }
+  case Bytecodes::_aastore:
+    if (TypeProfileCasts) {
+      if (XXXProfileBarrier) {
+        return CombinedData::static_cell_count();
+      } else {
+        return ReceiverTypeData::static_cell_count();
+      }
+    } else {
+      ShouldNotReachHere();
+      return false;
     }
   case Bytecodes::_invokespecial:
   case Bytecodes::_invokestatic:
@@ -993,15 +1064,35 @@ int MethodData::initialize_data(BytecodeStream* stream,
   DataLayout* data_layout = data_layout_at(data_index);
   Bytecodes::Code c = stream->code();
   switch (c) {
+  case Bytecodes::_putstatic:
+  case Bytecodes::_putfield: {
+    if (XXXProfileBarrier) {
+      cell_count = G1CounterData::static_cell_count();
+      tag = DataLayout::g1counter_data_tag;
+    }
+    break;
+  }
   case Bytecodes::_checkcast:
   case Bytecodes::_instanceof:
-  case Bytecodes::_aastore:
     if (TypeProfileCasts) {
       cell_count = ReceiverTypeData::static_cell_count();
       tag = DataLayout::receiver_type_data_tag;
     } else {
       cell_count = BitData::static_cell_count();
       tag = DataLayout::bit_data_tag;
+    }
+    break;
+  case Bytecodes::_aastore:
+    if (TypeProfileCasts) {
+      if (XXXProfileBarrier) {
+        cell_count = CombinedData::static_cell_count();
+        tag = DataLayout::combined_data_tag;
+      } else {
+        cell_count = ReceiverTypeData::static_cell_count();
+        tag = DataLayout::receiver_type_data_tag;
+      }
+    } else {
+      ShouldNotReachHere();
     }
     break;
   case Bytecodes::_invokespecial:
@@ -1100,7 +1191,15 @@ int MethodData::initialize_data(BytecodeStream* stream,
   if (cell_count >= 0) {
     assert(tag != DataLayout::no_tag, "bad tag");
     assert(bytecode_has_profile(c), "agree w/ BHP");
-    data_layout->initialize(tag, checked_cast<u2>(stream->bci()), cell_count);
+    u2 bci = checked_cast<u2>(stream->bci());
+    data_layout->initialize(tag, bci, cell_count);
+    if (tag ==  DataLayout::combined_data_tag) {
+      DataLayout* temp;
+      temp = data_layout_at(data_index + DataLayout::header_size_in_cells() * sizeof(intptr_t /* type of cell */));
+      temp->initialize(DataLayout::g1counter_data_tag, bci, G1CounterData::static_cell_count());
+      temp = data_layout_at(data_index + DataLayout::header_size_in_cells() * sizeof (intptr_t) + in_bytes(G1CounterData::counter_data_size()));
+      temp->initialize(DataLayout::receiver_type_data_tag, bci, ReceiverTypeData::static_cell_count());
+    }
     return DataLayout::compute_size_in_bytes(cell_count);
   } else {
     assert(!bytecode_has_profile(c), "agree w/ !BHP");
@@ -1127,6 +1226,10 @@ int DataLayout::cell_count() {
     return BitData::static_cell_count();
   case DataLayout::counter_data_tag:
     return CounterData::static_cell_count();
+  case DataLayout::g1counter_data_tag:
+    return G1CounterData::static_cell_count();
+  case DataLayout::combined_data_tag:
+    return CombinedData::static_cell_count();
   case DataLayout::jump_data_tag:
     return JumpData::static_cell_count();
   case DataLayout::receiver_type_data_tag:
@@ -1161,6 +1264,10 @@ ProfileData* DataLayout::data_in() {
     return new BitData(this);
   case DataLayout::counter_data_tag:
     return new CounterData(this);
+  case DataLayout::g1counter_data_tag:
+    return new G1CounterData(this);
+  case DataLayout::combined_data_tag:
+    return new CombinedData(this);
   case DataLayout::jump_data_tag:
     return new JumpData(this);
   case DataLayout::receiver_type_data_tag:
@@ -1223,7 +1330,7 @@ void MethodData::post_initialize(BytecodeStream* stream) {
 MethodData::MethodData(const methodHandle& method)
   : _method(method()),
     // Holds Compile_lock
-    _extra_data_lock(Mutex::nosafepoint, "MDOExtraData_lock"),
+    _extra_data_lock(Mutex::nosafepoint-1, "MDOExtraData_lock"),
     _compiler_counters(),
     _parameters_type_data_di(parameters_uninitialized) {
   initialize();
@@ -1391,7 +1498,7 @@ address MethodData::bci_to_dp(int bci) {
 
 // Translate a bci to its corresponding data, or null.
 ProfileData* MethodData::bci_to_data(int bci) {
-  check_extra_data_locked();
+  //check_extra_data_locked(); // FIXME, reinstate
 
   DataLayout* data = data_layout_before(bci);
   for ( ; is_valid(data); data = next_data_layout(data)) {

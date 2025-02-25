@@ -42,6 +42,7 @@
 #include "prims/jvmtiThreadState.hpp"
 #include "runtime/basicLock.hpp"
 #include "runtime/frame.inline.hpp"
+#include "runtime/globals.hpp"
 #include "runtime/javaThread.hpp"
 #include "runtime/safepointMechanism.hpp"
 #include "runtime/sharedRuntime.hpp"
@@ -242,13 +243,14 @@ void InterpreterMacroAssembler::load_resolved_klass_at_offset(
 // Kills:
 //      r2, r5
 void InterpreterMacroAssembler::gen_subtype_check(Register Rsub_klass,
-                                                  Label& ok_is_subtype) {
+                                                  Label& ok_is_subtype,
+                                                  bool is_aastore) {
   assert(Rsub_klass != r0, "r0 holds superklass");
   assert(Rsub_klass != r2, "r2 holds 2ndary super array length");
   assert(Rsub_klass != r5, "r5 holds 2ndary super array scan ptr");
 
   // Profile the not-null value's klass.
-  profile_typecheck(r2, Rsub_klass, r5); // blows r2, reloads r5
+  profile_typecheck(r2, Rsub_klass, r5, is_aastore); // blows r2, reloads r5
 
   // Do the check.
   check_klass_subtype(Rsub_klass, r0, r2, ok_is_subtype); // blows r2
@@ -1012,7 +1014,11 @@ void InterpreterMacroAssembler::update_mdp_by_offset(Register mdp_in,
 void InterpreterMacroAssembler::update_mdp_by_constant(Register mdp_in,
                                                        int constant) {
   assert(ProfileInterpreter, "must be profiling interpreter");
-  add(mdp_in, mdp_in, (unsigned)constant);
+  if (constant > 0) {
+    add(mdp_in, mdp_in, (unsigned)constant);
+  } else {
+    sub(mdp_in, mdp_in, (unsigned)-constant);
+  }
   str(mdp_in, Address(rfp, frame::interpreter_frame_mdp_offset * wordSize));
 }
 
@@ -1304,19 +1310,27 @@ void InterpreterMacroAssembler::profile_ret(Register return_bci,
   }
 }
 
-void InterpreterMacroAssembler::profile_null_seen(Register mdp) {
+void InterpreterMacroAssembler::profile_null_seen(Register mdp, bool is_aastore) {
   if (ProfileInterpreter) {
     Label profile_continue;
 
     // If no method data exists, go to profile_continue.
     test_method_data_pointer(mdp, profile_continue);
 
+    if (XXXProfileBarrier && is_aastore) {
+      add(mdp, mdp, in_bytes(CombinedData::receiver_type_data_offset()));
+    }
+
     set_mdp_flag_at(mdp, BitData::null_seen_byte_constant());
 
     // The method data pointer needs to be updated.
     int mdp_delta = in_bytes(BitData::bit_data_size());
     if (TypeProfileCasts) {
-      mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+      if (XXXProfileBarrier && is_aastore) {
+        mdp_delta = in_bytes(CombinedData::receiver_type_data_size());
+      } else {
+        mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+      }
     }
     update_mdp_by_constant(mdp, mdp_delta);
 
@@ -1324,22 +1338,35 @@ void InterpreterMacroAssembler::profile_null_seen(Register mdp) {
   }
 }
 
-void InterpreterMacroAssembler::profile_typecheck(Register mdp, Register klass, Register reg2) {
+void InterpreterMacroAssembler::profile_typecheck(Register mdp, Register klass, Register reg2, bool is_aastore) {
   if (ProfileInterpreter) {
     Label profile_continue;
 
     // If no method data exists, go to profile_continue.
     test_method_data_pointer(mdp, profile_continue);
 
-    // The method data pointer needs to be updated.
-    int mdp_delta = in_bytes(BitData::bit_data_size());
-    if (TypeProfileCasts) {
-      mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+// do no profiling for aastore here
+    if (TypeProfileCasts && XXXProfileBarrier && is_aastore) {
+      block_comment("aastore-do profiling {");
 
-      // Record the object type.
+      update_mdp_by_constant(mdp, in_bytes(CombinedData::receiver_type_data_offset()));
+
       record_klass_in_profile(klass, mdp, reg2);
+
+      update_mdp_by_constant(mdp, in_bytes(CombinedData::receiver_type_data_size()));
+
+      block_comment("aastore-do profiling  }");
+    } else {
+      // The method data pointer needs to be updated.
+      int mdp_delta = in_bytes(BitData::bit_data_size());
+      if (TypeProfileCasts) {
+        mdp_delta = in_bytes(VirtualCallData::virtual_call_data_size());
+
+        // Record the object type.
+        record_klass_in_profile(klass, mdp, reg2);
+      }
+      update_mdp_by_constant(mdp, mdp_delta);
     }
-    update_mdp_by_constant(mdp, mdp_delta);
 
     bind(profile_continue);
   }
@@ -1393,6 +1420,120 @@ void InterpreterMacroAssembler::profile_switch_case(Register index,
 
     bind(profile_continue);
   }
+}
+
+static void add_to_counter(MacroAssembler* masm, Register mdp, int offset, Register value) {
+  Address addr(mdp, offset);
+  masm->ldr(rscratch1, addr);
+  masm->add(rscratch1, rscratch1, value);
+  masm->str(rscratch1, addr);
+}
+
+static void add_to_counter(MacroAssembler* masm, Register mdp, int offset) {
+  Address addr(mdp, offset);
+  masm->ldr(rscratch1, addr);
+  masm->add(rscratch1, rscratch1, 1);
+  masm->str(rscratch1, addr);
+}
+
+void InterpreterMacroAssembler::profile_oop_store(Address addr, Register new_val) {
+  if (!XXXProfileBarrier) {
+    return;
+  }
+  if (!ProfileInterpreter) {
+    return;
+  }
+
+  Label profile_continue;
+
+  assert_different_registers(addr.base(), addr.index(), new_val, rscratch1, rscratch2, r10, r11);
+
+  block_comment("profile_oop_store {");
+
+  push(addr.base());
+  push(addr.index());
+  if (new_val != noreg) {
+    push(new_val);
+  }
+  push(r10);
+  push(r11);
+
+  Register mdp = r10;
+  Register tmp = r11;
+  // If no method data exists, exit.
+  test_method_data_pointer(mdp, profile_continue);
+
+  add_to_counter(this, mdp, in_bytes(G1CounterData::visits_counter_offset()));
+
+  lea(addr.base(), addr);
+  Register tmp2 = addr.index();
+
+  if (new_val != noreg) {
+    eor(tmp, addr.base(), new_val);
+    lsr(tmp, tmp, G1HeapRegion::LogOfHRGrainBytes);
+    cmp(tmp, zr);
+    cset(tmp, Assembler::EQ);
+    add_to_counter(this, mdp, in_bytes(G1CounterData::same_region_counter_offset()), tmp);
+
+    cmp(new_val, zr);
+    cset(tmp, Assembler::EQ);
+    add_to_counter(this, mdp, in_bytes(G1CounterData::null_new_val_counter_offset()), tmp);
+  } else {
+    add_to_counter(this, mdp, in_bytes(G1CounterData::null_new_val_counter_offset()));
+  }
+
+  ldr(tmp, Address(rthread, G1ThreadLocalData::card_table_base_offset()));
+  lsr(addr.base(), addr.base(), G1CardTable::card_shift());
+
+  ldrb(tmp, Address(tmp, addr.base()));
+  cmp(tmp, G1CardTable::clean_card_val());
+  cset(tmp2, Assembler::EQ);
+  add_to_counter(this, mdp, in_bytes(G1CounterData::clean_cards_counter_offset()), tmp2);
+
+  if (XXXProfileBarrierFromYoung) {
+    cmp(tmp, G1CardTable::g1_young_card_val());
+    cset(tmp2, Assembler::EQ);
+    add_to_counter(this, mdp, in_bytes(G1CounterData::from_young_counter_offset()), tmp2);
+  }
+
+  bind(profile_continue);
+
+  pop(r11);
+  pop(r10);
+  if (new_val != noreg) {
+    pop(new_val);
+  }
+  pop(addr.index());
+  pop(addr.base());
+
+  block_comment("}");
+}
+
+void InterpreterMacroAssembler::profile_putfield_fix_mdp() {
+  if (!XXXProfileBarrier) {
+    return;
+  }
+  if (!ProfileInterpreter) {
+    return;
+  }
+
+  Label profile_continue;
+
+  Register mdp = r10;
+
+  block_comment("profile_putfield_fix_mdp {");
+
+  push(mdp); // Just in case.
+
+  // If no method data exists, go to profile_continue.
+  test_method_data_pointer(mdp, profile_continue);
+
+  update_mdp_by_constant(mdp, in_bytes(G1CounterData::counter_data_size()));
+
+  bind(profile_continue);
+  pop(mdp);
+
+  block_comment("}");
 }
 
 void InterpreterMacroAssembler::_interp_verify_oop(Register reg, TosState state, const char* file, int line) {

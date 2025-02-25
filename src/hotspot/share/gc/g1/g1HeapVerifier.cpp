@@ -561,10 +561,11 @@ public:
   G1VerifyCardTableCleanup(G1HeapVerifier* verifier)
     : _verifier(verifier) { }
   virtual bool do_heap_region(G1HeapRegion* r) {
-    _verifier->verify_ct_clean_region(r);
     if (r->is_survivor()) {
+      _verifier->verify_ct_young_region(r);
       _verifier->verify_rt_clean_region(r);
     } else {
+      _verifier->verify_ct_clean_region(r);
       _verifier->verify_rt_clean_from_top(r);
     }
     return false;
@@ -615,6 +616,16 @@ void G1HeapVerifier::verify_rt_dirty_to_dummy_top(G1HeapRegion* hr) {
   G1CardTable* ct = _g1h->refinement_table();
   MemRegion mr(hr->bottom(), hr->pre_dummy_top());
   ct->verify_dirty_region(mr);
+}
+
+void G1HeapVerifier::verify_ct_young_region(G1HeapRegion* hr) {
+  if (XXXProfileBarrierFromYoung && hr->is_young()) {
+    G1CardTable* ct = _g1h->card_table();
+    MemRegion mr(hr->bottom(), hr->end());
+    ct->verify_region(mr, G1CardTable::dirty_card_val(), false); // Dirty OR young.
+  } else {
+    verify_ct_clean_region(hr);
+  }
 }
 
 void G1HeapVerifier::verify_ct_clean_region(G1HeapRegion* hr) {

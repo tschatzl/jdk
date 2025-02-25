@@ -600,7 +600,7 @@ void Method::build_profiling_method_data(const methodHandle& method, TRAPS) {
     return;
   }
 
-  if (PrintMethodData && (Verbose || WizardMode)) {
+  if (PrintMethodData /*&& (Verbose || WizardMode)*/) {
     ResourceMark rm(THREAD);
     tty->print("build_profiling_method_data for ");
     method->print_name(tty);

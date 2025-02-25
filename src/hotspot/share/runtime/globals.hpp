@@ -1997,6 +1997,24 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, UseThreadsLockThrottleLock, true, DIAGNOSTIC,               \
           "Use an extra lock during Thread start and exit to alleviate"     \
           "contention on Threads_lock.")                                    \
+          \
+  product(bool, XXXSkipPreBarrier, false,         \
+          "Skip pre-barrier generation")    \
+                                                                            \
+  product(bool, XXXNoWriteBarrierFilters, false,         \
+          "Do not generate any write barrier filters")    \
+                                                                            \
+  product(bool, XXXProfileBarrierFromYoung, false,         \
+          "Profile whether a reference write originates from young generation.")    \
+                                                                            \
+  product(bool, XXXProfileBarrier, false,         \
+          "Profile write barrier filters.")    \
+                                                                            \
+  product(bool, XXXDefaultNoFilters, true,         \
+          "Do not generate any write barrier filters by default (too few samples, no profiling info)")    \
+                                                                            \
+  product(bool, XXXTraceByteCodesOnlyTraceReferenceWrites, false,         \
+          "Profile write barrier filters.")    \
 
 // end of RUNTIME_FLAGS
 

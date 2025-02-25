@@ -869,6 +869,15 @@ uint8_t MemNode::barrier_data(const Node* n) {
   return 0;
 }
 
+uint8_t MemNode::ext_barrier_data(const Node* n) {
+  if (n->is_LoadStore()) {
+    return n->as_LoadStore()->ext_barrier_data();
+  } else if (n->is_Mem()) {
+    return n->as_Mem()->ext_barrier_data();
+  }
+  return 0;
+}
+
 //=============================================================================
 // Should LoadNode::Ideal() attempt to remove control edges?
 bool LoadNode::can_remove_control() const {
@@ -3632,7 +3641,7 @@ LoadStoreNode::LoadStoreNode( Node *c, Node *mem, Node *adr, Node *val, const Ty
   : Node(required),
     _type(rt),
     _adr_type(at),
-    _barrier_data(0)
+    _barrier_data(0), _ext_barrier_data(0)
 {
   init_req(MemNode::Control, c  );
   init_req(MemNode::Memory , mem);

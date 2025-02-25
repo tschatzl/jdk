@@ -160,7 +160,7 @@ void PhaseCFG::implicit_null_check(Block* block, Node *proj, Node *val, int allo
     Node *m = val->out(i);
     if( !m->is_Mach() ) continue;
     MachNode *mach = m->as_Mach();
-    if (mach->barrier_data() != 0) {
+    if (mach->barrier_data() != 0) { // FIXME
       // Using memory accesses with barriers to perform implicit null checks is
       // not supported. These operations might expand into multiple assembly
       // instructions during code emission, including new memory accesses (e.g.

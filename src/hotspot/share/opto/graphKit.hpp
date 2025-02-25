@@ -559,7 +559,8 @@ class GraphKit : public Phase {
                         bool unaligned = false,
                         bool mismatched = false,
                         bool unsafe = false,
-                        int barrier_data = 0);
+                        int barrier_data = 0,
+                        int ext_barrier_data = 0);
 
   // Perform decorated accesses
 

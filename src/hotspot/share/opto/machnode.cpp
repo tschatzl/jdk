@@ -551,7 +551,7 @@ void MachNode::dump_spec(outputStream *st) const {
     if( C->alias_type(t)->is_volatile() )
       st->print(" Volatile!");
   }
-  if (barrier_data() != 0) {
+  if (barrier_data() != 0) { // FIXME
     st->print(" barrier(");
     BarrierSet::barrier_set()->barrier_set_c2()->dump_barrier_data(this, st);
     st->print(") ");

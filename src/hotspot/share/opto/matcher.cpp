@@ -1929,6 +1929,7 @@ MachNode *Matcher::ReduceInst( State *s, int rule, Node *&mem ) {
 
   // Have mach nodes inherit GC barrier data
   mach->set_barrier_data(MemNode::barrier_data(leaf));
+  mach->set_ext_barrier_data(MemNode::ext_barrier_data(leaf));
 
   return ex;
 }
@@ -2873,7 +2874,7 @@ bool Matcher::is_encode_and_store_pattern(const Node* n, const Node* m) {
       m == nullptr ||
       n->Opcode() != Op_StoreN ||
       !m->is_EncodeP() ||
-      n->as_Store()->barrier_data() == 0) {
+      n->as_Store()->barrier_data() == 0) { // suspicious
     return false;
   }
   assert(m == n->in(MemNode::ValueIn), "m should be input to n");

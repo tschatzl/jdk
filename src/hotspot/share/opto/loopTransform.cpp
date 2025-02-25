@@ -1010,7 +1010,7 @@ bool IdealLoopTree::policy_unroll(PhaseIdealLoop *phase) {
   // Also count ModL, DivL, MulL, and other nodes that expand mightly
   for (uint k = 0; k < _body.size(); k++) {
     Node* n = _body.at(k);
-    if (MemNode::barrier_data(n) != 0) {
+    if (MemNode::barrier_data(n) != 0) { // FIXME
       body_size += BarrierSet::barrier_set()->barrier_set_c2()->estimated_barrier_size(n);
     }
     switch (n->Opcode()) {

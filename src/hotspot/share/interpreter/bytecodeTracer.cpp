@@ -118,6 +118,9 @@ class BytecodePrinter {
     } else {
       code = Bytecodes::code_at(method(), bcp);
     }
+    if (XXXTraceByteCodesOnlyTraceReferenceWrites && code != Bytecodes::_aastore && code != Bytecodes::_putfield && code != Bytecodes::_putstatic) {
+      return;
+    }
     _code = code;
     _next_pc = is_wide() ? bcp+2 : bcp+1;
     // Trace each bytecode unless we're truncating the tracing output, then only print the first
@@ -135,6 +138,23 @@ class BytecodePrinter {
         st->print("%8d  %4d  %s",
             BytecodeCounter::counter_value(), bci, Bytecodes::name(code));
       }
+
+      MethodData* md = method->method_data();
+      if (md != nullptr) {
+        MutexLocker ml(md->extra_data_lock(), Mutex::_no_safepoint_check_flag);
+
+        ProfileData* data = md->bci_to_data(bci);
+        if (data != nullptr) {
+          st->print("profile data: ");
+          data->print_data_on(st, nullptr, false);
+          st->print(" ");
+        } else {
+          st->print(" NO profile data ");
+        }
+      } else {
+        st->print(" NO method data ");
+      }
+
       print_attributes(bci, st);
     }
     // Set is_wide for the next one, since the caller of this doesn't skip
@@ -184,7 +204,8 @@ static BytecodePrinter _interpreter_printer;
 
 void BytecodeTracer::trace_interpreter(const methodHandle& method, address bcp, uintptr_t tos, uintptr_t tos2, outputStream* st) {
   if (TraceBytecodes && BytecodeCounter::counter_value() >= TraceBytecodesAt) {
-    ttyLocker ttyl;  // 5065316: keep the following output coherent
+    MutexLocker x(ByteCodeTracer_lock, Mutex::_no_safepoint_check_flag);
+    // 5065316: keep the following output coherent
     // The ttyLocker also prevents races between two threads
     // trying to use the single instance of BytecodePrinter.
     //

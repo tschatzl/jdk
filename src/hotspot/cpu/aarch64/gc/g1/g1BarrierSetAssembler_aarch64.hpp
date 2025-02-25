@@ -29,6 +29,7 @@
 #include "gc/shared/modRefBarrierSetAssembler.hpp"
 #include "utilities/macros.hpp"
 
+class ciMethodData;
 class LIR_Assembler;
 class StubAssembler;
 class G1PreBarrierStub;
@@ -66,6 +67,15 @@ public:
 
   void generate_c1_pre_barrier_runtime_stub(StubAssembler* sasm);
 
+  void g1_write_barrier_post_profile_c1(ciMethodData* md,
+                                        int bci,
+                                        MacroAssembler* masm,
+                                        Register store_addr,
+                                        Register new_val,
+                                        Register thread,
+                                        Register tmp1,
+                                        Register tmp2);
+
   void g1_write_barrier_post_c1(MacroAssembler* masm,
                                 Register store_addr,
                                 Register new_val,
@@ -90,7 +100,8 @@ public:
                                 Register thread,
                                 Register tmp1,
                                 Register tmp2,
-                                bool new_val_may_be_null);
+                                uint8_t barrier_data,
+                                uint ext_barrier_data);
 #endif
 
   void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

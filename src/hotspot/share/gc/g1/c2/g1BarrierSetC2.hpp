@@ -34,12 +34,19 @@ class TypeFunc;
 const int G1C2BarrierPre         = 1;
 const int G1C2BarrierPost        = 2;
 const int G1C2BarrierPostNotNull = 4;
+const int G1C2BarrierPostGenCrossCheck = 8;
+const int G1C2BarrierPostGenNullCheck  = 16;
+const int G1C2BarrierPostGenCardCheck = 32;
+const int G1C2BarrierPostNullCheckFirst = 64; // Probably not worth
 
 class G1BarrierStubC2 : public BarrierStubC2 {
 public:
   static bool needs_pre_barrier(const MachNode* node);
   static bool needs_post_barrier(const MachNode* node);
   static bool post_new_val_may_be_null(const MachNode* node);
+
+  static uint8_t barrier_data(const MachNode* node);
+  static uint8_t ext_barrier_data(const MachNode* node);
 
   G1BarrierStubC2(const MachNode* node);
   virtual void emit_code(MacroAssembler& masm) = 0;

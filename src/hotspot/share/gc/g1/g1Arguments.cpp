@@ -68,12 +68,6 @@ void G1Arguments::initialize_alignments() {
   if (FLAG_IS_DEFAULT(G1EagerReclaimRemSetThreshold)) {
     FLAG_SET_ERGO(G1EagerReclaimRemSetThreshold, G1RemSetArrayOfCardsEntries);
   }
-  // G1 prefers to use conditional card marking to avoid overwriting cards that
-  // have already been found to contain a to-collection set reference. This reduces
-  // refinement effort.
-  if (FLAG_IS_DEFAULT(UseCondCardMark)) {
-    FLAG_SET_ERGO(UseCondCardMark, true);
-  }
 }
 
 size_t G1Arguments::conservative_max_heap_alignment() {
