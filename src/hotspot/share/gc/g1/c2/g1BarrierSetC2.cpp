@@ -295,7 +295,10 @@ uint G1BarrierSetC2::estimated_barrier_size(const Node* node) const {
   uint8_t barrier_data = MemNode::barrier_data(node);
   uint nodes = 0;
   if ((barrier_data & G1C2BarrierPre) != 0) {
-    nodes += 50;
+    // Approximate the number of nodes needed; an if costs 4 nodes (Cmp, Bool,
+    // If, If projection), any other (Assembly) instruction is approximated with
+    // a cost of 1.
+    nodes += 4;
   }
   if ((barrier_data & G1C2BarrierPost) != 0) {
     nodes += 60;
