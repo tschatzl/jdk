@@ -499,6 +499,7 @@ Node* BarrierSetC2::atomic_cmpxchg_val_at_resolved(C2AtomicParseAccess& access, 
   }
 
   load_store->as_LoadStore()->set_barrier_data(access.barrier_data());
+  load_store->as_LoadStore()->set_ext_barrier_data(access.ext_barrier_data());
   load_store = kit->gvn().transform(load_store);
 
   access.set_raw_access(load_store);
@@ -582,6 +583,7 @@ Node* BarrierSetC2::atomic_cmpxchg_bool_at_resolved(C2AtomicParseAccess& access,
   }
 
   load_store->as_LoadStore()->set_barrier_data(access.barrier_data());
+  load_store->as_LoadStore()->set_ext_barrier_data(access.ext_barrier_data());
   load_store = kit->gvn().transform(load_store);
 
   access.set_raw_access(load_store);
@@ -627,6 +629,7 @@ Node* BarrierSetC2::atomic_xchg_at_resolved(C2AtomicParseAccess& access, Node* n
   }
 
   load_store->as_LoadStore()->set_barrier_data(access.barrier_data());
+  load_store->as_LoadStore()->set_ext_barrier_data(access.ext_barrier_data());
   load_store = kit->gvn().transform(load_store);
 
   access.set_raw_access(load_store);
@@ -666,6 +669,7 @@ Node* BarrierSetC2::atomic_add_at_resolved(C2AtomicParseAccess& access, Node* ne
   }
 
   load_store->as_LoadStore()->set_barrier_data(access.barrier_data());
+  load_store->as_LoadStore()->set_ext_barrier_data(access.ext_barrier_data());
   load_store = kit->gvn().transform(load_store);
 
   access.set_raw_access(load_store);

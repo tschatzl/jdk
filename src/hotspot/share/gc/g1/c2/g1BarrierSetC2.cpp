@@ -227,6 +227,7 @@ void G1BarrierSetC2::eliminate_gc_barrier_data(Node* node) const {
   } else if (node->is_Mem()) {
     MemNode* mem = node->as_Mem();
     mem->set_barrier_data(0);
+    mem->set_ext_barrier_data(0);
   }
 }
 
@@ -264,7 +265,6 @@ static void refine_barrier_by_new_val_type(const Node* n) {
     barrier_data |= G1C2BarrierPostNotNull;
   }
   store->set_barrier_data(barrier_data);
-  return;
 }
 
 // Refine (not really expand) G1 barriers by looking at the new value type
@@ -303,30 +303,32 @@ uint G1BarrierSetC2::estimated_barrier_size(const Node* node) const {
   // (Assembly) instruction is approximated with a cost of 1.
 
   uint8_t barrier_data = MemNode::barrier_data(node);
-  uint nodes = 0;
+  uint pre_node_cost = 0;
+  uint post_node_cost = 0;
   if ((barrier_data & G1C2BarrierPre) != 0) {
 
     // cmpb/l  marking-active-offset[tls_reg], 0
     // jz exit
-    nodes += XXXSkipPreBarrier ? 0 : 4;
+    pre_node_cost += XXXSkipPreBarrier ? 0 : 4;
   }
   if ((barrier_data & G1C2BarrierPost) != 0) {
+    uint ext_barrier_data = MemNode::ext_barrier_data(node);
     // Base cost for the card write containing getting base offset, address calculation and the card write;
-    nodes += 4;
+    post_node_cost = 4;
     // Same region check: Uncompress (new_val) oop, xor, shr, (cmp), jmp
-    if ((barrier_data & G1C2BarrierPostGenCrossCheck) != 0) {
-      nodes += 6;
+    if ((ext_barrier_data & G1C2BarrierPostGenCrossCheck) != 0) {
+      post_node_cost += 6;
     }
     // New_val is null check
-    if ((barrier_data & G1C2BarrierPostGenNullCheck) != 0) {
-      nodes += 4;
+    if ((ext_barrier_data & G1C2BarrierPostGenNullCheck) != 0) {
+      post_node_cost += 4;
     }
     // Card not clean check.
-    if ((barrier_data & G1C2BarrierPostGenCardCheck) != 0) {
-      nodes += 4;
+    if ((ext_barrier_data & G1C2BarrierPostGenCardCheck) != 0) {
+      post_node_cost += 4;
     }
   }
-  return nodes;
+  return pre_node_cost + post_node_cost;
 }
 
 bool G1BarrierSetC2::can_initialize_object(const StoreNode* store) const {
@@ -390,6 +392,7 @@ static uint8_t barrier_data_from_profile(C2Access& access) {
 
     return (XXXNoWriteBarrierFilters || XXXDefaultNoFilters) ? use_no_filters : use_all_filters;
   }
+  guarantee(XXXProfileBarrier, "must be");
   G1CounterData* data = profile->as_G1CounterData();
 
   uint8_t result = 0;

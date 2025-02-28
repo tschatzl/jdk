@@ -2010,7 +2010,7 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, XXXProfileBarrier, false,         \
           "Profile write barrier filters.")    \
                                                                             \
-  product(bool, XXXDefaultNoFilters, true,         \
+  product(bool, XXXDefaultNoFilters, false,         \
           "Do not generate any write barrier filters by default (too few samples, no profiling info)")    \
                                                                             \
   product(bool, XXXTraceByteCodesOnlyTraceReferenceWrites, false,         \

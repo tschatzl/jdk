@@ -1787,7 +1787,7 @@ void GraphBuilder::access_field(Bytecodes::Code code) {
       }
       ciMethod* profiled_method = nullptr;
       int profiled_bci = 0;
-      if (field->type()->basic_type() == T_OBJECT) {
+      if (XXXProfileBarrier && field->type()->basic_type() == T_OBJECT) {
         profiled_method = method();
         profiled_bci = bci();
       }
@@ -1865,7 +1865,7 @@ void GraphBuilder::access_field(Bytecodes::Code code) {
         store = _memory->store(store);
       }
       if (store != nullptr) {
-        if (field->type()->basic_type() == T_OBJECT) {
+        if (XXXProfileBarrier && field->type()->basic_type() == T_OBJECT) {
           store->set_profiled_bci(bci());
           store->set_profiled_method(method());
         }
