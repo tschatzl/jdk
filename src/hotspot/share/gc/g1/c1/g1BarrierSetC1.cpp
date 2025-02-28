@@ -236,7 +236,7 @@ public:
         _method->method_data_or_null()->bci_to_data(_bci) != nullptr) {
       bs_asm->g1_write_barrier_post_profile_c1(_method->method_data(), _bci, ce->masm(), addr, new_val, thread, tmp1, tmp2);
     }
-    bs_asm->g1_write_barrier_post_c1(ce->masm(), addr, new_val, thread, tmp1);
+    bs_asm->g1_write_barrier_post_c1(ce->masm(), addr, new_val, thread, tmp1, tmp2);
   }
 
   virtual void print_instr(outputStream* out) const {

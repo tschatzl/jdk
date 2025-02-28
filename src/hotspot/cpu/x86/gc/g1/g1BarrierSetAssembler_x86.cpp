@@ -573,9 +573,10 @@ void G1BarrierSetAssembler::g1_write_barrier_post_c1(MacroAssembler* masm,
                                                      Register store_addr,
                                                      Register new_val,
                                                      Register thread,
-                                                     Register tmp) {
+                                                     Register tmp1,
+                                                     Register tmp2 /* unused */) {
   Label done;
-  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp, done, XXXNoWriteBarrierFilters ? gen_no_barrier_parts() : gen_all_barrier_parts(), false /* new_val_is_compressed */);
+  generate_post_barrier_fast_path(masm, store_addr, new_val, thread, tmp1, done, XXXNoWriteBarrierFilters ? gen_no_barrier_parts() : gen_all_barrier_parts(), false /* new_val_is_compressed */);
   __ bind(done);
 }
 

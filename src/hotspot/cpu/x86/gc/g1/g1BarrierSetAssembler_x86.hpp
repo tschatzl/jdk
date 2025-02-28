@@ -77,7 +77,8 @@ class G1BarrierSetAssembler: public ModRefBarrierSetAssembler {
                                 Register store_addr,
                                 Register new_val,
                                 Register thread,
-                                Register tmp);
+                                Register tmp1,
+                                Register tmp2);
 #endif
 
 #ifdef COMPILER2

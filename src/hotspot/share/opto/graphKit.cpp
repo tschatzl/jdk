@@ -1615,6 +1615,9 @@ Node* GraphKit::store_to_memory(Node* ctl, Node* adr, Node *val, BasicType bt,
   if (unsafe) {
     st->as_Store()->set_unsafe_access();
   }
+  if (barrier_data != 0 ) {
+    assert(ext_barrier_data != 0, "must be");
+  }
   st->as_Store()->set_barrier_data(barrier_data);
   st->as_Store()->set_ext_barrier_data(ext_barrier_data);
   st = _gvn.transform(st);
