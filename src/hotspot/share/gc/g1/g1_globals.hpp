@@ -50,6 +50,9 @@
           "Force execution of evacuation failure handling by inducing "     \
           "allocation failures during certain young collection pauses")     \
                                                                             \
+  product(bool, G1StressBarriers, true,                                    \
+          "Configure G1 to exercise cold barrier paths")                    \
+                                                                            \
   product(uintx, G1GCAllocationFailureALotCount, 1000,                      \
           "Number of successful evacuations between induced allocation "    \
           "failures occurring at object copying per thread")                \
