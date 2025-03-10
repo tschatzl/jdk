@@ -633,9 +633,9 @@ void G1Policy::record_dirtying_stats(double last_mutator_start_dirty_ms,
                                      double yield_duration_ms,
                                      size_t next_pending_cards_from_gc,
                                      size_t next_to_collection_set_cards) {
-  assert(SafepointSynchronize::is_at_safepoint() || G1RareEvent_lock->is_locked(),
+  assert(SafepointSynchronize::is_at_safepoint() || G1ReviseYoungLength_lock->is_locked(),
          "must be (at safepoint %s locked %s)",
-         BOOL_TO_STR(SafepointSynchronize::is_at_safepoint()), BOOL_TO_STR(G1RareEvent_lock->is_locked()));
+         BOOL_TO_STR(SafepointSynchronize::is_at_safepoint()), BOOL_TO_STR(G1ReviseYoungLength_lock->is_locked()));
   // Record mutator's card logging rate.
 
   // Unlike above for conc-refine rate, here we should not require a

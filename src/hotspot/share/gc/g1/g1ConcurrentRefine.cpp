@@ -532,55 +532,6 @@ uint64_t G1ConcurrentRefine::adjust_threads_wait_ms() const {
   }
 }
 
-class G1ConcurrentRefine::RemSetSamplingClosure : public G1HeapRegionClosure {
-  size_t _sampled_code_root_rs_length;
-
-public:
-  RemSetSamplingClosure() :
-    _sampled_code_root_rs_length(0) {}
-
-  bool do_heap_region(G1HeapRegion* r) override {
-    G1HeapRegionRemSet* rem_set = r->rem_set();
-    _sampled_code_root_rs_length += rem_set->code_roots_list_length();
-    return false;
-  }
-
-  size_t sampled_code_root_rs_length() const { return _sampled_code_root_rs_length; }
-};
-
-// Adjust the target length (in regions) of the young gen, based on the
-// current length of the remembered sets.
-//
-// At the end of the GC G1 determines the length of the young gen based on
-// how much time the next GC can take, and when the next GC may occur
-// according to the MMU.
-//
-// The assumption is that a significant part of the GC is spent on scanning
-// the remembered sets (and many other components), so this thread constantly
-// reevaluates the prediction for the remembered set scanning costs, and potentially
-// resizes the young gen. This may do a premature GC or even increase the young
-// gen size to keep pause time length goal.
-void G1ConcurrentRefine::adjust_young_list_target_length() {
-  if (_policy->use_adaptive_young_list_length()) {
-    G1CollectedHeap* g1h = G1CollectedHeap::heap();
-    G1CollectionSet* cset = g1h->collection_set();
-    RemSetSamplingClosure cl;
-    cset->iterate(&cl);
-
-    size_t pending_cards;
-    size_t current_to_collection_set_cards;
-    {
-      MutexLocker x(G1RareEvent_lock, Mutex::_no_safepoint_check_flag);
-      G1Policy* p = g1h->policy();
-      pending_cards = p->current_pending_cards();
-      current_to_collection_set_cards = p->current_to_collection_set_cards();
-    }
-    _policy->revise_young_list_target_length(pending_cards,
-                                             current_to_collection_set_cards,
-                                             cl.sampled_code_root_rs_length());
-  }
-}
-
 bool G1ConcurrentRefine::adjust_num_threads_periodically() {
   assert_current_thread_is_control_refinement_thread();
 
@@ -606,7 +557,6 @@ bool G1ConcurrentRefine::adjust_num_threads_periodically() {
     size_t used_bytes = _policy->estimate_used_young_bytes_locked();
     Heap_lock->unlock();
 
-    adjust_young_list_target_length();
     size_t young_bytes = _policy->young_list_target_length() * G1HeapRegion::GrainBytes;
     size_t available_bytes = young_bytes - MIN2(young_bytes, used_bytes);
     adjust_threads_wanted(available_bytes);
