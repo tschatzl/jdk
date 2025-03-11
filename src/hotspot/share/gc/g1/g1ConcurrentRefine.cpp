@@ -197,11 +197,15 @@ bool G1ConcurrentRefineSweepState::swap_global_card_table() {
     // A safepoint may occur during that time, so leave the STS temporarily.
     SuspendibleThreadSetLeaver sts_leave;
 
+    size_t epoch = refinement_epoch();
     MutexLocker mu(Threads_lock);
     // A GC that advanced the epoch might have happened, which already switched
     // The global card table. Do nothing.
+    log_debug(gc,refine)("swap global %zu == %zu?", epoch, _sweep_start_epoch);
     if (in_sweep_epoch()) {
       G1BarrierSet::g1_barrier_set()->swap_global_card_table();
+    } else {
+      G1CollectedHeap::heap()->verifier()->verify_card_tables_clean(true /* refinement_table_only */);
     }
   }
 
@@ -216,13 +220,18 @@ bool G1ConcurrentRefineSweepState::swap_java_threads_ct() {
   {
     SuspendibleThreadSetLeaver sts_leave;
 
-    class G1SwapThreadCardTableClosure : public HandshakeClosure {
+    class SwapThreadCardTableClosure : public HandshakeClosure {
     public:
-      G1SwapThreadCardTableClosure() : HandshakeClosure("G1 Swap JT card table") { }
+      SwapThreadCardTableClosure() : HandshakeClosure("G1 Swap JT card table") { }
 
       virtual void do_thread(Thread* t) {
         G1BarrierSet* bs = G1BarrierSet::g1_barrier_set();
-        G1ThreadLocalData::set_byte_map_base(t, bs->card_table()->byte_map_base());
+        {
+          ResourceMark rm;
+          G1CardTable::CardValue* table = bs->card_table()->byte_map_base();
+          log_debug(gc, refine)("set ct base2 " PTR_FORMAT " thread " PTR_FORMAT " %s", p2i(table), p2i(t), t->name());
+        }
+        bs->update_card_table_base(t);
       }
     } cl;
     Handshake::execute(&cl);
@@ -376,6 +385,10 @@ void G1ConcurrentRefineSweepState::snapshot_heap_into(G1CardTableClaimTable* swe
 
 bool G1ConcurrentRefineSweepState::is_in_progress() const {
   return _state != State::Idle;
+}
+
+bool G1ConcurrentRefineSweepState::are_java_threads_synched() const {
+  return _state > State::SwapJavaThreadsCT || !is_in_progress();
 }
 
 uint64_t G1ConcurrentRefine::adjust_threads_period_ms() const {
