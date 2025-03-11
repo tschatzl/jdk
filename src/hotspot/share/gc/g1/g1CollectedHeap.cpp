@@ -109,6 +109,7 @@
 #include "runtime/init.hpp"
 #include "runtime/java.hpp"
 #include "runtime/orderAccess.hpp"
+#include "runtime/threads.hpp"
 #include "runtime/threadSMR.hpp"
 #include "runtime/vmThread.hpp"
 #include "utilities/align.hpp"
@@ -801,6 +802,25 @@ void G1CollectedHeap::prepare_for_mutator_after_full_collection() {
 void G1CollectedHeap::abort_refinement() {
   G1ConcurrentRefineSweepState& sweep_state = concurrent_refine()->sweep_state();
   if (sweep_state.is_in_progress()) {
+
+    if (!sweep_state.are_java_threads_synched()) {
+      // Synchronize Java threads with global card table.
+      class SwapThreadCardTableClosure : public ThreadClosure {
+      public:
+
+        virtual void do_thread(Thread* t) {
+          G1BarrierSet* bs = G1BarrierSet::g1_barrier_set();
+          {
+            ResourceMark rm;
+            G1CardTable::CardValue* table = bs->card_table()->byte_map_base();
+            log_debug(gc, refine)("set ct base2 " PTR_FORMAT " thread " PTR_FORMAT " %s", p2i(table), p2i(t), t->name());
+          }
+          bs->update_card_table_base(t);
+        }
+      } cl;
+      Threads::java_threads_do(&cl);
+    }
+
     // Record any available refinement statistics.
     policy()->record_refinement_stats(sweep_state.stats());
     sweep_state.complete_work(false /* concurrent */, false /* print_log */);
@@ -809,6 +829,8 @@ void G1CollectedHeap::abort_refinement() {
 }
 
 void G1CollectedHeap::verify_after_full_collection() {
+    _verifier->verify_card_tables_in_sync(); // FIXME: remove
+
   if (!VerifyAfterGC) {
     return;
   }
@@ -817,6 +839,7 @@ void G1CollectedHeap::verify_after_full_collection() {
   }
   _hrm.verify_optional();
   _verifier->verify_region_sets_optional();
+  _verifier->verify_card_tables_clean(false /* refinement_table_only */);
   _verifier->verify_after_gc();
   _verifier->verify_bitmap_clear(false /* above_tams_only */);
 
@@ -2432,6 +2455,8 @@ void G1CollectedHeap::verify_before_young_collection(G1HeapVerifier::G1VerifyTyp
 }
 
 void G1CollectedHeap::verify_after_young_collection(G1HeapVerifier::G1VerifyType type) {
+        _verifier->verify_card_tables_in_sync(); // FIXME: remove
+
   if (!VerifyAfterGC) {
     return;
   }
