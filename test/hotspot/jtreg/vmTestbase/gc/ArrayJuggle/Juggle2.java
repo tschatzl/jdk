@@ -29,6 +29,7 @@
 
 /* @test @key stress randomness @library /vmTestbase /test/lib @run main/othervm -Xlog:gc=debug:gc.log gc.ArrayJuggle.Juggle2 */
 /* @test @key stress randomness @library /vmTestbase /test/lib @run main/othervm -Xlog:gc=debug:gc.log gc.ArrayJuggle.Juggle2 -tg */
+/* @test @key stress randomness @library /vmTestbase /test/lib @run main/othervm -XX:-G1UseAdaptiveIHOP -XX:InitiatingHeapOccupancyPercent=0 -XX:G1HeapRegionSize=1m -XX:G1RSetUpdatingPauseTimePercent=0 -XX:G1UpdateBufferSize=1 -XX:+UnlockDiagnosticVMOptions -XX:+VerifyAfterGC -Xlog:gc=debug,gc+refine=debug:gc.log gc.ArrayJuggle.Juggle2 -tg */
 
 package gc.ArrayJuggle;
 
