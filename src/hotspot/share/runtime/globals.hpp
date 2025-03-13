@@ -1994,6 +1994,9 @@ const int ObjectAlignmentInBytes = 8;
   product(bool, StressSecondarySupers, false, DIAGNOSTIC,                   \
           "Use a terrible hash function in order to generate many collisions.") \
                                                                             \
+  product(bool, G1StressBarriers, false,                                    \
+          "Configure G1 to exercise cold barrier paths")                    \
+                                                                            \
   product(bool, UseThreadsLockThrottleLock, true, DIAGNOSTIC,               \
           "Use an extra lock during Thread start and exit to alleviate"     \
           "contention on Threads_lock.")                                    \

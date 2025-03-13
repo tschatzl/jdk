@@ -637,7 +637,8 @@ void G1ConcurrentRefine::adjust_threads_wanted(size_t available_bytes) {
     // Bound the wanted threads by maximum available.
     new_wanted = _thread_control.max_num_threads();
   }
-  _num_threads_wanted = new_wanted;
+
+  _num_threads_wanted = MAX2(G1StressBarriers ? 1u : 0u, new_wanted);
 
   log_debug(gc, refine)("Concurrent refinement: wanted %u, pending cards: %zu (pending-from-gc %zu), "
                         "predicted: %zu, goal %zu, time-until-next-gc: %1.2fms pred-refine-rate %1.2fc/ms log-rate %1.2fc/ms",
