@@ -242,9 +242,6 @@ void G1FullCollector::complete_collection() {
   // Prepare the bitmap for the next (potentially concurrent) marking.
   _heap->concurrent_mark()->clear_bitmap(_heap->workers());
 
-  // FIXME: remove
-  _heap->verifier()->verify_card_tables_clean(false /* refinement_table_only */);
-
   _heap->prepare_for_mutator_after_full_collection();
 
   _heap->resize_all_tlabs();

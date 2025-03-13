@@ -71,7 +71,6 @@ void G1BarrierSet::swap_global_card_table() {
   G1CardTable* temp = static_cast<G1CardTable*>(_card_table);
   _card_table = _refinement_table;
   _refinement_table = temp;
-  log_debug(gc, refine)("New ct " PTR_FORMAT " New RT " PTR_FORMAT, p2i(_card_table->byte_map_base()), p2i(_refinement_table->byte_map_base()));
 }
 
 void G1BarrierSet::update_card_table_base(Thread* thread) {
@@ -173,9 +172,6 @@ void G1BarrierSet::on_thread_attach(Thread* thread) {
 
   if (thread->is_Java_thread()) {
     assert(Threads_lock->is_locked(), "must be, synchronization with refinement.");
-    G1CardTable::CardValue* table = G1CollectedHeap::heap()->card_table_base();
-    ResourceMark rm;
-    log_debug(gc, refine)("set ct base1 " PTR_FORMAT " thread " PTR_FORMAT " %s", p2i(table), p2i(thread), thread->name());
     update_card_table_base(thread);
   }
 }

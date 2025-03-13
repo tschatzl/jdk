@@ -55,9 +55,9 @@ void G1CardTable::verify_region(MemRegion mr, CardValue val, bool val_equals) {
                             p2i(curr), p2i(addr_for(curr)),
                             p2i((HeapWord*) (((size_t) addr_for(curr)) + _card_size)),
                             (int) curr_val);
-      guarantee(!failures, "there should not have been any failures");
     }
   }
+  guarantee(!failures, "there should not have been any failures");
 }
 
 void G1CardTableChangedListener::on_commit(uint start_idx, size_t num_regions, bool zero_filled) {

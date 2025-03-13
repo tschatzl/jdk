@@ -582,23 +582,23 @@ void G1HeapVerifier::verify_card_table_cleanup() {
 
 class G1VerifyCardTablesClean: public G1HeapRegionClosure {
   G1HeapVerifier* _verifier;
-  bool _refinement_table_only;
+  bool _both_card_tables;
 
 public:
-  G1VerifyCardTablesClean(G1HeapVerifier* verifier, bool refinement_table_only = true)
-    : _verifier(verifier), _refinement_table_only(refinement_table_only) { }
+  G1VerifyCardTablesClean(G1HeapVerifier* verifier, bool both_card_tables = true)
+    : _verifier(verifier), _both_card_tables(both_card_tables) { }
 
   virtual bool do_heap_region(G1HeapRegion* r) {
     _verifier->verify_rt_clean_region(r);     // Must be all Clean from bottom -> end.
-    if (!_refinement_table_only) {
+    if (_both_card_tables) {
       _verifier->verify_ct_clean_region(r);
     }
     return false;
   }
 };
 
-void G1HeapVerifier::verify_card_tables_clean(bool refinement_table_only) {
-  G1VerifyCardTablesClean cl(this, refinement_table_only);
+void G1HeapVerifier::verify_card_tables_clean(bool both_card_tables) {
+  G1VerifyCardTablesClean cl(this, both_card_tables);
   _g1h->heap_region_iterate(&cl);
 }
 
@@ -637,6 +637,7 @@ void G1HeapVerifier::verify_rt_clean_region(G1HeapRegion* hr) {
 
 void G1HeapVerifier::verify_card_tables_in_sync() {
 
+    // Non-Java thread card tables must be null.
     class AssertCardTableBaseNull : public ThreadClosure {
     public:
 
@@ -649,6 +650,7 @@ void G1HeapVerifier::verify_card_tables_in_sync() {
 
     Threads::non_java_threads_do(&check_null_cl);
 
+    // Java thread card tables must be the same as the global card table.
     class AssertSameCardTableClosure : public ThreadClosure {
     public:
 

@@ -79,13 +79,14 @@ public:
   bool check_region_attr_table() PRODUCT_RETURN_( return true; );
 
   void verify_card_table_cleanup();
-  void verify_card_tables_clean(bool refinement_table_only);
+  void verify_card_tables_clean(bool both_card_tables);
 
   void verify_ct_clean_region(G1HeapRegion* hr);
   void verify_rt_dirty_to_dummy_top(G1HeapRegion* hr);
   void verify_rt_clean_from_top(G1HeapRegion* hr);
   void verify_rt_clean_region(G1HeapRegion* hr);
 
+  // Verify that the global card table and the thread's card tables are in sync.
   void verify_card_tables_in_sync() PRODUCT_RETURN;
 };
 

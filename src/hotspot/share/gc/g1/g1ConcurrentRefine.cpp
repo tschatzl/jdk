@@ -197,15 +197,11 @@ bool G1ConcurrentRefineSweepState::swap_global_card_table() {
     // A safepoint may occur during that time, so leave the STS temporarily.
     SuspendibleThreadSetLeaver sts_leave;
 
-    size_t epoch = refinement_epoch();
     MutexLocker mu(Threads_lock);
     // A GC that advanced the epoch might have happened, which already switched
     // The global card table. Do nothing.
-    log_debug(gc,refine)("swap global %zu == %zu?", epoch, _sweep_start_epoch);
     if (in_sweep_epoch()) {
       G1BarrierSet::g1_barrier_set()->swap_global_card_table();
-    } else {
-      G1CollectedHeap::heap()->verifier()->verify_card_tables_clean(true /* refinement_table_only */);
     }
   }
 
@@ -224,14 +220,9 @@ bool G1ConcurrentRefineSweepState::swap_java_threads_ct() {
     public:
       SwapThreadCardTableClosure() : HandshakeClosure("G1 Swap JT card table") { }
 
-      virtual void do_thread(Thread* t) {
+      virtual void do_thread(Thread* thread) {
         G1BarrierSet* bs = G1BarrierSet::g1_barrier_set();
-        {
-          ResourceMark rm;
-          G1CardTable::CardValue* table = bs->card_table()->byte_map_base();
-          log_debug(gc, refine)("set ct base2 " PTR_FORMAT " thread " PTR_FORMAT " %s", p2i(table), p2i(t), t->name());
-        }
-        bs->update_card_table_base(t);
+        bs->update_card_table_base(thread);
       }
     } cl;
     Handshake::execute(&cl);
@@ -650,7 +641,6 @@ void G1ConcurrentRefine::adjust_threads_wanted(size_t available_bytes) {
     // Bound the wanted threads by maximum available.
     new_wanted = _thread_control.max_num_threads();
   }
-
   _num_threads_wanted = new_wanted;
 
   log_debug(gc, refine)("Concurrent refinement: wanted %u, pending cards: %zu (pending-from-gc %zu), "

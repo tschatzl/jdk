@@ -845,17 +845,11 @@ public:
 
     class ResizeAndSwapCardTableClosure : public ThreadClosure {
     public:
+
       void do_thread(Thread* thread) {
         if (UseTLAB && ResizeTLAB) {
           static_cast<JavaThread*>(thread)->tlab().resize();
         }
-
-        {
-        // The global card table references have already been swapped.
-        G1CardTable::CardValue* new_card_table_base = G1CollectedHeap::heap()->card_table_base();
-        ResourceMark rm;
-        log_debug(gc, refine)("set ct base3 " PTR_FORMAT " thread " PTR_FORMAT " %s", p2i(new_card_table_base), p2i(thread), thread->name());
-      }
 
         G1BarrierSet::g1_barrier_set()->update_card_table_base(thread);
       }
