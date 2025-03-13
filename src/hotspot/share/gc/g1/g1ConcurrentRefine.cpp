@@ -381,7 +381,11 @@ bool G1ConcurrentRefineSweepState::are_java_threads_synched() const {
 uint64_t G1ConcurrentRefine::adjust_threads_period_ms() const {
   // Instead of a fixed value, this could be a command line option.  But then
   // we might also want to allow configuration of adjust_threads_wait_ms().
-  return 50;
+
+  // Use a prime number close to 50ms, different to other components that derive
+  // their wait time from the try_get_available_bytes_estimate() call to minimize
+  // interference.
+  return 53;
 }
 
 static size_t minimum_pending_cards_target() {
@@ -504,14 +508,6 @@ void G1ConcurrentRefine::adjust_after_gc(double logged_cards_time_ms,
   }
 }
 
-// Wake up the control thread less frequently when the time available until
-// the next GC is longer.  But don't increase the wait time too rapidly.
-// This reduces the number of control thread wakeups that just immediately
-// go back to waiting, while still being responsive to behavior changes.
-static uint64_t compute_adjust_wait_time_ms(double available_ms) {
-  return static_cast<uint64_t>(sqrt(available_ms) * 4.0);
-}
-
 uint64_t G1ConcurrentRefine::adjust_threads_wait_ms() const {
   assert_current_thread_is_control_refinement_thread();
   if (is_pending_cards_target_initialized()) {
@@ -521,9 +517,9 @@ uint64_t G1ConcurrentRefine::adjust_threads_wait_ms() const {
     if (_heap_was_locked) {
       return 1;
     }
-    double available_ms = _threads_needed.predicted_time_until_next_gc_ms();
-    uint64_t wait_time_ms = compute_adjust_wait_time_ms(available_ms);
-    return MAX2(wait_time_ms, adjust_threads_period_ms());
+    double available_time_ms = _threads_needed.predicted_time_until_next_gc_ms();
+
+    return _policy->adjust_wait_time_ms(available_time_ms, adjust_threads_period_ms());
   } else {
     // If target not yet initialized then wait forever (until explicitly
     // activated).  This happens during startup, when we don't bother with
@@ -548,17 +544,8 @@ bool G1ConcurrentRefine::adjust_num_threads_periodically() {
 
   // Reset pending request.
   _needs_adjust = false;
-  // Getting used young bytes requires holding Heap_lock.  But we can't use
-  // normal lock and block until available.  Blocking on the lock could
-  // deadlock with a GC VMOp that is holding the lock and requesting a
-  // safepoint.  Instead try to lock, and if fail then skip adjustment for
-  // this iteration and retry the adjustment later.
-  if (Heap_lock->try_lock()) {
-    size_t used_bytes = _policy->estimate_used_young_bytes_locked();
-    Heap_lock->unlock();
-
-    size_t young_bytes = _policy->young_list_target_length() * G1HeapRegion::GrainBytes;
-    size_t available_bytes = young_bytes - MIN2(young_bytes, used_bytes);
+  size_t available_bytes = 0;
+  if (_policy->try_get_available_bytes_estimate(available_bytes)) {
     adjust_threads_wanted(available_bytes);
     _last_adjust = Ticks::now();
   } else {

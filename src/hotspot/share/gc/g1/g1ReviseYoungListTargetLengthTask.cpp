@@ -30,7 +30,20 @@
 
 
 jlong G1ReviseYoungLengthTargetLengthTask::reschedule_delay_ms() const {
-  return 49;
+  G1Policy* policy = G1CollectedHeap::heap()->policy();
+  size_t available_bytes;
+  if (policy->try_get_available_bytes_estimate(available_bytes)) {
+    double predicted_time_to_next_gc_ms = policy->predict_time_to_next_gc_ms(available_bytes);
+
+    // Use a prime number close to 50ms as minimum time, different to other components
+    // that derive their wait time from the try_get_available_bytes_estimate() call
+    // to minimize interference.
+    uint64_t const min_wait_time_ms = 47;
+
+    return policy->adjust_wait_time_ms(predicted_time_to_next_gc_ms, min_wait_time_ms);
+  } else {
+    return 1;
+  }
 }
 
 class G1ReviseYoungLengthTargetLengthTask::RemSetSamplingClosure : public G1HeapRegionClosure {

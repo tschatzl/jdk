@@ -32,7 +32,7 @@
 #include "utilities/growableArray.hpp"
 #include "utilities/ticks.hpp"
 
-// Revise young generation target length.
+// ServiceTask to revise the young generation target length.
 class G1ReviseYoungLengthTargetLengthTask : public G1ServiceTask {
 
   // The delay used to reschedule this task.
