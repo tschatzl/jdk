@@ -35,7 +35,7 @@ package gc.g1;
  *          java.management
  * @build jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller jdk.test.whitebox.WhiteBox
- * @run driver gc.g1.TestEagerReclaimHumongousRegionsClearMarkBits
+ * @run main/othervm -XX:+UnlockDiagnosticVMOptions -Xbootclasspath/a:. -XX:+WhiteBoxAPI gc.g1.TestEagerReclaimHumongousRegionsClearMarkBits
  */
 
 import java.util.regex.Matcher;
@@ -47,7 +47,9 @@ import jdk.test.lib.process.ProcessTools;
 import jdk.test.whitebox.WhiteBox;
 
 public class TestEagerReclaimHumongousRegionsClearMarkBits {
-    public static void main(String[] args) throws Exception {
+    private static final WhiteBox WB = WhiteBox.getWhiteBox();
+
+    private static String runHelperVM(boolean useTypeArray, boolean keepReference, String phase) throws Exception {
         OutputAnalyzer output = ProcessTools.executeLimitedTestJava("-XX:+UseG1GC",
                                                                     "-Xmx20M",
                                                                     "-Xms20m",
@@ -57,18 +59,49 @@ public class TestEagerReclaimHumongousRegionsClearMarkBits {
                                                                     "-Xlog:gc=debug,gc+humongous=debug",
                                                                     "-XX:+UnlockDiagnosticVMOptions",
                                                                     "-XX:+WhiteBoxAPI",
-                                                                    TestEagerReclaimHumongousRegionsClearMarkBitsRunner.class.getName());
+                                                                    TestEagerReclaimHumongousRegionsClearMarkBitsRunner.class.getName(),
+                                                                    String.valueOf(useTypeArray),
+                                                                    String.valueOf(keepReference),
+                                                                    phase);
 
         String log = output.getStdout();
         System.out.println(log);
         output.shouldHaveExitValue(0);
+        return log;
+    }
 
+    private static String boolToInt(boolean value) {
+        return value ? "1" : "0";
+    }
+
+    private static void runTest(boolean useTypeArray, boolean keepReference, String phase, boolean expectedMarked, boolean expectedCandidate, boolean expectedReclaim) throws Exception {
+        String log = runHelperVM(useTypeArray, keepReference, phase);
         // Find the log output indicating that the humongous object has been reclaimed, and marked.
-        Pattern pattern = Pattern.compile("Humongous region .* marked 1 .* reclaim candidate 1 type array 1");
-        Asserts.assertTrue(pattern.matcher(log).find(), "Could not find log output matching marked humongous region.");
+// [0.351s][debug][gc,humongous] GC(3) Humongous region 2 (object size 4194320 @ 0x00000000fee00000) remset 0 code roots 0 marked 1 pinned count 0 reclaim candidate 1 type array 1
+        String patternString = "Humongous region .* marked " + boolToInt(expectedMarked) + " .* reclaim candidate " + boolToInt(expectedCandidate) + " type array " + boolToInt(useTypeArray);
+        Pattern pattern = Pattern.compile(patternString);
+        Asserts.assertTrue(pattern.matcher(log).find(), "Could not find log output matching marked humongous region with pattern \"" + patternString + "\"");
 
         pattern = Pattern.compile("Reclaimed humongous region .*");
-        Asserts.assertTrue(pattern.matcher(log).find(), "Could not find log output reclaiming humongous region");
+        Asserts.assertTrue(expectedReclaim == pattern.matcher(log).find(), "Wrong log output reclaiming humongous region");
+    }
+
+    public static void main(String[] args) throws Exception {
+        runTest(true /* useTypeArray */, false /* keepReference */, WB.BEFORE_MARKING_COMPLETED, true /* expectedMarked */, true /* expectedCandidate */, true /* expectedReclaim */);
+        runTest(true /* useTypeArray */, false /* keepReference */, WB.G1_BEFORE_REBUILD_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, true /* expectedReclaim */);
+        runTest(true /* useTypeArray */, false /* keepReference */, WB.G1_BEFORE_CLEANUP_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, true /* expectedReclaim */);
+
+        runTest(true /* useTypeArray */, true /* keepReference */, WB.BEFORE_MARKING_COMPLETED, true /* expectedMarked */, true /* expectedCandidate */, false /* expectedReclaim */);
+        runTest(true /* useTypeArray */, true /* keepReference */, WB.G1_BEFORE_REBUILD_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, false /* expectedReclaim */);
+        runTest(true /* useTypeArray */, true /* keepReference */, WB.G1_BEFORE_CLEANUP_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, false /* expectedReclaim */);
+
+        runTest(false /* useTypeArray */, false /* keepReference */, WB.BEFORE_MARKING_COMPLETED, true /* expectedMarked */, false /* expectedCandidate */, false /* expectedReclaim */);
+        runTest(false /* useTypeArray */, false /* keepReference */, WB.G1_BEFORE_REBUILD_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, true /* expectedReclaim */);
+        runTest(false /* useTypeArray */, false /* keepReference */, WB.G1_BEFORE_CLEANUP_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, true /* expectedReclaim */);
+
+        runTest(false /* useTypeArray */, true /* keepReference */, WB.BEFORE_MARKING_COMPLETED, true /* expectedMarked */, false /* expectedCandidate */, false /* expectedReclaim */);
+        runTest(false /* useTypeArray */, true /* keepReference */, WB.G1_BEFORE_REBUILD_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, false /* expectedReclaim */);
+        runTest(false /* useTypeArray */, true /* keepReference */, WB.G1_BEFORE_CLEANUP_COMPLETED, false /* expectedMarked */, true /* expectedCandidate */, false /* expectedReclaim */);
     }
 }
 
@@ -76,20 +109,29 @@ class TestEagerReclaimHumongousRegionsClearMarkBitsRunner {
     private static final WhiteBox WB = WhiteBox.getWhiteBox();
     private static final int M = 1024 * 1024;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        if (args.length != 3) {
+            throw new Exception("Invalid number of arguments " + args.length);
+        }
+        boolean useTypeArray = Boolean.parseBoolean(args[0]);
+        boolean keepReference = Boolean.parseBoolean(args[1]);
+        String phase = args[2];
+
+        System.out.println("useTypeArray: " + useTypeArray + " keepReference: " + keepReference + " phase: " + phase);
         WB.fullGC();
 
-        Object largeObj = new int[M]; // Humongous object.
+        Object largeObj = useTypeArray ? new int[M] : new Object[M]; // Humongous object.
 
         WB.concurrentGCAcquireControl();
-        WB.concurrentGCRunTo(WB.BEFORE_MARKING_COMPLETED);
+        WB.concurrentGCRunTo(phase);
 
-        System.out.println("Large object at " + largeObj);
-
-        largeObj = null;
+        if (!keepReference) {
+          largeObj = null;
+        }
         WB.youngGC(); // Should reclaim marked humongous object.
 
         WB.concurrentGCRunToIdle();
+        System.out.println("Large object at " + largeObj);
     }
 }
 
