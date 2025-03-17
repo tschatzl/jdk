@@ -27,13 +27,12 @@ import jdk.internal.vm.annotation.Contended;
 
 /*
  * @test TestHumongousReferenceObjectParallel
- * @summary Test that verifies that iteration over large, plain Java objects, that potentially cross region boundaries, with references in them works.
+ * @summary Test that verifies that iteration over large, plain Java objects, that potentially cross region boundaries on Parallel, with references in them works.
  * @requires vm.gc.Parallel
  * @bug 8151499 8153734
  * @modules java.base/jdk.internal.vm.annotation
  * @run main/othervm -XX:+EnableContended -XX:-RestrictContended -Xmx128m -XX:+UseParallelGC -XX:ContendedPaddingWidth=8192 gc.TestHumongousReferenceObject
  */
-
 /*
  * @test TestHumongousReferenceObjectG1
  * @summary Test that verifies that iteration over large, plain Java objects, that potentially cross region boundaries on G1, with references in them works.

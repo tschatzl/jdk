@@ -271,6 +271,8 @@ inline bool G1CollectedHeap::is_obj_dead_full(const oop obj) const {
 }
 
 inline bool G1CollectedHeap::is_humongous_reclaim_candidate(uint region) {
+  assert(!region_at(region)->is_humongous() || region_at(region)->is_starts_humongous(),
+         "Must not ask this for humongous continues regions");
   return _region_attr.is_humongous_candidate(region);
 }
 
