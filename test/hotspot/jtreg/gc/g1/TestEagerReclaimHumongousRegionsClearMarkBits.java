@@ -50,14 +50,7 @@ public class TestEagerReclaimHumongousRegionsClearMarkBits {
     public static void main(String[] args) throws Exception {
         OutputAnalyzer output = ProcessTools.executeLimitedTestJava("-XX:+UseG1GC",
                                                                     "-Xmx20M",
-<<<<<<< HEAD
-<<<<<<< HEAD
                                                                     "-Xms20m",
-=======
->>>>>>> 8e8340517f0 (8352147)
-=======
-                                                                    "-Xms20m",
->>>>>>> 240f01f460e (* also check for actual region reclamation)
                                                                     "-XX:+UnlockDiagnosticVMOptions",
                                                                     "-XX:+VerifyAfterGC",
                                                                     "-Xbootclasspath/a:.",

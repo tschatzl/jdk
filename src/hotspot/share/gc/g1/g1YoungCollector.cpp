@@ -356,7 +356,7 @@ class G1PrepareEvacuationTask : public WorkerTask {
       // important use case for eager reclaim, and this special handling
       // may reduce needed headroom.
 
-      return obj->is_typeArray() &&
+      return (obj->is_typeArray() || (G1EagerReclaimWithRefs && !_g1h->collector_state()->mark_in_progress())) &&
              _g1h->is_potential_eager_reclaim_candidate(region);
     }
 
