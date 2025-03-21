@@ -524,7 +524,7 @@ void G1CollectionSet::select_candidates_from_retained(double time_remaining_ms) 
     G1HeapRegion* r = ci->_r;
 
     // If we can't reclaim that region ignore it for now.
-    if (r->has_pinned_objects()) {
+    if (!G1RetainedRegionsAreOptional && r->has_pinned_objects()) {
       num_pinned_regions++;
       if (ci->update_num_unreclaimed()) {
         log_trace(gc, ergo, cset)("Retained candidate %u can not be reclaimed currently. Skipping.", r->hrm_index());
@@ -540,7 +540,7 @@ void G1CollectionSet::select_candidates_from_retained(double time_remaining_ms) 
       continue;
     }
 
-    if (fits_in_remaining_time || (num_expensive_regions < min_regions)) {
+    if (!G1RetainedRegionsAreOptional && (fits_in_remaining_time || (num_expensive_regions < min_regions))) {
       predicted_initial_time_ms += predicted_time_ms;
       if (!fits_in_remaining_time) {
         num_expensive_regions++;

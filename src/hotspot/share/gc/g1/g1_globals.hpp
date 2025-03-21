@@ -343,6 +343,8 @@
           "scan cost related prediction samples. A sample must involve "    \
           "the same or more than this number of code roots to be used.")    \
                                                                             \
+  develop(bool, G1RetainedRegionsAreOptional, false,                        \
+          "")                                                               \
   GC_G1_EVACUATION_FAILURE_FLAGS(develop,                                   \
                     develop_pd,                                             \
                     product,                                                \
