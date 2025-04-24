@@ -54,8 +54,8 @@ class G1NUMA: public CHeapObj<mtGC> {
   // Stores statistic data.
   G1NUMAStats* _stats;
 
-  size_t region_size() const;
-  size_t page_size() const;
+  inline size_t region_size() const;
+  inline size_t page_size() const;
 
   // Returns node index of the given node id.
   // Precondition: node_id is an active node id.
@@ -79,20 +79,20 @@ public:
 
   // Sets heap region size and page size after those values
   // are determined at G1CollectedHeap::initialize().
-  void set_region_info(size_t region_size, size_t page_size);
+  inline void set_region_info(size_t region_size, size_t page_size);
 
   // Returns active memory node count.
-  uint num_active_nodes() const;
+  inline uint num_active_nodes() const;
 
-  bool is_enabled() const;
+  inline bool is_enabled() const;
 
-  uint numa_id(uint index) const;
+  inline uint numa_id(uint index) const;
 
   // Returns memory node ids
-  const uint* node_ids() const;
+  inline const uint* node_ids() const;
 
   // Returns node index of current calling thread.
-  uint index_of_current_thread() const;
+  inline uint index_of_current_thread() const;
 
   // Returns the preferred index for the given G1HeapRegion index.
   // This assumes that heap regions are evenly spit, so we can decide preferred index
@@ -114,7 +114,7 @@ public:
 
   // Returns maximum search depth which is used to limit heap region search iterations.
   // The number of active nodes, page size and heap region size are considered.
-  uint max_search_depth() const;
+  inline uint max_search_depth() const;
 
   // Update the given phase of requested and allocated node index.
   void update_statistics(G1NUMAStats::NodeDataItems phase, uint requested_node_index, uint allocated_node_index);

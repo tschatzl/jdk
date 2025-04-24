@@ -120,10 +120,7 @@ public:
 
   G1OldGenAllocationTracker* old_gen_alloc_tracker() { return &_old_gen_alloc_tracker; }
 
-  void set_region_eden(G1HeapRegion* hr) {
-    hr->set_eden();
-    hr->install_surv_rate_group(_eden_surv_rate_group);
-  }
+  inline void set_region_eden(G1HeapRegion* hr);
 
   void set_region_survivor(G1HeapRegion* hr) {
     assert(hr->is_survivor(), "pre-condition");
@@ -359,7 +356,7 @@ public:
   uint young_list_desired_length() const { return Atomic::load(&_young_list_desired_length); }
   uint young_list_target_length() const { return Atomic::load(&_young_list_target_length); }
 
-  bool should_allocate_mutator_region() const;
+  inline bool should_allocate_mutator_region() const;
 
   bool use_adaptive_young_list_length() const;
 

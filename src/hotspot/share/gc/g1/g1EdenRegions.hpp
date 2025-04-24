@@ -41,20 +41,12 @@ private:
 public:
   G1EdenRegions() : _length(0), _used_bytes(0), _regions_on_node() { }
 
-  uint add(G1HeapRegion* hr) {
-    assert(!hr->is_eden(), "should not already be set");
-    _length++;
-    return _regions_on_node.add(hr);
-  }
+  inline uint add(G1HeapRegion* hr);
 
-  void clear() {
-    _length = 0;
-    _used_bytes = 0;
-    _regions_on_node.clear();
-  }
+  inline void clear();
 
   uint length() const { return _length; }
-  uint regions_on_node(uint node_index) const { return _regions_on_node.count(node_index); }
+  inline uint regions_on_node(uint node_index) const;
 
   size_t used_bytes() const { return _used_bytes; }
 

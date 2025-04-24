@@ -90,8 +90,8 @@ public:
     assert(length() == 0, "post condition!");
   }
 
-  void add(G1HeapRegion* hr);
-  void add(G1CollectionSetCandidateInfo& hr_info);
+  inline void add(G1HeapRegion* hr);
+  inline void add(G1CollectionSetCandidateInfo& hr_info);
 
   uint length() const { return (uint)_candidates.length(); }
 

@@ -27,7 +27,20 @@
 
 #include "gc/g1/g1CollectionSetCandidates.hpp"
 
+#include "gc/g1/g1HeapRegion.inline.hpp"
 #include "utilities/growableArray.hpp"
+
+
+inline void G1CSetCandidateGroup::add(G1HeapRegion* hr) {
+  G1CollectionSetCandidateInfo c(hr);
+  add(c);
+}
+
+inline void G1CSetCandidateGroup::add(G1CollectionSetCandidateInfo& hr_info) {
+  G1HeapRegion* hr = hr_info._r;
+  _candidates.append(hr_info);
+  hr->install_cset_group(this);
+}
 
 template<typename Func>
 void G1CSetCandidateGroupList::iterate(Func&& f) const {

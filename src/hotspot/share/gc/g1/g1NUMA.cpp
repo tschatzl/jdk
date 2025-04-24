@@ -22,25 +22,14 @@
  *
  */
 
-#include "gc/g1/g1NUMA.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
+
 #include "gc/shared/gc_globals.hpp"
 #include "logging/logStream.hpp"
 #include "runtime/globals.hpp"
 #include "runtime/os.hpp"
 
 G1NUMA* G1NUMA::_inst = nullptr;
-
-size_t G1NUMA::region_size() const {
-  assert(_region_size > 0, "Heap region size is not yet set");
-  return _region_size;
-}
-
-size_t G1NUMA::page_size() const {
-  assert(_page_size > 0, "Page size not is yet set");
-  return _page_size;
-}
-
-bool G1NUMA::is_enabled() const { return num_active_nodes() > 1; }
 
 G1NUMA* G1NUMA::create() {
   guarantee(_inst == nullptr, "Should be called once.");
@@ -54,19 +43,6 @@ G1NUMA* G1NUMA::create() {
 #endif /* LINUX */
 
   return _inst;
-}
-
-  // Returns memory node ids
-const uint* G1NUMA::node_ids() const {
-  return _node_ids;
-}
-
-uint G1NUMA::index_of_node_id(uint node_id) const {
-  assert(node_id < _len_node_id_to_index_map, "invalid node id %d", node_id);
-  uint node_index = _node_id_to_index_map[node_id];
-  assert(node_index != G1NUMA::UnknownNodeIndex,
-         "invalid node id %d", node_id);
-  return node_index;
 }
 
 G1NUMA::G1NUMA() :
@@ -127,23 +103,6 @@ G1NUMA::~G1NUMA() {
   FREE_C_HEAP_ARRAY(uint, _node_ids);
 }
 
-void G1NUMA::set_region_info(size_t region_size, size_t page_size) {
-  _region_size = region_size;
-  _page_size = page_size;
-}
-
-uint G1NUMA::num_active_nodes() const {
-  assert(_num_active_node_ids > 0, "just checking");
-  return _num_active_node_ids;
-}
-
-uint G1NUMA::index_of_current_thread() const {
-  if (!is_enabled()) {
-    return 0;
-  }
-  return index_of_node_id(os::numa_get_group_id());
-}
-
 uint G1NUMA::preferred_node_index_for_index(uint region_index) const {
   if (region_size() >= page_size()) {
     // Simple case, pages are smaller than the region so we
@@ -155,12 +114,6 @@ uint G1NUMA::preferred_node_index_for_index(uint region_index) const {
     size_t regions_per_page = page_size() / region_size();
     return (region_index / regions_per_page) % _num_active_node_ids;
   }
-}
-
-uint G1NUMA::numa_id(uint index) const {
-  assert(index < _len_node_id_to_index_map, "Index %d out of range: [0,%d)",
-         index, _len_node_id_to_index_map);
-  return _node_ids[index];
 }
 
 uint G1NUMA::index_of_address(HeapWord *address) const {
@@ -219,12 +172,6 @@ void G1NUMA::request_memory_on_node(void* aligned_address, size_t size_in_bytes,
   log_trace(gc, heap, numa)("Request memory [" PTR_FORMAT ", " PTR_FORMAT ") to be NUMA id (%u)",
                             p2i(aligned_address), p2i((char*)aligned_address + size_in_bytes), _node_ids[node_index]);
   os::numa_make_local((char*)aligned_address, size_in_bytes, checked_cast<int>(_node_ids[node_index]));
-}
-
-uint G1NUMA::max_search_depth() const {
-  // Multiple of 3 is just random number to limit iterations.
-  // There would be some cases that 1 page may be consisted of multiple heap regions.
-  return 3 * MAX2((uint)(page_size() / region_size()), (uint)1) * num_active_nodes();
 }
 
 void G1NUMA::update_statistics(G1NUMAStats::NodeDataItems phase,

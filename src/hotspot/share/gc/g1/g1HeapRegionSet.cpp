@@ -25,7 +25,7 @@
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/g1/g1HeapRegionSet.inline.hpp"
-#include "gc/g1/g1NUMA.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 
 uint G1FreeRegionList::_unrealistically_long_length = 0;
 

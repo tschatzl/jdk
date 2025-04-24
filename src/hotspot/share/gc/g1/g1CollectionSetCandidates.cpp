@@ -42,17 +42,6 @@ G1CSetCandidateGroup::G1CSetCandidateGroup() :
   G1CSetCandidateGroup(G1CollectedHeap::heap()->card_set_config(), G1CollectedHeap::heap()->card_set_freelist_pool(), _next_group_id++)
 { }
 
-void G1CSetCandidateGroup::add(G1HeapRegion* hr) {
-  G1CollectionSetCandidateInfo c(hr);
-  add(c);
-}
-
-void G1CSetCandidateGroup::add(G1CollectionSetCandidateInfo& hr_info) {
-  G1HeapRegion* hr = hr_info._r;
-  _candidates.append(hr_info);
-  hr->install_cset_group(this);
-}
-
 void G1CSetCandidateGroup::calculate_efficiency() {
   _reclaimable_bytes = 0;
   uint num_candidates = _candidates.length();

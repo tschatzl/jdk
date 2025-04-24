@@ -34,7 +34,7 @@
 #include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/g1/g1HeapRegionTracer.hpp"
 #include "gc/g1/g1HeapRegionTraceType.hpp"
-#include "gc/g1/g1NUMA.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 #include "gc/g1/g1OopClosures.inline.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
@@ -143,11 +143,6 @@ void G1HeapRegion::set_free() {
     report_region_type_change(G1HeapRegionTraceType::Free);
   }
   _type.set_free();
-}
-
-void G1HeapRegion::set_eden() {
-  report_region_type_change(G1HeapRegionTraceType::Eden);
-  _type.set_eden();
 }
 
 void G1HeapRegion::set_eden_pre_gc() {

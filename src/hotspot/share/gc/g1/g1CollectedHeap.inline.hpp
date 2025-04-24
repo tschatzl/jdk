@@ -30,6 +30,7 @@
 #include "gc/g1/g1BarrierSet.hpp"
 #include "gc/g1/g1CollectorState.hpp"
 #include "gc/g1/g1ConcurrentMark.inline.hpp"
+#include "gc/g1/g1EdenRegions.inline.hpp"
 #include "gc/g1/g1EvacFailureRegions.hpp"
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "gc/g1/g1HeapRegionManager.inline.hpp"
@@ -244,6 +245,10 @@ inline bool G1CollectedHeap::is_in_young(const oop obj) const {
 inline bool G1CollectedHeap::requires_barriers(stackChunkOop obj) const {
   assert(obj != nullptr, "");
   return !heap_region_containing(obj)->is_young(); // is_in_young does an unnecessary null check
+}
+
+inline uint G1CollectedHeap::eden_regions_count(uint node_index) const {
+  return _eden.regions_on_node(node_index);
 }
 
 inline bool G1CollectedHeap::is_obj_filler(const oop obj) {
