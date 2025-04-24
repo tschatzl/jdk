@@ -27,7 +27,7 @@
 
 #include "gc/g1/g1HeapRegionSet.hpp"
 
-#include "gc/g1/g1NUMA.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 
 inline void G1HeapRegionSetBase::add(G1HeapRegion* hr) {
   check_mt_safety();

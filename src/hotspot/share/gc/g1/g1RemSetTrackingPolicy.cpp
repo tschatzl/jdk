@@ -39,7 +39,7 @@ void G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
   }
   // Always collect remembered set for young regions and for humongous regions.
   // Humongous regions need that for eager reclaim.
-  r->rem_set()->set_state_complete();
+  r->rem_set()->set_state_complete(r->is_humongous());
 }
 
 void G1RemSetTrackingPolicy::update_at_free(G1HeapRegion* r) {
@@ -89,7 +89,7 @@ void G1RemSetTrackingPolicy::update_after_rebuild(G1HeapRegion* r) {
 
   if (r->is_old_or_humongous()) {
     if (r->rem_set()->is_updating()) {
-      r->rem_set()->set_state_complete();
+      r->rem_set()->set_state_complete(true /* needs_clear_fcc */);
     }
     G1CollectedHeap* g1h = G1CollectedHeap::heap();
     // We can drop remembered sets of humongous regions that have a too large remembered set:

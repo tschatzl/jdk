@@ -31,7 +31,7 @@
 #include "gc/g1/g1HeapRegionPrinter.hpp"
 #include "gc/g1/g1HeapRegionSet.inline.hpp"
 #include "gc/g1/g1HeapRegionType.hpp"
-#include "gc/g1/g1NUMA.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 #include "gc/g1/g1Policy.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "runtime/mutexLocker.hpp"

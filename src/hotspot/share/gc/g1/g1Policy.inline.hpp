@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,21 @@
  *
  */
 
-#ifndef SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP
-#define SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP
+#ifndef SHARE_GC_G1_G1POLICY_INLINE_HPP
+#define SHARE_GC_G1_G1POLICY_INLINE_HPP
 
-#include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1Policy.hpp"
 
+#include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1HeapRegion.inline.hpp"
-#include "utilities/growableArray.hpp"
 
-
-inline void G1CSetCandidateGroup::add(G1HeapRegion* hr) {
-  _candidates.append(hr);
-  hr->install_cset_group(this);
+inline void G1Policy::set_region_eden(G1HeapRegion* hr) {
+  hr->install_surv_rate_group(_eden_surv_rate_group);
 }
 
-template<typename Func>
-void G1CSetCandidateGroupList::iterate(Func&& f) const {
-  for (G1CSetCandidateGroup* group : _groups) {
-    for (G1CollectionSetCandidateInfo ci : *group) {
-      G1HeapRegion* r = ci._r;
-      f(r);
-    }
-  }
+bool G1Policy::should_allocate_mutator_region() const {
+  uint young_list_length = _g1h->young_regions_count();
+  return young_list_length < young_list_target_length();
 }
 
-template<typename Func>
-void G1CollectionSetCandidates::iterate_regions(Func&& f) const {
-  _from_marking_groups.iterate(f);
-
-  _retained_groups.iterate(f);
-}
-
-#endif /* SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP */
+#endif // SHARE_GC_G1_G1POLICY_INLINE_HPP

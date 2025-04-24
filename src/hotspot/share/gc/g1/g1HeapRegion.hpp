@@ -398,7 +398,7 @@ public:
 
   void set_free();
 
-  void set_eden();
+  inline void set_eden();
   void set_eden_pre_gc();
   void set_survivor();
 

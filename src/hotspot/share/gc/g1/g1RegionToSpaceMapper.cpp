@@ -23,7 +23,7 @@
  */
 
 #include "gc/g1/g1BiasedArray.hpp"
-#include "gc/g1/g1NUMA.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 #include "gc/g1/g1RegionToSpaceMapper.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "memory/allocation.inline.hpp"

@@ -22,8 +22,10 @@
  *
  */
 
-#include "gc/g1/g1HeapRegion.hpp"
 #include "gc/g1/g1SurvivorRegions.hpp"
+
+#include "gc/g1/g1HeapRegion.hpp"
+#include "gc/g1/g1RegionsOnNodes.inline.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/growableArray.hpp"
 

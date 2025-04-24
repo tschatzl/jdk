@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,35 +22,26 @@
  *
  */
 
-#ifndef SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP
-#define SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP
+#ifndef SHARE_GC_G1_G1EDENREGIONS_INLINE_HPP
+#define SHARE_GC_G1_G1EDENREGIONS_INLINE_HPP
 
-#include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1EdenRegions.hpp"
+#include "gc/g1/g1RegionsOnNodes.inline.hpp"
 
-#include "gc/g1/g1HeapRegion.inline.hpp"
-#include "utilities/growableArray.hpp"
-
-
-inline void G1CSetCandidateGroup::add(G1HeapRegion* hr) {
-  _candidates.append(hr);
-  hr->install_cset_group(this);
+inline uint G1EdenRegions::add(G1HeapRegion* hr) {
+  assert(hr->is_eden(), "must be");
+  _length++;
+  return _regions_on_node.add(hr);
 }
 
-template<typename Func>
-void G1CSetCandidateGroupList::iterate(Func&& f) const {
-  for (G1CSetCandidateGroup* group : _groups) {
-    for (G1CollectionSetCandidateInfo ci : *group) {
-      G1HeapRegion* r = ci._r;
-      f(r);
-    }
-  }
+inline void G1EdenRegions::clear() {
+  _length = 0;
+  _used_bytes = 0;
+  _regions_on_node.clear();
 }
 
-template<typename Func>
-void G1CollectionSetCandidates::iterate_regions(Func&& f) const {
-  _from_marking_groups.iterate(f);
-
-  _retained_groups.iterate(f);
+inline uint G1EdenRegions::regions_on_node(uint node_index) const {
+  return _regions_on_node.count(node_index);
 }
 
-#endif /* SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP */
+#endif // SHARE_GC_G1_G1EDENREGIONS_INLINE_HPP

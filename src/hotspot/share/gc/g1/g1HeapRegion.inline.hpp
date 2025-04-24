@@ -290,6 +290,11 @@ inline bool G1HeapRegion::in_collection_set() const {
   return G1CollectedHeap::heap()->is_in_cset(this);
 }
 
+inline void G1HeapRegion::set_eden() {
+  report_region_type_change(G1HeapRegionTraceType::Eden);
+  _type.set_eden();
+}
+
 template <class Closure, bool in_gc_pause>
 HeapWord* G1HeapRegion::do_oops_on_memregion_in_humongous(MemRegion mr,
                                                         Closure* cl) {
