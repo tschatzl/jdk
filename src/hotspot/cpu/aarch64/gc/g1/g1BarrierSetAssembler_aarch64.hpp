@@ -101,7 +101,8 @@ public:
                                 Register tmp1,
                                 Register tmp2,
                                 uint8_t barrier_data,
-                                uint ext_barrier_data);
+                                uint ext_barrier_data,
+                                bool new_val_is_compressed);
 #endif
 
   void load_at(MacroAssembler* masm, DecoratorSet decorators, BasicType type,

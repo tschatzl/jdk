@@ -61,13 +61,14 @@ static void write_barrier_post(MacroAssembler* masm,
                                Register store_addr,
                                Register new_val,
                                Register tmp1,
-                               Register tmp2) {
+                               Register tmp2,
+                               bool new_val_is_compressed) {
   if (!G1BarrierStubC2::needs_post_barrier(node)) {
     return;
   }
   Assembler::InlineSkippedInstructionsCounter skip_counter(masm);
   G1BarrierSetAssembler* g1_asm = static_cast<G1BarrierSetAssembler*>(BarrierSet::barrier_set()->barrier_set_assembler());
-  g1_asm->g1_write_barrier_post_c2(masm, store_addr, new_val, rthread, tmp1, tmp2, G1BarrierStubC2::barrier_data(node), G1BarrierStubC2::ext_barrier_data(node));
+  g1_asm->g1_write_barrier_post_c2(masm, store_addr, new_val, rthread, tmp1, tmp2, G1BarrierStubC2::barrier_data(node), G1BarrierStubC2::ext_barrier_data(node), new_val_is_compressed);
 }
 
 %}
@@ -98,7 +99,8 @@ instruct g1StoreP(indirect mem, iRegP src, iRegPNoSp tmp1, iRegPNoSp tmp2, iRegP
                        $mem$$Register /* store_addr */,
                        $src$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(istore_reg_mem);
 %}
@@ -124,7 +126,8 @@ instruct g1StorePVolatile(indirect mem, iRegP src, iRegPNoSp tmp1, iRegPNoSp tmp
                        $mem$$Register /* store_addr */,
                        $src$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -146,18 +149,12 @@ instruct g1StoreN(indirect mem, iRegN src, iRegPNoSp tmp1, iRegPNoSp tmp2, iRegP
                       $tmp3$$Register /* tmp2 */,
                       RegSet::of($mem$$Register, $src$$Register) /* preserve */);
     __ strw($src$$Register, $mem$$Register);
-    if ((barrier_data() & G1C2BarrierPost) != 0) {
-      if ((barrier_data() & G1C2BarrierPostNotNull) == 0) {
-        __ decode_heap_oop($tmp1$$Register, $src$$Register);
-      } else {
-        __ decode_heap_oop_not_null($tmp1$$Register, $src$$Register);
-      }
-    }
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
-                       $tmp1$$Register /* new_val */,
+                       $src$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(istore_reg_mem);
 %}
@@ -179,18 +176,12 @@ instruct g1StoreNVolatile(indirect mem, iRegN src, iRegPNoSp tmp1, iRegPNoSp tmp
                       $tmp3$$Register /* tmp2 */,
                       RegSet::of($mem$$Register, $src$$Register) /* preserve */);
     __ stlrw($src$$Register, $mem$$Register);
-    if ((barrier_data() & G1C2BarrierPost) != 0) {
-      if ((barrier_data() & G1C2BarrierPostNotNull) == 0) {
-        __ decode_heap_oop($tmp1$$Register, $src$$Register);
-      } else {
-        __ decode_heap_oop_not_null($tmp1$$Register, $src$$Register);
-      }
-    }
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
-                       $tmp1$$Register /* new_val */,
+                       $src$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -222,7 +213,8 @@ instruct g1EncodePAndStoreN(indirect mem, iRegP src, iRegPNoSp tmp1, iRegPNoSp t
                        $mem$$Register /* store_addr */,
                        $src$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(istore_reg_mem);
 %}
@@ -254,7 +246,8 @@ instruct g1EncodePAndStoreNVolatile(indirect mem, iRegP src, iRegPNoSp tmp1, iRe
                        $mem$$Register /* store_addr */,
                        $src$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -287,7 +280,8 @@ instruct g1CompareAndExchangeP(iRegPNoSp res, indirect mem, iRegP oldval, iRegP 
                        $mem$$Register /* store_addr */,
                        $newval$$Register /* new_val */,
                        $tmp1$$Register /* tmp1 */,
-                       $tmp2$$Register /* tmp2 */);
+                       $tmp2$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -320,7 +314,8 @@ instruct g1CompareAndExchangePAcq(iRegPNoSp res, indirect mem, iRegP oldval, iRe
                        $mem$$Register /* store_addr */,
                        $newval$$Register /* new_val */,
                        $tmp1$$Register /* tmp1 */,
-                       $tmp2$$Register /* tmp2 */);
+                       $tmp2$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -346,12 +341,12 @@ instruct g1CompareAndExchangeN(iRegNNoSp res, indirect mem, iRegN oldval, iRegN 
                       RegSet::of($res$$Register) /* no_preserve */);
     __ cmpxchg($mem$$Register, $oldval$$Register, $newval$$Register, Assembler::word,
                false /* acquire */, true /* release */, false /* weak */, $res$$Register);
-    __ decode_heap_oop($tmp1$$Register, $newval$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
-                       $tmp1$$Register /* new_val */,
+                       $newval$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -377,12 +372,12 @@ instruct g1CompareAndExchangeNAcq(iRegNNoSp res, indirect mem, iRegN oldval, iRe
                       RegSet::of($res$$Register) /* no_preserve */);
     __ cmpxchg($mem$$Register, $oldval$$Register, $newval$$Register, Assembler::word,
                true /* acquire */, true /* release */, false /* weak */, $res$$Register);
-    __ decode_heap_oop($tmp1$$Register, $newval$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
-                       $tmp1$$Register /* new_val */,
+                       $newval$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -415,7 +410,8 @@ instruct g1CompareAndSwapP(iRegINoSp res, indirect mem, iRegP newval, iRegPNoSp 
                        $mem$$Register /* store_addr */,
                        $newval$$Register /* new_val */,
                        $tmp1$$Register /* tmp1 */,
-                       $tmp2$$Register /* tmp2 */);
+                       $tmp2$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -448,7 +444,8 @@ instruct g1CompareAndSwapPAcq(iRegINoSp res, indirect mem, iRegP newval, iRegPNo
                        $mem$$Register /* store_addr */,
                        $newval$$Register /* new_val */,
                        $tmp1$$Register /* tmp1 */,
-                       $tmp2$$Register /* tmp2 */);
+                       $tmp2$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -477,12 +474,12 @@ instruct g1CompareAndSwapN(iRegINoSp res, indirect mem, iRegN newval, iRegPNoSp 
     __ cmpxchg($mem$$Register, $oldval$$Register, $newval$$Register, Assembler::word,
                false /* acquire */, true /* release */, false /* weak */, noreg);
     __ cset($res$$Register, Assembler::EQ);
-    __ decode_heap_oop($tmp1$$Register, $newval$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
-                       $tmp1$$Register /* new_val */,
+                       $newval$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -511,12 +508,12 @@ instruct g1CompareAndSwapNAcq(iRegINoSp res, indirect mem, iRegN newval, iRegPNo
     __ cmpxchg($mem$$Register, $oldval$$Register, $newval$$Register, Assembler::word,
                true /* acquire */, true /* release */, false /* weak */, noreg);
     __ cset($res$$Register, Assembler::EQ);
-    __ decode_heap_oop($tmp1$$Register, $newval$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
-                       $tmp1$$Register /* new_val */,
+                       $newval$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_slow);
 %}
@@ -543,7 +540,8 @@ instruct g1GetAndSetP(indirect mem, iRegP newval, iRegPNoSp tmp1, iRegPNoSp tmp2
                        $mem$$Register /* store_addr */,
                        $newval$$Register /* new_val */,
                        $tmp1$$Register /* tmp1 */,
-                       $tmp2$$Register /* tmp2 */);
+                       $tmp2$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_serial);
 %}
@@ -570,7 +568,8 @@ instruct g1GetAndSetPAcq(indirect mem, iRegP newval, iRegPNoSp tmp1, iRegPNoSp t
                        $mem$$Register /* store_addr */,
                        $newval$$Register /* new_val */,
                        $tmp1$$Register /* tmp1 */,
-                       $tmp2$$Register /* tmp2 */);
+                       $tmp2$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_serial);
 %}
@@ -593,12 +592,12 @@ instruct g1GetAndSetN(indirect mem, iRegN newval, iRegPNoSp tmp1, iRegPNoSp tmp2
                       $tmp3$$Register /* tmp2 */,
                       RegSet::of($mem$$Register, $preval$$Register, $newval$$Register) /* preserve */);
     __ atomic_xchgw($preval$$Register, $newval$$Register, $mem$$Register);
-    __ decode_heap_oop($tmp1$$Register, $newval$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
-                       $tmp1$$Register /* new_val */,
+                       $newval$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       false /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_serial);
 %}
@@ -621,12 +620,12 @@ instruct g1GetAndSetNAcq(indirect mem, iRegN newval, iRegPNoSp tmp1, iRegPNoSp t
                       $tmp3$$Register /* tmp2 */,
                       RegSet::of($mem$$Register, $preval$$Register, $newval$$Register) /* preserve */);
     __ atomic_xchgalw($preval$$Register, $newval$$Register, $mem$$Register);
-    __ decode_heap_oop($tmp1$$Register, $newval$$Register);
     write_barrier_post(masm, this,
                        $mem$$Register /* store_addr */,
                        $tmp1$$Register /* new_val */,
                        $tmp2$$Register /* tmp1 */,
-                       $tmp3$$Register /* tmp2 */);
+                       $tmp3$$Register /* tmp2 */,
+                       true /* new_val_is_compressed */);
   %}
   ins_pipe(pipe_serial);
 %}
