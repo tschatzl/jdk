@@ -152,7 +152,7 @@ public:
 
   inline void set_state_untracked();
   inline void set_state_updating();
-  inline void set_state_complete();
+  inline void set_state_complete(bool needs_clear_fcc);
 
   inline void add_reference(OopOrNarrowOopStar from, uint tid);
 

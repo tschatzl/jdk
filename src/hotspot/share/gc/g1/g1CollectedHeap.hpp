@@ -208,6 +208,7 @@ private:
   G1BlockOffsetTable* _bot;
 
 public:
+    jlong _wait_time;
   void rebuild_free_region_list();
   // Start a new incremental collection set for the next pause.
   void start_new_collection_set();
@@ -1249,7 +1250,7 @@ public:
   G1SurvivorRegions* survivor() { return &_survivor; }
 
   uint eden_regions_count() const { return _eden.length(); }
-  uint eden_regions_count(uint node_index) const { return _eden.regions_on_node(node_index); }
+  inline uint eden_regions_count(uint node_index) const;
   uint survivor_regions_count() const { return _survivor.length(); }
   uint survivor_regions_count(uint node_index) const { return _survivor.regions_on_node(node_index); }
   size_t eden_regions_used_bytes() const { return _eden.used_bytes(); }

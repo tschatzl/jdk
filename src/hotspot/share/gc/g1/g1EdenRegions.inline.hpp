@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,26 @@
  *
  */
 
+#ifndef SHARE_GC_G1_G1EDENREGIONS_INLINE_HPP
+#define SHARE_GC_G1_G1EDENREGIONS_INLINE_HPP
+
+#include "gc/g1/g1EdenRegions.hpp"
 #include "gc/g1/g1RegionsOnNodes.inline.hpp"
 
-#include "gc/g1/g1NUMA.inline.hpp"
-
-G1RegionsOnNodes::G1RegionsOnNodes() : _count_per_node(nullptr), _numa(G1NUMA::numa()) {
-  _count_per_node = NEW_C_HEAP_ARRAY(uint, _numa->num_active_nodes(), mtGC);
-  clear();
+inline uint G1EdenRegions::add(G1HeapRegion* hr) {
+  assert(!hr->is_eden(), "should not already be set");
+  _length++;
+  return _regions_on_node.add(hr);
 }
 
-G1RegionsOnNodes::~G1RegionsOnNodes() {
-  FREE_C_HEAP_ARRAY(uint, _count_per_node);
+inline void G1EdenRegions::clear() {
+  _length = 0;
+  _used_bytes = 0;
+  _regions_on_node.clear();
 }
+
+inline uint G1EdenRegions::regions_on_node(uint node_index) const {
+  return _regions_on_node.count(node_index);
+}
+
+#endif // SHARE_GC_G1_G1EDENREGIONS_INLINE_HPP

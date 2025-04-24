@@ -33,11 +33,12 @@
 #include "gc/g1/g1BatchedTask.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1CollectionSet.hpp"
-#include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1CollectorState.hpp"
 #include "gc/g1/g1ConcurrentMarkThread.inline.hpp"
 #include "gc/g1/g1ConcurrentRefine.hpp"
 #include "gc/g1/g1ConcurrentRefineThread.hpp"
+#include "gc/g1/g1EdenRegions.inline.hpp"
 #include "gc/g1/g1EvacStats.inline.hpp"
 #include "gc/g1/g1FullCollector.hpp"
 #include "gc/g1/g1GCCounters.hpp"
@@ -54,11 +55,12 @@
 #include "gc/g1/g1InitLogger.hpp"
 #include "gc/g1/g1MemoryPool.hpp"
 #include "gc/g1/g1MonotonicArenaFreeMemoryTask.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 #include "gc/g1/g1OopClosures.inline.hpp"
 #include "gc/g1/g1ParallelCleaning.hpp"
 #include "gc/g1/g1ParScanThreadState.inline.hpp"
 #include "gc/g1/g1PeriodicGCTask.hpp"
-#include "gc/g1/g1Policy.hpp"
+#include "gc/g1/g1Policy.inline.hpp"
 #include "gc/g1/g1RegionPinCache.inline.hpp"
 #include "gc/g1/g1RegionToSpaceMapper.hpp"
 #include "gc/g1/g1RemSet.hpp"
@@ -434,7 +436,14 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(uint node_index, size_t word_
     uint gc_count_before;
 
     {
+      uint gc_count_before_locking = total_collections();
+
+      jlong wait_start = os::elapsed_counter();
       MutexLocker x(Heap_lock);
+
+      if (total_collections() == gc_count_before_locking) {
+        _wait_time += os::elapsed_counter() - wait_start;
+      }
 
       // Now that we have the lock, we first retry the allocation in case another
       // thread changed the region while we were waiting to acquire the lock.
@@ -1173,6 +1182,7 @@ G1CollectedHeap::G1CollectedHeap() :
   _old_set("Old Region Set", new OldRegionSetChecker()),
   _humongous_set("Humongous Region Set", new HumongousRegionSetChecker()),
   _bot(nullptr),
+        _wait_time(0),
   _listener(),
   _numa(G1NUMA::create()),
   _hrm(),

@@ -30,6 +30,7 @@
 #include "gc/g1/g1HeapRegionManager.inline.hpp"
 #include "gc/g1/g1HeapRegionPrinter.hpp"
 #include "gc/g1/g1HeapRegionSet.inline.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 #include "gc/g1/g1NUMAStats.hpp"
 #include "jfr/jfrEvents.hpp"
 #include "logging/logStream.hpp"
@@ -69,7 +70,7 @@ G1HeapRegionManager::G1HeapRegionManager() :
   _next_highest_used_hrm_index(0),
   _regions(), _heap_mapper(nullptr),
   _bitmap_mapper(nullptr),
-  _free_list("Free list", new G1MasterFreeRegionListChecker())
+  _free_list("Free list", DEBUG_ONLY(new G1MasterFreeRegionListChecker()) NOT_DEBUG(nullptr))
 { }
 
 void G1HeapRegionManager::initialize(G1RegionToSpaceMapper* heap_storage,

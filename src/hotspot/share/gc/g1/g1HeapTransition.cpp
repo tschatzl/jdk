@@ -22,8 +22,10 @@
  *
  */
 
-#include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/g1/g1HeapTransition.hpp"
+
+#include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1NUMA.inline.hpp"
 #include "gc/g1/g1Policy.hpp"
 #include "logging/logStream.hpp"
 #include "memory/metaspaceUtils.hpp"

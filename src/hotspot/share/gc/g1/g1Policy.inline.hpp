@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,15 +22,22 @@
  *
  */
 
-#include "gc/g1/g1RegionsOnNodes.inline.hpp"
+#ifndef SHARE_GC_G1_G1POLICY_INLINE_HPP
+#define SHARE_GC_G1_G1POLICY_INLINE_HPP
 
-#include "gc/g1/g1NUMA.inline.hpp"
+#include "gc/g1/g1Policy.hpp"
 
-G1RegionsOnNodes::G1RegionsOnNodes() : _count_per_node(nullptr), _numa(G1NUMA::numa()) {
-  _count_per_node = NEW_C_HEAP_ARRAY(uint, _numa->num_active_nodes(), mtGC);
-  clear();
+#include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1HeapRegion.inline.hpp"
+
+inline void G1Policy::set_region_eden(G1HeapRegion* hr) {
+  hr->set_eden();
+  hr->install_surv_rate_group(_eden_surv_rate_group);
 }
 
-G1RegionsOnNodes::~G1RegionsOnNodes() {
-  FREE_C_HEAP_ARRAY(uint, _count_per_node);
+bool G1Policy::should_allocate_mutator_region() const {
+  uint young_list_length = _g1h->young_regions_count();
+  return young_list_length < young_list_target_length();
 }
+
+#endif // SHARE_GC_G1_G1POLICY_INLINE_HPP

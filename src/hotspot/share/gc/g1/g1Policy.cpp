@@ -1181,11 +1181,6 @@ double G1Policy::predict_region_code_root_scan_time(G1HeapRegion* hr, bool for_y
     _analytics->predict_code_root_scan_time_ms(code_root_length, for_young_only_phase);
 }
 
-bool G1Policy::should_allocate_mutator_region() const {
-  uint young_list_length = _g1h->young_regions_count();
-  return young_list_length < young_list_target_length();
-}
-
 bool G1Policy::use_adaptive_young_list_length() const {
   return _young_gen_sizer.use_adaptive_young_list_length();
 }

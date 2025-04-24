@@ -50,8 +50,10 @@ void G1HeapRegionRemSet::set_state_updating() {
   _state = Updating;
 }
 
-void G1HeapRegionRemSet::set_state_complete() {
-  clear_fcc();
+void G1HeapRegionRemSet::set_state_complete(bool needs_clear_fcc) {
+  if (needs_clear_fcc) {
+    clear_fcc();
+  }
   _state = Complete;
 }
 
