@@ -375,7 +375,7 @@ class G1FreeHumongousRegionClosure : public G1HeapRegionIndexClosure {
   // are currently allocated into.
   bool is_reclaimable(uint region_idx) const {
     return G1CollectedHeap::heap()->is_humongous_reclaim_candidate(region_idx);
-  }
+}
 
 public:
   G1FreeHumongousRegionClosure() :
@@ -386,11 +386,14 @@ public:
   {}
 
   bool do_heap_region_index(uint region_index) override {
+    G1HeapRegion* r = _g1h->region_at(region_index);
+
+    if (r->is_continues_humongous()) {
+      return true;
+    }
     if (!is_reclaimable(region_index)) {
       return false;
     }
-
-    G1HeapRegion* r = _g1h->region_at(region_index);
 
     oop obj = cast_to_oop(r->bottom());
     guarantee(obj->is_typeArray(),

@@ -355,7 +355,7 @@ class G1PrepareEvacuationTask : public WorkerTask {
       // important use case for eager reclaim, and this special handling
       // may reduce needed headroom.
 
-      return obj->is_typeArray() &&
+      return (obj->is_typeArray() || !_g1h->collector_state()->mark_in_progress()) &&
              _g1h->is_potential_eager_reclaim_candidate(region);
     }
 
@@ -391,17 +391,18 @@ class G1PrepareEvacuationTask : public WorkerTask {
       } else {
         _g1h->register_region_with_region_attr(hr);
       }
+      oop obj = cast_to_oop(hr->bottom());
       log_debug(gc, humongous)("Humongous region %u (object size %zu @ " PTR_FORMAT ") remset %zu code roots %zu "
-                               "marked %d pinned count %zu reclaim candidate %d type array %d",
+                               "marked %d pinned count %zu reclaim candidate %d type %s",
                                index,
-                               cast_to_oop(hr->bottom())->size() * HeapWordSize,
+                               obj->size() * HeapWordSize,
                                p2i(hr->bottom()),
                                hr->rem_set()->occupied(),
                                hr->rem_set()->code_roots_list_length(),
                                _g1h->concurrent_mark()->mark_bitmap()->is_marked(hr->bottom()),
                                hr->pinned_count(),
                                _g1h->is_humongous_reclaim_candidate(index),
-                               cast_to_oop(hr->bottom())->is_typeArray()
+                               obj->is_typeArray() ? "tA" : obj->is_objArray() : "oA" : "o"
                               );
       _worker_humongous_total++;
 

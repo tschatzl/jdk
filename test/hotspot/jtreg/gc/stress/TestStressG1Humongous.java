@@ -52,15 +52,6 @@ package gc.stress;
  * @run driver/timeout=180 gc.stress.TestStressG1Humongous 32 4 0.6 120
  */
 
-/*
- * @test
- * @requires vm.gc.G1
- * @requires !vm.flightRecorder
- * @library /test/lib
- * @modules java.base/jdk.internal.misc
- * @run driver/timeout=900 gc.stress.TestStressG1Humongous 1 7 0.6 600
- */
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;

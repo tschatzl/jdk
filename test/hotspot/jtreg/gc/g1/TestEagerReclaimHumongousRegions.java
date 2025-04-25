@@ -56,17 +56,26 @@ class TestEagerReclaimHumongousRegionsReclaimRegionFast {
     }
 
     // A large object referenced by a static.
-    static int[] filler = new int[10 * M];
+    static Object filler = new int[6 * M];
+
+    static Object genLargeObject(boolean typeArray) {
+        if (typeArray) {
+            return new int[M];
+        } else {
+            return new Object[M];
+        }
+    }
 
     public static void main(String[] args) {
 
-        int[] large = new int[M];
+        Object large = genLargeObject(true);
 
         Object ref_from_stack = large;
 
         for (int i = 0; i < 100; i++) {
             // A large object that will be reclaimed eagerly.
-            large = new int[6*M];
+            large = genLargeObject(i % 2 == 0);
+
             genGarbage();
             // Make sure that the compiler cannot completely remove
             // the allocation of the large object until here.
@@ -85,7 +94,7 @@ public class TestEagerReclaimHumongousRegions {
             "-Xms128M",
             "-Xmx128M",
             "-Xmn16M",
-            "-Xlog:gc",
+            "-Xlog:gc,gc+humongous=debug",
             TestEagerReclaimHumongousRegionsReclaimRegionFast.class.getName());
 
         Pattern p = Pattern.compile("Full GC");
