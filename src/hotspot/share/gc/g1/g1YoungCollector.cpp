@@ -402,7 +402,7 @@ class G1PrepareEvacuationTask : public WorkerTask {
                                _g1h->concurrent_mark()->mark_bitmap()->is_marked(hr->bottom()),
                                hr->pinned_count(),
                                _g1h->is_humongous_reclaim_candidate(index),
-                               obj->is_typeArray() ? "tA" : obj->is_objArray() : "oA" : "o"
+                               obj->is_typeArray() ? "tA" : obj->is_objArray() ? "oA" : "o"
                               );
       _worker_humongous_total++;
 
