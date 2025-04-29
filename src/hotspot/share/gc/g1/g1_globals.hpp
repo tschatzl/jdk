@@ -123,6 +123,10 @@
           "level for gc+remset")                                            \
           range(0, max_intx)                                                \
                                                                             \
+  product(uint, G1RebuildFreeListDivisor, 1,                      \
+          "Number of successful evacuations between induced allocation "    \
+          "failures occurring at object copying per thread")                \
+                                                                            \
   product(double, G1ConcMarkStepDurationMillis, 10.0,                       \
           "Target duration of individual concurrent marking steps "         \
           "in milliseconds.")                                               \

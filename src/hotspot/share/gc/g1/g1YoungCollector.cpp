@@ -511,8 +511,11 @@ void G1YoungCollector::pre_evacuate_collection_set(G1EvacInfo* evacuation_info) 
   }
 
   {
+      uint old_workers = _g1h->workers()->active_workers();
+    _g1h->workers()->set_active_workers(MAX2(1u, MIN2(old_workers, _g1h->max_regions() / 1024)));
     G1PrepareEvacuationTask g1_prep_task(_g1h);
     Tickspan task_time = run_task_timed(&g1_prep_task);
+    _g1h->workers()->set_active_workers(old_workers);
 
     G1MonotonicArenaMemoryStats sampled_card_set_stats = g1_prep_task.all_card_set_stats();
     sampled_card_set_stats.add(_g1h->young_regions_card_set_memory_stats());

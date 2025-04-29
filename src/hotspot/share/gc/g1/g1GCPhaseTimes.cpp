@@ -527,11 +527,11 @@ double G1GCPhaseTimes::print_post_evacuate_collection_set(bool evacuation_failed
   trace_phase(_gc_par_phases[YoungFreeCSet], true, 1);
   trace_phase(_gc_par_phases[NonYoungFreeCSet], true, 1);
 
-  trace_time("Serial Free Collection Set", _recorded_serial_free_cset_time_ms);
+  debug_time("Serial Free Collection Set", _recorded_serial_free_cset_time_ms);
 
   debug_time("Rebuild Free List", _recorded_total_rebuild_freelist_time_ms);
-  trace_time("Serial Rebuild Free List", _recorded_serial_rebuild_freelist_time_ms);
-  trace_phase(_gc_par_phases[RebuildFreeList]);
+  debug_phase(_gc_par_phases[RebuildFreeList]);
+  debug_time("Serial Rebuild Free List", _recorded_serial_rebuild_freelist_time_ms);
 
   debug_time("Prepare For Mutator", _recorded_prepare_for_mutator_time_ms);
   debug_time("Expand Heap After Collection", _cur_expand_heap_time_ms);
