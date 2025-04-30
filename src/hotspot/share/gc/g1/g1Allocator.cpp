@@ -242,6 +242,7 @@ HeapWord* G1Allocator::survivor_attempt_allocation(uint node_index,
                                                    size_t min_word_size,
                                                    size_t desired_word_size,
                                                    size_t* actual_word_size) {
+  SlowAllocTimer t;
   assert(!_g1h->is_humongous(desired_word_size),
          "we should not be seeing humongous-size allocations in this path");
 
@@ -271,6 +272,7 @@ HeapWord* G1Allocator::survivor_attempt_allocation(uint node_index,
 HeapWord* G1Allocator::old_attempt_allocation(size_t min_word_size,
                                               size_t desired_word_size,
                                               size_t* actual_word_size) {
+  SlowAllocTimer t;
   assert(!_g1h->is_humongous(desired_word_size),
          "we should not be seeing humongous-size allocations in this path");
 

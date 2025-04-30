@@ -121,21 +121,24 @@ void G1BarrierSetAssembler::gen_write_ref_array_post_barrier(MacroAssembler* mas
   if (UseCondCardMark) {
     __ cmpb(Address(addr, 0), G1CardTable::clean_card_val());
     __ jcc(Assembler::equal, is_clean_card);
+    Label next_card;
+    __ bind(next_card);
+    __ addptr(addr, sizeof(CardTable::CardValue));
+    __ cmpptr(addr, count);
+    __ jcc(Assembler::belowEqual, loop);
+    __ jmp(done);
+
+    __ bind(is_clean_card);
+    // Card was clean. Dirty card and go to next..
+    __ movb(Address(addr, 0), G1CardTable::dirty_card_val());
+    __ jmp(next_card);
   } else {
    __ movb(Address(addr, 0), G1CardTable::dirty_card_val());
+   __ addq(addr, sizeof(CardTable::CardValue));
+   __ cmpptr(addr, count);
+   __ jcc(Assembler::belowEqual, loop);
   }
 
-  Label next_card;
-  __ bind(next_card);
-  __ addptr(addr, sizeof(CardTable::CardValue));
-  __ cmpptr(addr, count);
-  __ jcc(Assembler::belowEqual, loop);
-  __ jmp(done);
-
-  __ bind(is_clean_card);
-  // Card was clean. Dirty card and go to next..
-  __ movb(Address(addr, 0), G1CardTable::dirty_card_val());
-  __ jmp(next_card);
 
   __ bind(done);
 }
@@ -309,22 +312,22 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
   bool gen_card_table_check = ((ext_barrier_data & G1C2BarrierPostGenCardCheck) != 0);
   bool null_check_first = ((ext_barrier_data & G1C2BarrierPostNullCheckFirst) != 0);
 
-  bool new_val_maybe_null = ((ext_barrier_data & G1C2BarrierPostNotNull) != 0);
+  bool new_val_maybe_null_by_c2_check = ((ext_barrier_data & G1C2BarrierPostNotNull) != 0) && !XXXNoWriteBarrierFilters;
 
-  __ block_comment(err_msg("barrier parts: gen_same_region %d gen_null_new %d gen_card_table %d maybe_null %d swap_same_null %d", gen_cross_region_check, gen_null_new_val_check, gen_card_table_check, new_val_maybe_null, null_check_first));
+  __ block_comment(err_msg("barrier parts: gen_same_region %d gen_null_new %d gen_card_table %d maybe_null %d swap_same_null %d", gen_cross_region_check, gen_null_new_val_check, gen_card_table_check, new_val_maybe_null_by_c2_check, null_check_first));
 
   if (!null_check_first) {
     if (gen_cross_region_check) {
       generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done, new_val_is_compressed);
     }
     // Crosses regions, storing null?
-    if (gen_null_new_val_check || new_val_maybe_null) { /* fixme: new_val_maybe_null is very very inaccurate; maybe only use if no other information is available */
+    if (gen_null_new_val_check || new_val_maybe_null_by_c2_check) { /* fixme: new_val_maybe_null is very very inaccurate; maybe only use if no other information is available */
       generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done, new_val_is_compressed);
     }
   } else {
     assert(gen_cross_region_check, "must be");
     assert(gen_null_new_val_check, "must be");
-    if (gen_null_new_val_check || new_val_maybe_null) { /* fixme: new_val_maybe_null is very very inaccurate; maybe only use if no other information is available */
+    if (gen_null_new_val_check || new_val_maybe_null_by_c2_check) { /* fixme: new_val_maybe_null is very very inaccurate; maybe only use if no other information is available */
       generate_post_barrier_null_new_value_check(masm, new_val, tmp1, done, new_val_is_compressed);
     }
     generate_post_barrier_same_region_check(masm, store_addr, new_val, tmp1, done, new_val_is_compressed);
@@ -340,8 +343,8 @@ static void generate_post_barrier_fast_path(MacroAssembler* masm,
     __ cmpb(Address(tmp1, 0), G1CardTable::clean_card_val());     // *(card address) == clean_card_val?
     __ jcc(Assembler::notEqual, done);
   }
-  // Storing a region crossing, non-null oop, card is clean.
-  // Dirty card.
+    // Storing a region crossing, non-null oop, card is clean.
+    // Dirty card.
   __ movb(Address(tmp1, 0), G1CardTable::dirty_card_val());       // *(card address) := dirty_card_val
 }
 

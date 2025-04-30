@@ -1383,4 +1383,17 @@ public:
   ~G1JFRTracerMark();
 };
 
+class SlowAllocTimer {
+  jlong _start;
+public:
+  SlowAllocTimer() : _start(os::elapsed_counter()) { }
+  void gc_start() {
+    G1CollectedHeap::heap()->_wait_time += os::elapsed_counter() - _start;
+  }
+  void gc_end() {
+    _start = os::elapsed_counter();
+  }
+  ~SlowAllocTimer() { G1CollectedHeap::heap()->_wait_time += os::elapsed_counter() - _start; }
+};
+
 #endif // SHARE_GC_G1_G1COLLECTEDHEAP_HPP

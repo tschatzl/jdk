@@ -1093,6 +1093,8 @@ G1YoungCollector::G1YoungCollector(GCCause::Cause gc_cause) :
 }
 
 void G1YoungCollector::collect() {
+  log_debug(gc)("Heap-lock mutator wait time %.2f", _g1h->_wait_time * 1000.0 / os::elapsed_frequency()); _g1h->_wait_time = 0;
+
   // Do timing/tracing/statistics/pre- and post-logging/verification work not
   // directly related to the collection. They should not be accounted for in
   // collection work timing.
@@ -1157,5 +1159,5 @@ void G1YoungCollector::collect() {
     policy()->record_young_collection_end(_concurrent_operation_is_full_mark, evacuation_alloc_failed());
   }
   TASKQUEUE_STATS_ONLY(_g1h->task_queues()->print_and_reset_taskqueue_stats("Oop Queue");)
-  log_debug(gc)("Heap-lock wait time %.2f", _g1h->_wait_time * 1000.0 / os::elapsed_counter());
+  log_debug(gc)("Heap-lock gc wait time %.2f", _g1h->_wait_time * 1000.0 / os::elapsed_frequency()); _g1h->_wait_time = 0;
 }

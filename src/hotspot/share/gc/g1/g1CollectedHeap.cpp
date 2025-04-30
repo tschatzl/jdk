@@ -417,6 +417,7 @@ G1CollectedHeap::mem_allocate(size_t word_size,
 }
 
 HeapWord* G1CollectedHeap::attempt_allocation_slow(uint node_index, size_t word_size) {
+  SlowAllocTimer t;
   ResourceMark rm; // For retrieving the thread names in log messages.
 
   // Make sure you read the note in attempt_allocation_humongous().
@@ -436,14 +437,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(uint node_index, size_t word_
     uint gc_count_before;
 
     {
-      uint gc_count_before_locking = total_collections();
-
-      jlong wait_start = os::elapsed_counter();
       MutexLocker x(Heap_lock);
-
-      if (total_collections() == gc_count_before_locking) {
-        _wait_time += os::elapsed_counter() - wait_start;
-      }
 
       // Now that we have the lock, we first retry the allocation in case another
       // thread changed the region while we were waiting to acquire the lock.
@@ -457,7 +451,9 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(uint node_index, size_t word_
     }
 
     bool succeeded;
+    t.gc_start();
     result = do_collection_pause(word_size, gc_count_before, &succeeded, GCCause::_g1_inc_collection_pause);
+    t.gc_end();
     if (succeeded) {
       log_trace(gc, alloc)("%s: Successfully scheduled collection returning " PTR_FORMAT,
                            Thread::current()->name(), p2i(result));
