@@ -45,6 +45,7 @@
 #include "gc/g1/g1RegionMarkStatsCache.inline.hpp"
 #include "gc/g1/g1ThreadLocalData.hpp"
 #include "gc/g1/g1Trace.hpp"
+#include "gc/shared/classUnloadingContext.hpp"
 #include "gc/shared/gcId.hpp"
 #include "gc/shared/gcTimer.hpp"
 #include "gc/shared/gcTraceTime.inline.hpp"
@@ -511,6 +512,8 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
   _concurrent_workers(nullptr),
   _num_concurrent_workers(0),
   _max_concurrent_workers(0),
+
+  _class_unloading_context(nullptr),
 
   _region_mark_stats(NEW_C_HEAP_ARRAY(G1RegionMarkStats, _g1h->max_num_regions(), mtGC)),
   _top_at_mark_starts(NEW_C_HEAP_ARRAY(HeapWord*, _g1h->max_num_regions(), mtGC)),
@@ -1186,6 +1189,45 @@ void G1ConcurrentMark::verify_during_pause(G1HeapVerifier::G1VerifyType type,
   }
 }
 
+void G1ConcurrentMark::start_unload_classes_and_code(GCTimer* timer) {
+  GCTraceTime(Debug, gc, phases) debug("Start Class Unloading", timer);
+  guarantee(_class_unloading_context == nullptr, "must be");
+
+  _class_unloading_context = new ClassUnloadingContext(_concurrent_workers->active_workers(),
+                                                       true /* unregister_nmethods_during_purge */,
+                                                       true /* lock_nmethod_free_separately */);
+
+  {
+    G1CMIsAliveClosure is_alive(this);
+    CodeCache::UnlinkingScope scope(&is_alive);
+    bool unloading_occurred = SystemDictionary::do_unloading(timer);
+    GCTraceTime(Debug, gc, phases) t("G1 Complete Cleaning", timer);
+    _g1h->complete_cleaning(_concurrent_workers, unloading_occurred);
+  }
+}
+
+void G1ConcurrentMark::complete_unload_classes_and_code() {
+  guarantee(_class_unloading_context != nullptr, "must be");
+
+  // When unlinking concurrently, also need a handshake here.
+  {
+    GCTraceTime(Debug, gc, phases) t("Purge Unlinked NMethods", gc_timer_cm());
+    _class_unloading_context->purge_nmethods();
+  }
+  {
+    GCTraceTime(Debug, gc, phases) t("Free Code Blobs", gc_timer_cm());
+    _class_unloading_context->free_nmethods();
+  }
+  {
+    GCTraceTime(Debug, gc, phases) t("Purge Class Loader Data", gc_timer_cm());
+    ClassLoaderDataGraph::purge(false /* at_safepoint */);
+    DEBUG_ONLY(MetaspaceUtils::verify();)
+  }
+
+  delete _class_unloading_context;
+  _class_unloading_context = nullptr;
+}
+
 // Update per-region liveness info based on CM stats. Then, reclaim empty
 // regions right away and select certain regions (e.g. sparse ones) for remset
 // rebuild.
@@ -1399,8 +1441,12 @@ void G1ConcurrentMark::remark() {
 
     // Unload Klasses, String, Code Cache, etc.
     if (ClassUnloadingWithConcurrentMark) {
-      G1CMIsAliveClosure is_alive(this);
-      _g1h->unload_classes_and_code("Class Unloading", &is_alive, _gc_timer_cm);
+      if (G1ConcurrentClassUnloading) {
+        start_unload_classes_and_code(_gc_timer_cm);
+      } else {
+        G1CMIsAliveClosure is_alive_closure(this);
+        _g1h->unload_classes_and_code("Class Unloading", &is_alive_closure, _gc_timer_cm);
+      }
     }
 
     SATBMarkQueueSet& satb_mq_set = G1BarrierSet::satb_mark_queue_set();

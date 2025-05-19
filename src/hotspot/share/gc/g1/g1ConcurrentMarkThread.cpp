@@ -231,6 +231,13 @@ bool G1ConcurrentMarkThread::subphase_remark() {
   return _cm->has_aborted();
 }
 
+void G1ConcurrentMarkThread::phase_complete_unload_classes_and_code() {
+  if (G1ConcurrentClassUnloading) {
+    G1ConcPhaseTimer p(_cm, "Concurrent Complete Unload Classes and Code");
+    _cm->complete_unload_classes_and_code();
+  }
+}
+
 bool G1ConcurrentMarkThread::phase_rebuild_and_scrub() {
   ConcurrentGCBreakpoints::at("AFTER REBUILD STARTED");
   G1ConcPhaseTimer p(_cm, "Concurrent Rebuild Remembered Sets and Scrub Regions");
@@ -288,6 +295,8 @@ void G1ConcurrentMarkThread::concurrent_mark_cycle_do() {
 
   // Phase 2: Actual mark loop.
   if (phase_mark_loop()) return;
+
+  phase_complete_unload_classes_and_code();
 
   // Phase 3: Rebuild remembered sets and scrub dead objects.
   if (phase_rebuild_and_scrub()) return;

@@ -40,10 +40,12 @@
 #include "utilities/compilerWarnings.hpp"
 #include "utilities/numberSeq.hpp"
 
+class ClassUnloadingContext;
 class ConcurrentGCTimer;
 class G1CollectedHeap;
 class G1ConcurrentMark;
 class G1ConcurrentMarkThread;
+class G1ConcPhaseTimer;
 class G1CMOopClosure;
 class G1CMTask;
 class G1OldTracer;
@@ -449,6 +451,14 @@ class G1ConcurrentMark : public CHeapObj<mtGC> {
   WorkerThreads* _concurrent_workers;
   uint      _num_concurrent_workers; // The number of marking worker threads we're using
   uint      _max_concurrent_workers; // Maximum number of marking worker threads
+
+  ClassUnloadingContext*  _class_unloading_context;
+
+  void start_unload_classes_and_code(GCTimer* timer);
+public:
+  void complete_unload_classes_and_code();
+
+private:
 
   enum class VerifyLocation {
     RemarkBefore,

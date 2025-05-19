@@ -2538,10 +2538,10 @@ void G1CollectedHeap::do_collection_pause_at_safepoint_helper(size_t allocation_
   }
 }
 
-void G1CollectedHeap::complete_cleaning(bool class_unloading_occurred) {
-  uint num_workers = workers()->active_workers();
+void G1CollectedHeap::complete_cleaning(WorkerThreads* worker_threads, bool class_unloading_occurred) {
+  uint num_workers = worker_threads->active_workers();
   G1ParallelCleaningTask unlink_task(num_workers, class_unloading_occurred);
-  workers()->run_task(&unlink_task);
+  worker_threads->run_task(&unlink_task);
 }
 
 void G1CollectedHeap::unload_classes_and_code(const char* description, BoolObjectClosure* is_alive, GCTimer* timer) {
@@ -2554,7 +2554,7 @@ void G1CollectedHeap::unload_classes_and_code(const char* description, BoolObjec
     CodeCache::UnlinkingScope scope(is_alive);
     bool unloading_occurred = SystemDictionary::do_unloading(timer);
     GCTraceTime(Debug, gc, phases) t("G1 Complete Cleaning", timer);
-    complete_cleaning(unloading_occurred);
+    complete_cleaning(workers(), unloading_occurred);
   }
   {
     GCTraceTime(Debug, gc, phases) t("Purge Unlinked NMethods", timer);
@@ -2562,7 +2562,7 @@ void G1CollectedHeap::unload_classes_and_code(const char* description, BoolObjec
   }
   {
     GCTraceTime(Debug, gc, phases) ur("Unregister NMethods", timer);
-    G1CollectedHeap::heap()->bulk_unregister_nmethods();
+    bulk_unregister_nmethods(workers());
   }
   {
     GCTraceTime(Debug, gc, phases) t("Free Code Blobs", timer);
@@ -2597,10 +2597,10 @@ public:
   }
 };
 
-void G1CollectedHeap::bulk_unregister_nmethods() {
-  uint num_workers = workers()->active_workers();
+void G1CollectedHeap::bulk_unregister_nmethods(WorkerThreads* worker_threads) {
+  uint num_workers = worker_threads->active_workers();
   G1BulkUnregisterNMethodTask t(num_workers);
-  workers()->run_task(&t);
+  worker_threads->run_task(&t);
 }
 
 bool G1STWSubjectToDiscoveryClosure::do_object_b(oop obj) {
