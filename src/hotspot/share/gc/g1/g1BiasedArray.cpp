@@ -31,7 +31,6 @@ G1BiasedMappedArrayBase::G1BiasedMappedArrayBase() :
   _length(0),
   _biased_base(0),
   _bias(0),
-  _elem_size(0),
   _shift_by(0) { }
 
 G1BiasedMappedArrayBase::~G1BiasedMappedArrayBase() {

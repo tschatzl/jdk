@@ -51,7 +51,6 @@ class G1BiasedMappedArrayBase : public CHeapObj<mtGC> {
     _length = length;
     _biased_base = (uintptr_t)base - (bias * elem_size);
     _bias = bias;
-    _elem_size = elem_size;
     _shift_by = shift_by;
   }
 
@@ -63,7 +62,6 @@ protected:
   size_t _length;         // the length of the array
   uintptr_t _biased_base; // base address biased by "bias" elements.
   size_t _bias;           // the bias, i.e. the offset biased_base is located to the right in elements
-  uint _elem_size;        // element size.
   uint _shift_by;         // the amount of bits to shift right when mapping to an index of the array.
 
   G1BiasedMappedArrayBase();
@@ -109,8 +107,6 @@ protected:
   // The raw biased base pointer.
   uintptr_t biased_base() const { return G1BiasedMappedArrayBase::_biased_base; }
 
-  uint elem_size() const { return G1BiasedMappedArrayBase::_elem_size; }
-
 public:
   typedef G1BiasedMappedArrayBase::idx_t idx_t;
 
@@ -135,7 +131,7 @@ public:
   T get_by_address(HeapWord* value) const {
     idx_t biased_index = ((uintptr_t)value) >> this->shift_by();
     this->verify_biased_index(biased_index);
-    return *(T*)(biased_base() + biased_index * elem_size());
+    return *(T*)(biased_base() + biased_index * sizeof(T));
   }
 
   T* get_ref_by_index(uintptr_t index) const {
@@ -155,7 +151,7 @@ public:
   void set_by_address(HeapWord * address, T value) {
     idx_t biased_index = ((uintptr_t)address) >> this->shift_by();
     this->verify_biased_index(biased_index);
-    *(T*)(biased_base() + biased_index * elem_size()) = value;
+    *(T*)(biased_base() + biased_index * sizeof(T)) = value;
   }
 
 public:
