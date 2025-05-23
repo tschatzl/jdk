@@ -49,8 +49,9 @@ class G1BiasedMappedArrayBase : public CHeapObj<mtGC> {
     assert(shift_by < sizeof(uintptr_t) * 8, "Shifting by %u, larger than word size?", shift_by);
     _base = base;
     _length = length;
-    _biased_base = base - (bias * elem_size);
+    _biased_base = (uintptr_t)base - (bias * elem_size);
     _bias = bias;
+    _elem_size = elem_size;
     _shift_by = shift_by;
   }
 
@@ -60,8 +61,9 @@ public:
 protected:
   address _base;          // the real base address
   size_t _length;         // the length of the array
-  address _biased_base;   // base address biased by "bias" elements
+  uintptr_t _biased_base; // base address biased by "bias" elements.
   size_t _bias;           // the bias, i.e. the offset biased_base is located to the right in elements
+  uint _elem_size;        // element size.
   uint _shift_by;         // the amount of bits to shift right when mapping to an index of the array.
 
   G1BiasedMappedArrayBase();
@@ -105,7 +107,9 @@ protected:
   T* base() const { return (T*)G1BiasedMappedArrayBase::_base; }
 
   // The raw biased base pointer.
-  T* biased_base() const { return (T*)G1BiasedMappedArrayBase::_biased_base; }
+  uintptr_t biased_base() const { return G1BiasedMappedArrayBase::_biased_base; }
+
+  uint elem_size() const { return G1BiasedMappedArrayBase::_elem_size; }
 
 public:
   typedef G1BiasedMappedArrayBase::idx_t idx_t;
@@ -131,7 +135,7 @@ public:
   T get_by_address(HeapWord* value) const {
     idx_t biased_index = ((uintptr_t)value) >> this->shift_by();
     this->verify_biased_index(biased_index);
-    return biased_base()[biased_index];
+    return *(T*)(biased_base() + biased_index * elem_size());
   }
 
   T* get_ref_by_index(uintptr_t index) const {
@@ -151,7 +155,7 @@ public:
   void set_by_address(HeapWord * address, T value) {
     idx_t biased_index = ((uintptr_t)address) >> this->shift_by();
     this->verify_biased_index(biased_index);
-    biased_base()[biased_index] = value;
+    *(T*)(biased_base() + biased_index * elem_size()) = value;
   }
 
 public:
