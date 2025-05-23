@@ -104,8 +104,7 @@ class G1BiasedMappedArray : public G1BiasedMappedArrayBase {
 protected:
   T* base() const { return (T*)G1BiasedMappedArrayBase::_base; }
 
-  // The raw biased base pointer.
-  uintptr_t biased_base() const { return G1BiasedMappedArrayBase::_biased_base; }
+  T* biased_base_at(idx_t index) const { return (T*)(G1BiasedMappedArrayBase::_biased_base + index * sizeof(T)); }
 
 public:
   typedef G1BiasedMappedArrayBase::idx_t idx_t;
@@ -131,7 +130,7 @@ public:
   T get_by_address(HeapWord* value) const {
     idx_t biased_index = ((uintptr_t)value) >> this->shift_by();
     this->verify_biased_index(biased_index);
-    return *(T*)(biased_base() + biased_index * sizeof(T));
+    return *biased_base_at(biased_index);
   }
 
   T* get_ref_by_index(uintptr_t index) const {
@@ -151,7 +150,7 @@ public:
   void set_by_address(HeapWord * address, T value) {
     idx_t biased_index = ((uintptr_t)address) >> this->shift_by();
     this->verify_biased_index(biased_index);
-    *(T*)(biased_base() + biased_index * sizeof(T)) = value;
+    *biased_base_at(biased_index) = value;
   }
 
 public:
