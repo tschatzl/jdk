@@ -134,15 +134,24 @@ G1HeapRegion* G1HeapRegionManager::allocate_humongous_allow_expand(uint num_regi
   return allocate_free_regions_starting_at(candidate, num_regions);
 }
 
-G1HeapRegion* G1HeapRegionManager::allocate_humongous(uint num_regions) {
-  // Special case a single region to avoid expensive search.
+G1HeapRegion* G1HeapRegionManager::allocate_humongous(uint num_regions, bool& expansion_attempted) {
+  G1HeapRegion* result = nullptr;
+  expansion_attempted = false;
+  // Policy: First try to allocate a humongous object in the free list. Special case a
+  // single region to avoid expensive search for this case.
   if (num_regions == 1) {
-    return allocate_free_region(G1HeapRegionType::Humongous, G1NUMA::AnyNodeIndex);
+    result = allocate_free_region(G1HeapRegionType::Humongous, G1NUMA::AnyNodeIndex);
+  } else {
+    result = allocate_humongous_from_free_list(num_regions);    
   }
-  return allocate_humongous_from_free_list(num_regions);
-}
+  if (result != nullptr) {
+    return result;
+  }
 
-G1HeapRegion* G1HeapRegionManager::expand_and_allocate_humongous(uint num_regions) {
+  expansion_attempted = true;
+  // Policy: We could not find enough regions for the humongous object in the
+  // free list. Look through the heap to find a mix of free and uncommitted regions.
+  // If so, expand the heap and allocate the humongous object.
   return allocate_humongous_allow_expand(num_regions);
 }
 

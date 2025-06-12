@@ -202,11 +202,10 @@ public:
   // Allocate a free region with specific node index. If fails allocate with next node index.
   G1HeapRegion* allocate_free_region(G1HeapRegionType type, uint requested_node_index);
 
-  // Allocate a humongous object from the free list
-  G1HeapRegion* allocate_humongous(uint num_regions);
-
-  // Allocate a humongous object by expanding the heap
-  G1HeapRegion* expand_and_allocate_humongous(uint num_regions);
+  // Allocate a humongous object with the given size in regions. Returns the first
+  // heap region if successful, and whether the method required an expansion for the
+  // allocation.
+  G1HeapRegion* allocate_humongous(uint num_regions, bool& expansion_attempted);
 
   inline G1HeapRegion* allocate_free_regions_starting_at(uint first, uint num_regions);
 

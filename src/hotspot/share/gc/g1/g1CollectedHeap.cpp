@@ -352,25 +352,17 @@ HeapWord* G1CollectedHeap::humongous_obj_allocate(size_t word_size) {
     return nullptr;
   }
 
-  // Policy: First try to allocate a humongous object in the free list.
-  G1HeapRegion* humongous_start = _hrm.allocate_humongous(obj_regions);
-  if (humongous_start == nullptr) {
-    // Policy: We could not find enough regions for the humongous object in the
-    // free list. Look through the heap to find a mix of free and uncommitted regions.
-    // If so, expand the heap and allocate the humongous object.
-    humongous_start = _hrm.expand_and_allocate_humongous(obj_regions);
-    if (humongous_start != nullptr) {
-      // We managed to find a region by expanding the heap.
+  HeapWord* result = nullptr;
+  bool expansion_attempted;
+
+  G1HeapRegion* humongous_start = _hrm.allocate_humongous(obj_regions, expansion_attempted);
+  if (humongous_start != nullptr) {
+    if (expansion_attempted) {
       log_debug(gc, ergo, heap)("Heap expansion (humongous allocation request). Allocation request: %zuB",
                                 word_size * HeapWordSize);
       policy()->record_new_heap_size(num_committed_regions());
-    } else {
-      // Policy: Potentially trigger a defragmentation GC.
     }
-  }
 
-  HeapWord* result = nullptr;
-  if (humongous_start != nullptr) {
     result = humongous_obj_allocate_initialize_regions(humongous_start, obj_regions, word_size);
     assert(result != nullptr, "it should always return a valid result");
 
@@ -378,9 +370,9 @@ HeapWord* G1CollectedHeap::humongous_obj_allocate(size_t word_size) {
     // information of the old generation so we need to recalculate the
     // sizes and update the jstat counters here.
     monitoring_support()->update_sizes();
+  } else {
+    // Policy: Potentially trigger a defragmentation GC.
   }
-
-  _verifier->verify_region_sets_optional();
 
   return result;
 }
