@@ -370,7 +370,7 @@
           "scan cost related prediction samples. A sample must involve "    \
           "the same or more than this number of code roots to be used.")    \
                                                                             \
-  product(bool, G1ConcurrentClassUnloading, false,                          \
+  product(bool, G1ConcurrentClassUnloading, true,                          \
           "")                                                               \
                                                                             \
   GC_G1_EVACUATION_FAILURE_FLAGS(develop,                                   \

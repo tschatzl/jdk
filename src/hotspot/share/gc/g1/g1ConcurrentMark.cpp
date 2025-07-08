@@ -1209,7 +1209,7 @@ void G1ConcurrentMark::start_unload_classes_and_code(GCTimer* timer) {
 void G1ConcurrentMark::complete_unload_classes_and_code() {
   guarantee(_class_unloading_context != nullptr, "must be");
 
-  // When unlinking concurrently, also need a handshake here.
+  // When unlinking concurrently, we would also need a handshake here.
   {
     GCTraceTime(Debug, gc, phases) t("Purge Unlinked NMethods", gc_timer_cm());
     _class_unloading_context->purge_nmethods();
