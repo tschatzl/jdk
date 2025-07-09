@@ -1190,26 +1190,29 @@ void G1ConcurrentMark::verify_during_pause(G1HeapVerifier::G1VerifyType type,
 }
 
 void G1ConcurrentMark::start_unload_classes_and_code(GCTimer* timer) {
-  GCTraceTime(Debug, gc, phases) debug("Start Class Unloading", timer);
+}
+
+void G1ConcurrentMark::complete_unload_classes_and_code() {
   guarantee(_class_unloading_context == nullptr, "must be");
 
   _class_unloading_context = new ClassUnloadingContext(_concurrent_workers->active_workers(),
                                                        true /* unregister_nmethods_during_purge */,
                                                        true /* lock_nmethod_free_separately */);
 
+  bool unloading_occurred;
   {
     G1CMIsAliveClosure is_alive(this);
     CodeCache::UnlinkingScope scope(&is_alive);
-    bool unloading_occurred = SystemDictionary::do_unloading(timer);
+    MutexLocker ml(ClassLoaderDataGraph_lock, Mutex::_no_safepoint_check_flag);
+    unloading_occurred = SystemDictionary::do_unloading(timer);
+  }
+  {
+    MutexLocker ml(CodeCache_lock, Mutex::_no_safepoint_check_flag);
     GCTraceTime(Debug, gc, phases) t("G1 Complete Cleaning", timer);
     _g1h->complete_cleaning(_concurrent_workers, unloading_occurred);
   }
-}
 
-void G1ConcurrentMark::complete_unload_classes_and_code() {
-  guarantee(_class_unloading_context != nullptr, "must be");
-
-  // When unlinking concurrently, we would also need a handshake here.
+  // FIXME: When unlinking concurrently, we would also need a handshake here.
   {
     GCTraceTime(Debug, gc, phases) t("Purge Unlinked NMethods", gc_timer_cm());
     _class_unloading_context->purge_nmethods();

@@ -233,7 +233,7 @@ bool G1ConcurrentMarkThread::subphase_remark() {
 
 void G1ConcurrentMarkThread::phase_complete_unload_classes_and_code() {
   if (G1ConcurrentClassUnloading) {
-    G1ConcPhaseTimer p(_cm, "Concurrent Complete Unload Classes and Code");
+    G1ConcPhaseTimer p(_cm, "Concurrent Unload Classes and Code");
     _cm->complete_unload_classes_and_code();
   }
 }
