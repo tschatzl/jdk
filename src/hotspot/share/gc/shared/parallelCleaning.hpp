@@ -57,16 +57,21 @@ class KlassCleaningTask : public StackObj {
   volatile int                            _clean_klass_tree_claimed;
   ClassLoaderDataGraphKlassIteratorAtomic _klass_iterator;
 
+  static const uint MaxClaimKlasses = 128;
+
 public:
   KlassCleaningTask();
+  ~KlassCleaningTask();
 
+  uint _processed;
+  uint _num_clds_processed;
 private:
   bool claim_clean_klass_tree_task();
-  InstanceKlass* claim_next_klass();
+  Klass* claim_next_klass(uint steps);
 
 public:
 
-  void work();
+  void work(uint worker_id);
 };
 
 #endif // SHARE_GC_SHARED_PARALLELCLEANING_HPP

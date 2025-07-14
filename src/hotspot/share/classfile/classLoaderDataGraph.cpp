@@ -490,9 +490,10 @@ void ClassLoaderDataGraph::purge(bool at_safepoint) {
 }
 
 ClassLoaderDataGraphKlassIteratorAtomic::ClassLoaderDataGraphKlassIteratorAtomic()
-    : _next_klass(nullptr) {
+    : _next_klass(nullptr), _cmpxchgfail(0), _cld(nullptr) {
   assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint!");
   ClassLoaderData* cld = ClassLoaderDataGraph::_head;
+  _cld = ClassLoaderDataGraph::_head;
   Klass* klass = nullptr;
 
   // Find the first klass in the CLDG.
@@ -505,6 +506,30 @@ ClassLoaderDataGraphKlassIteratorAtomic::ClassLoaderDataGraphKlassIteratorAtomic
     }
     cld = cld->next();
   }
+}
+
+ClassLoaderData* ClassLoaderDataGraphKlassIteratorAtomic::next() {
+  ClassLoaderData* cur = Atomic::load(&_cld);
+  for (;;) {
+    if (cur == nullptr) {
+      return nullptr;
+    }
+    ClassLoaderData* next = cur->next();
+    ClassLoaderData* old;
+    if ((old = Atomic::cmpxchg(&_cld, cur, next)) == cur) {
+      return cur;
+    }
+    Atomic::inc(&_cmpxchgfail);
+    cur = old;
+  }
+}
+
+Klass* ClassLoaderDataGraphKlassIteratorAtomic::next_klass_in_cldg(Klass* klass, uint max_steps) {
+  Klass* result = klass;
+  for (uint i = 0; i < max_steps && result != nullptr; i++) {
+    result = next_klass_in_cldg(result);
+  }
+  return result;
 }
 
 Klass* ClassLoaderDataGraphKlassIteratorAtomic::next_klass_in_cldg(Klass* klass) {
@@ -527,25 +552,50 @@ Klass* ClassLoaderDataGraphKlassIteratorAtomic::next_klass_in_cldg(Klass* klass)
   return next;
 }
 
-Klass* ClassLoaderDataGraphKlassIteratorAtomic::next_klass() {
+Klass* ClassLoaderDataGraphKlassIteratorAtomic::next_klass(uint max_steps) {
   Klass* head = _next_klass;
 
+  uint failures = 0;
   while (head != nullptr) {
-    Klass* next = next_klass_in_cldg(head);
+    Klass* next = next_klass_in_cldg(head, max_steps);
 
     Klass* old_head = Atomic::cmpxchg(&_next_klass, head, next);
 
     if (old_head == head) {
+        if (failures != 0) {
+            Atomic::add(&_cmpxchgfail, failures);
+        }
       return head; // Won the CAS.
     }
-
+    failures++;
     head = old_head;
+  }
+
+  if (failures != 0) {
+          Atomic::add(&_cmpxchgfail, failures);
   }
 
   // Nothing more for the iterator to hand out.
   assert(head == nullptr, "head is " PTR_FORMAT ", expected not null:", p2i(head));
   return nullptr;
 }
+
+uint ClassLoaderDataGraphKlassIteratorAtomic2::iterate_klass_in_cldg() {
+  assert(SafepointSynchronize::is_at_safepoint(), "must be at safepoint!");
+
+  uint result = 0;
+  ClassLoaderData* cld = ClassLoaderDataGraph::_head;
+  while (cld != nullptr) {
+    Klass* klass = cld->_klasses;
+    while (klass != nullptr) {
+      klass = klass->next_link();
+      result++;
+    }
+    cld = cld->next();
+  }
+  return result;
+}
+
 
 void ClassLoaderDataGraph::verify() {
   ClassLoaderDataGraphIterator iter;
