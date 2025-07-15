@@ -100,24 +100,11 @@ void CodeCacheUnloadingTask::work(uint worker_id) {
 }
 
 KlassCleaningTask::KlassCleaningTask() :
-  _clean_klass_tree_claimed(0),
   _klass_iterator(), _processed(0), _num_clds_processed(0) {
 }
 
 KlassCleaningTask::~KlassCleaningTask() {
     log_debug(gc)("KlassCleaningTask cmpxchg-fail %u", _klass_iterator._cmpxchgfail);
-}
-
-bool KlassCleaningTask::claim_clean_klass_tree_task() {
-  if (_clean_klass_tree_claimed) {
-    return false;
-  }
-
-  return Atomic::cmpxchg(&_clean_klass_tree_claimed, 0, 1) == 0;
-}
-
-Klass* KlassCleaningTask::claim_next_klass(uint steps) {
-  return _klass_iterator.next_klass(steps);
 }
 
 void KlassCleaningTask::work(uint worker_id) {
@@ -129,32 +116,10 @@ void KlassCleaningTask::work(uint worker_id) {
   uint num_processed = 0;
   uint num_ik = 0;
   uint num_clds_processed = 0;
-  Klass* klass;
-  /*
-  uint my_steps = 500 + 53 * worker_id;
-  while ((klass = claim_next_klass(my_steps)) != nullptr) {
-      jlong start_clean = os::elapsed_counter();
-    for (uint i = 0; i < my_steps && klass != nullptr; i++) {
-      klass->clean_subklass();
-      Klass* sibling = klass->next_sibling(true);
-      klass->set_next_sibling(sibling);
-
-      if (klass->is_instance_klass()) {
-        Klass::clean_weak_instanceklass_links(InstanceKlass::cast(klass));
-        num_ik++;
-      }
-      guarantee(klass->subklass(false) == nullptr || klass->subklass(false)->is_loader_alive(), "must be");
-      guarantee(klass->next_sibling(false) == nullptr || klass->next_sibling(false)->is_loader_alive(), "must be");
-      num_processed++;
-      klass = _klass_iterator.next_klass_in_cldg(klass);
-    }
-    clean += os::elapsed_counter() - start_clean;
-  }
-   */
   for (ClassLoaderData* cur = _klass_iterator.next(); cur != nullptr; cur = _klass_iterator.next()) {
       jlong start_clean = os::elapsed_counter();
     num_clds_processed++;
-    for (klass = cur->klasses(); klass != nullptr; klass = klass->next_link()) {
+    for (Klass* klass = cur->klasses(); klass != nullptr; klass = klass->next_link()) {
       klass->clean_subklass();
       Klass* sibling = klass->next_sibling(true);
       klass->set_next_sibling(sibling);

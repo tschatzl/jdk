@@ -54,10 +54,7 @@ public:
 
 
 class KlassCleaningTask : public StackObj {
-  volatile int                            _clean_klass_tree_claimed;
   ClassLoaderDataGraphKlassIteratorAtomic _klass_iterator;
-
-  static const uint MaxClaimKlasses = 128;
 
 public:
   KlassCleaningTask();
@@ -65,9 +62,6 @@ public:
 
   uint _processed;
   uint _num_clds_processed;
-private:
-  bool claim_clean_klass_tree_task();
-  Klass* claim_next_klass(uint steps);
 
 public:
 

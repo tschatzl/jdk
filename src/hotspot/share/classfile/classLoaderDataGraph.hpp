@@ -35,7 +35,6 @@
 class ClassLoaderDataGraph : public AllStatic {
   friend class ClassLoaderData;
   friend class ClassLoaderDataGraphKlassIteratorAtomic;
-  friend class ClassLoaderDataGraphKlassIteratorAtomic2;
   friend class VMStructs;
  private:
   class ClassLoaderDataGraphIterator;
@@ -143,29 +142,13 @@ public:
 
 // An iterator that distributes Klasses to parallel worker threads.
 class ClassLoaderDataGraphKlassIteratorAtomic : public StackObj {
-  char pad0[100];
-  Klass* volatile _next_klass;
-  char pad1[100];
-  static Klass* next_klass_in_cldg(Klass* klass, uint max_steps);
-
 public:
   uint _cmpxchgfail;
-  char pad2[100];
   ClassLoaderData* volatile _cld;
 
   ClassLoaderDataGraphKlassIteratorAtomic();
-  Klass* next_klass(uint max_steps = 1);
-
-  static Klass* next_klass_in_cldg(Klass* klass);    
 
   ClassLoaderData* next();
 };
-
-class ClassLoaderDataGraphKlassIteratorAtomic2 : public StackObj {
-public:
-
-  static uint iterate_klass_in_cldg();    
-};
-
 
 #endif // SHARE_CLASSFILE_CLASSLOADERDATAGRAPH_HPP
