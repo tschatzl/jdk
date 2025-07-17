@@ -78,7 +78,7 @@ void BarrierSetNMethod::disarm(nmethod* nm) {
 void BarrierSetNMethod::guard_with(nmethod* nm, int value) {
   assert((value & not_entrant) == 0, "not_entrant bit is reserved");
   // Enter critical section.  Does not block for safepoint.
-  ConditionalMutexLocker ml(NMethodEntryBarrier_lock, !NMethodEntryBarrier_lock->owned_by_self(), Mutex::_no_safepoint_check_flag);
+  ConditionalMutexLocker ml(NMethodEntryBarrier_lock, !NMethodEntryBarrier_lock->owned_by_self() && (!UseNewCode || !SafepointSynchronize::is_at_safepoint()), Mutex::_no_safepoint_check_flag);
   // Do not undo sticky bit
   if (is_not_entrant(nm)) {
     value |= not_entrant;

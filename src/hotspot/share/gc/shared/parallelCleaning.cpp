@@ -72,10 +72,14 @@ void CodeCacheUnloadingTask::claim_nmethods(nmethod** claimed_nmethods, int *num
 }
 
 void CodeCacheUnloadingTask::work(uint worker_id) {
+  jlong start = os::elapsed_counter();
+  jlong clean = 0;
   // The first nmethods is claimed by the first worker.
   if (worker_id == 0 && _first_nmethod != nullptr) {
+    
     _first_nmethod->do_unloading(_unloading_occurred);
     _first_nmethod = nullptr;
+    clean += os::elapsed_counter() - start;
   }
 
   int num_claimed_nmethods;
@@ -88,10 +92,15 @@ void CodeCacheUnloadingTask::work(uint worker_id) {
       break;
     }
 
+    jlong clean_start = os::elapsed_counter();
     for (int i = 0; i < num_claimed_nmethods; i++) {
       claimed_nmethods[i]->do_unloading(_unloading_occurred);
     }
+    clean += os::elapsed_counter() - clean_start;
   }
+
+  jlong total = os::elapsed_counter() - start;
+  log_info(gc)("CodeCache Unloading total %.2fms clean %.2fms (%.2f)", TimeHelper::counter_to_millis(total), TimeHelper::counter_to_millis(clean), percent_of(clean, total));
 }
 
 KlassCleaningTask::KlassCleaningTask() :
