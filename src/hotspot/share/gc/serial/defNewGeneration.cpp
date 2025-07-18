@@ -605,21 +605,19 @@ bool DefNewGeneration::collect(bool clear_all_soft_refs) {
 
   {
     StrongRootsScope srs(0);
+
+    // Old-to-young references.
+    _old_gen->scan_old_to_young_refs(_old_gen->space()->top());
+
     RootScanClosure root_cl{this};
     CLDScanClosure cld_cl{this};
-
     MarkingNMethodClosure code_cl(&root_cl,
                                   NMethodToOopClosure::FixRelocations,
                                   false /* keepalive_nmethods */);
-
-    HeapWord* saved_top_in_old_gen = _old_gen->space()->top();
-    heap->process_roots(SerialHeap::SO_ScavengeCodeCache,
+    heap->process_roots(SerialHeap::RP_YoungCollection,
                         &root_cl,
                         &cld_cl,
-                        &cld_cl,
                         &code_cl);
-
-    _old_gen->scan_old_to_young_refs(saved_top_in_old_gen);
   }
 
   // "evacuate followers".

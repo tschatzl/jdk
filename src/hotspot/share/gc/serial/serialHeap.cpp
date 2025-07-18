@@ -513,36 +513,34 @@ HeapWord* SerialHeap::satisfy_failed_allocation(size_t size, bool is_tlab) {
   return nullptr;
 }
 
-void SerialHeap::process_roots(ScanningOption so,
-                               OopClosure* strong_roots,
-                               CLDClosure* strong_cld_closure,
-                               CLDClosure* weak_cld_closure,
-                               NMethodToOopClosure* code_roots) {
-  // General roots.
-  assert(code_roots != nullptr, "code root closure should always be set");
+void SerialHeap::process_roots(RootProcessingKind rpk,
+                               OopClosure* oop_closure,
+                               CLDClosure* cld_closure,
+                               NMethodToOopClosure* code_closure) {
+  // Roots from CLD and Threads.
+  if (rpk == RP_FullCollectionMark) {
+    // always_strong_cld_do() internally takes care of whether class loading
+    // is enabled or not, applying the closure to both strong and weak or only
+    // strong CLDs.
+    ClassLoaderDataGraph::always_strong_cld_do(cld_closure);
+    Threads::oops_do(oop_closure, code_closure);
+  } else {
+    assert(rpk == RP_YoungCollection || rpk == RP_FullCollectionAdjust, "must be");
 
-  ClassLoaderDataGraph::roots_cld_do(strong_cld_closure, weak_cld_closure);
-
-  // Only process code roots from thread stacks if we aren't visiting the entire CodeCache anyway
-  NMethodToOopClosure* roots_from_code_p = (so & SO_AllCodeCache) ? nullptr : code_roots;
-
-  Threads::oops_do(strong_roots, roots_from_code_p);
-
-  OopStorageSet::strong_oops_do(strong_roots);
-
-  if (so & SO_ScavengeCodeCache) {
-    assert(code_roots != nullptr, "must supply closure for code cache");
-
-    // We only visit parts of the CodeCache when scavenging.
-    ScavengableNMethods::nmethods_do(code_roots);
+    ClassLoaderDataGraph::cld_do(cld_closure);
+    // Do not gather roots from the nmethods of Thread stacks - we gather them
+    // differently and more efficiently just below depending on the type of
+    // collection.
+    Threads::oops_do(oop_closure, nullptr);
+    if (rpk == RP_YoungCollection) {
+      ScavengableNMethods::nmethods_do(code_closure);
+    } else {
+      assert(rpk == RP_FullCollectionAdjust, "must be");
+      CodeCache::nmethods_do(code_closure);
+    }
   }
-  if (so & SO_AllCodeCache) {
-    assert(code_roots != nullptr, "must supply closure for code cache");
 
-    // CMSCollector uses this to do intermediate-strength collections.
-    // We scan the entire code cache, since CodeCache::do_unloading is not called.
-    CodeCache::nmethods_do(code_roots);
-  }
+  OopStorageSet::strong_oops_do(oop_closure);
 }
 
 template <typename OopClosureType>
