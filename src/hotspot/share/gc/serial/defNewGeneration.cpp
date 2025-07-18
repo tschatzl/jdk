@@ -609,15 +609,19 @@ bool DefNewGeneration::collect(bool clear_all_soft_refs) {
     // Old-to-young references.
     _old_gen->scan_old_to_young_refs(_old_gen->space()->top());
 
-    RootScanClosure root_cl{this};
-    CLDScanClosure cld_cl{this};
-    MarkingNMethodClosure code_cl(&root_cl,
+    RootScanClosure root_closure{this};
+    CLDScanClosure cld_closure{this};
+    MarkingNMethodClosure code_closure(&root_closure,
                                   NMethodToOopClosure::FixRelocations,
                                   false /* keepalive_nmethods */);
-    heap->process_roots(SerialHeap::RP_YoungCollection,
-                        &root_cl,
-                        &cld_cl,
-                        &code_cl);
+    // There is no class unloading during a young collection, so use all CLDs.
+    ClassLoaderDataGraph::cld_do(&cld_closure);
+    // Do not gather roots from the nmethods of Thread stacks - the code root
+    // remembered set (ScavengableNMethods) contains all of them.
+    Threads::oops_do(&root_closure, nullptr);
+    ScavengableNMethods::nmethods_do(&code_closure);
+
+    OopStorageSet::strong_oops_do(&root_closure);
   }
 
   // "evacuate followers".

@@ -222,21 +222,7 @@ public:
   // generations in a fully generational heap.
   CardTableRS* rem_set() { return _rem_set; }
 
-  // The RootProcessingKind for root processing selects the correct, optimal paths
-  // for applying the closures given to process_roots().
-  enum RootProcessingKind {
-    RP_FullCollectionMark,
-    RP_FullCollectionAdjust,
-    RP_YoungCollection
-  };
-
  public:
-  // Apply closures on various roots in Young GC or marking/adjust phases of
-  // Full GC.
-  void process_roots(RootProcessingKind rpk,
-                     OopClosure* oop_closure,
-                     CLDClosure* cld_closure,
-                     NMethodToOopClosure* code_closure);
 
   // Set the saved marks of generations, if that makes sense.
   // In particular, if any generation might iterate over the oops

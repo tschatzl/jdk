@@ -513,36 +513,6 @@ HeapWord* SerialHeap::satisfy_failed_allocation(size_t size, bool is_tlab) {
   return nullptr;
 }
 
-void SerialHeap::process_roots(RootProcessingKind rpk,
-                               OopClosure* oop_closure,
-                               CLDClosure* cld_closure,
-                               NMethodToOopClosure* code_closure) {
-  // Roots from CLD and Threads.
-  if (rpk == RP_FullCollectionMark) {
-    // always_strong_cld_do() internally takes care of whether class loading
-    // is enabled or not, applying the closure to both strong and weak or only
-    // strong CLDs.
-    ClassLoaderDataGraph::always_strong_cld_do(cld_closure);
-    Threads::oops_do(oop_closure, code_closure);
-  } else {
-    assert(rpk == RP_YoungCollection || rpk == RP_FullCollectionAdjust, "must be");
-
-    ClassLoaderDataGraph::cld_do(cld_closure);
-    // Do not gather roots from the nmethods of Thread stacks - we gather them
-    // differently and more efficiently just below depending on the type of
-    // collection.
-    Threads::oops_do(oop_closure, nullptr);
-    if (rpk == RP_YoungCollection) {
-      ScavengableNMethods::nmethods_do(code_closure);
-    } else {
-      assert(rpk == RP_FullCollectionAdjust, "must be");
-      CodeCache::nmethods_do(code_closure);
-    }
-  }
-
-  OopStorageSet::strong_oops_do(oop_closure);
-}
-
 template <typename OopClosureType>
 static void oop_iterate_from(OopClosureType* blk, ContiguousSpace* space, HeapWord** from) {
   assert(*from != nullptr, "precondition");

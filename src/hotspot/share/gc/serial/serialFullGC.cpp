@@ -483,13 +483,17 @@ void SerialFullGC::phase1_mark(bool clear_all_softrefs) {
   {
     StrongRootsScope srs(0);
 
-    MarkingNMethodClosure mark_code_closure(&follow_root_closure,
-                                            !NMethodToOopClosure::FixRelocations,
-                                            true);
-    gch->process_roots(SerialHeap::RP_FullCollectionMark,
-                       &follow_root_closure,
-                       &follow_cld_closure,
-                       &mark_code_closure);
+    MarkingNMethodClosure code_closure(&follow_root_closure,
+                                       !NMethodToOopClosure::FixRelocations,
+                                       true);
+    // Roots from CLD and Threads. Only need to gather strong roots. Always_strong_cld_do()
+    // internally takes care of whether class loading is enabled or not, applying
+    // the closure to both strong and weak or only strong CLDs.
+    ClassLoaderDataGraph::always_strong_cld_do(&follow_cld_closure);
+    Threads::oops_do(&follow_root_closure, &code_closure);
+
+    // Other strong roots.
+    OopStorageSet::strong_oops_do(&follow_root_closure);
   }
 
   // Process reference objects found during marking
@@ -719,10 +723,14 @@ void SerialFullGC::invoke_at_safepoint(bool clear_all_softrefs) {
 
     NMethodToOopClosure code_closure(&adjust_pointer_closure,
                                      NMethodToOopClosure::FixRelocations);
-    gch->process_roots(SerialHeap::RP_FullCollectionAdjust,
-                       &adjust_pointer_closure,
-                       &adjust_cld_closure,
-                       &code_closure);
+    // In the adjust phase there is no class unloading, use all CLDs.
+    ClassLoaderDataGraph::cld_do(&cld_closure);
+    // Do not gather roots from the nmethods of Thread stacks - we need to iterate
+    // over all of them anyway.
+    Threads::oops_do(&adjust_pointer_closure, nullptr);
+    CodeCache::nmethods_do(&code_closure);
+
+    OopStorageSet::strong_oops_do(&adjust_pointer_closure);
 
     WeakProcessor::oops_do(&adjust_pointer_closure);
 
