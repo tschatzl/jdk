@@ -201,6 +201,10 @@ void G1HeapRegion::set_continues_humongous(G1HeapRegion* first_hr) {
   report_region_type_change(G1HeapRegionTraceType::ContinuesHumongous);
   _type.set_continues_humongous();
   _humongous_start_region = first_hr;
+
+  // Link with humongous start region's cset group.
+  G1CSetCandidateGroup* cset_group = _humongous_start_region->rem_set()->cset_group();
+  cset_group->add(this);
 }
 
 void G1HeapRegion::clear_humongous() {

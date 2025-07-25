@@ -209,10 +209,16 @@ G1HeapRegionAttr G1CollectedHeap::region_attr(uint idx) const {
   return _region_attr.get_by_index(idx);
 }
 
-void G1CollectedHeap::register_humongous_candidate_region_with_region_attr(uint index) {
+void G1CollectedHeap::register_humongous_candidate_region_with_region_attr(uint index, uint size_in_regions) {
   assert(!region_at(index)->has_pinned_objects(), "must be");
   assert(region_at(index)->rem_set()->is_complete(), "must be");
   _region_attr.set_humongous_candidate(index);
+
+  for (uint i = index + 1; i < index + size_in_regions; i++) {
+    assert(!region_at(i)->has_pinned_objects(), "must be");
+    assert(region_at(i)->rem_set()->is_complete(), "must be");
+    _region_attr.set_humongous_candidate(i);
+  }
 }
 
 void G1CollectedHeap::register_new_survivor_region_with_region_attr(G1HeapRegion* r) {
@@ -307,7 +313,10 @@ inline void G1CollectedHeap::set_humongous_is_live(oop obj) {
   // humongous-candidate to not, and the write, in evacuation, is
   // separated from the read, in post-evacuation.
   if (_region_attr.is_humongous_candidate(region)) {
-    _region_attr.clear_humongous_candidate(region);
+    uint obj_size_in_regions = checked_cast<uint>(humongous_obj_size_in_regions(obj->size()));
+    for (uint i = 0; i < obj_size_in_regions; i++) {
+      _region_attr.clear_humongous_candidate(region + i);
+    }
   }
 }
 

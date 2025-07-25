@@ -603,7 +603,7 @@ public:
   inline void set_humongous_is_live(oop obj);
 
   // Register the given region to be part of the collection set.
-  inline void register_humongous_candidate_region_with_region_attr(uint index);
+  inline void register_humongous_candidate_region_with_region_attr(uint index, uint num_regions);
 
   void set_humongous_metadata(G1HeapRegion* first_hr,
                               uint num_regions,

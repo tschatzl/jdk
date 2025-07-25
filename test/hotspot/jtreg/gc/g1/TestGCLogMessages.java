@@ -182,7 +182,7 @@ public class TestGCLogMessages {
         new LogMessageWithLevelC2OrJVMCIOnly("Update Derived Pointers", Level.DEBUG),
         new LogMessageWithLevel("Redirty Logged Cards \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Redirtied Cards:", Level.DEBUG),
-        new LogMessageWithLevel("Rebuild Free List:", Level.DEBUG),
+        new LogMessageWithLevel("Rebuild Free List \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Resize TLABs \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Free Collection Set \\(ms\\):", Level.DEBUG),
         new LogMessageWithLevel("Serial Free Collection Set:", Level.TRACE),

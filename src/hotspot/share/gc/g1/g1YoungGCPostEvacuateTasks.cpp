@@ -392,6 +392,11 @@ public:
     }
 
     G1HeapRegion* r = _g1h->region_at(region_index);
+    // Use the starts humongous regions as representative of the entire
+    // humongous object.
+    if (!r->is_starts_humongous()) {
+      return false;
+    }
 
     oop obj = cast_to_oop(r->bottom());
     guarantee(obj->is_typeArray(),
@@ -414,7 +419,6 @@ public:
 
     auto free_humongous_region = [&] (G1HeapRegion* r) {
       _freed_bytes += r->used();
-      r->set_containing_set(nullptr);
       _humongous_regions_reclaimed++;
       G1HeapRegionPrinter::eager_reclaim(r);
       _g1h->free_humongous_region(r, nullptr);
@@ -961,7 +965,7 @@ bool G1PostEvacuateCollectionSetCleanupTask2::WillBeFreeHeapRegionClosure::do_he
     (G1CollectedHeap::heap()->is_in_cset(r) && !_evac_failure_regions->contains(r->hrm_index())) ||
     // While is_reclaimable() accepts any region, only the humongous starts region is tracked wrt humongous eager
     // reclaim. However all regions covered by of the humongous object will get freed during reclamation.
-    (r->is_humongous() && G1FreeHumongousRegionClosure::is_reclaimable(r->humongous_start_region()->hrm_index()));
+    G1FreeHumongousRegionClosure::is_reclaimable(r->hrm_index());
 }
 
 G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2(G1ParScanThreadStateSet* per_thread_states,

@@ -386,7 +386,8 @@ class G1PrepareEvacuationTask : public WorkerTask {
 
       uint index = hr->hrm_index();
       if (humongous_region_is_candidate(hr)) {
-        _g1h->register_humongous_candidate_region_with_region_attr(index);
+        uint obj_size_in_regions = checked_cast<uint>(_g1h->humongous_obj_size_in_regions(cast_to_oop(hr->bottom())->size()));
+        _g1h->register_humongous_candidate_region_with_region_attr(index, obj_size_in_regions);
         _worker_humongous_candidates++;
         // We will later handle the remembered sets of these regions.
       } else {

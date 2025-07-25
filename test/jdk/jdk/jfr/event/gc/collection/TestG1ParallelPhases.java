@@ -107,7 +107,7 @@ public class TestG1ParallelPhases {
             "Termination",
             "RedirtyCards",
             "RecalculateUsed",
-            "RebuildFreeList"
+            "RebuildFreeList",
             "ResizeTLABs",
             "FreeCSet",
             "UpdateDerivedPointers",
@@ -117,7 +117,6 @@ public class TestG1ParallelPhases {
             "MergePSS",
             "NonYoungFreeCSet",
             "YoungFreeCSet",
-            "RebuildFreeList",
             "SampleCandidates",
             "ResetMarkingState",
             "NoteStartOfMark"
