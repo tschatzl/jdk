@@ -772,7 +772,7 @@ void G1CollectedHeap::prepare_heap_for_full_collection() {
   // set between the last GC or pause and now. We need to clear the
   // incremental collection set and then start rebuilding it afresh
   // after this full GC.
-  abandon_collection_set(collection_set());
+  abandon_collection_set();
 
   _hrm.remove_all_free_regions();
 }
@@ -2447,6 +2447,17 @@ void G1CollectedHeap::update_perf_counter_cpu_time() {
 void G1CollectedHeap::start_new_collection_set() {
   collection_set()->start_incremental_building();
 
+  assert(policy()->collector_state()->in_full_gc() ||
+         young_regions_cardset()->occupied() == policy()->num_young_rem_set_cards_at_start(),
+         "Should not add cards to young gen remembered set during young GC, but "
+         "changed from %zu at start to %zu now.",
+         policy()->num_young_rem_set_cards_at_start(), young_regions_cardset()->occupied());
+  // Clear current young only collection set. As cards will be refined, they will
+  // be added to the remembered set.
+  // It is fine to clear it this late - evacuation does not add any remembered sets
+  // by itself, but only mark cards.
+  young_regions_cset_group()->clear();
+
   clear_region_attr();
 
   guarantee(_eden.length() == 0, "eden should have been cleared");
@@ -2793,22 +2804,20 @@ public:
   }
 };
 
-void G1CollectedHeap::abandon_collection_set(G1CollectionSet* collection_set) {
+void G1CollectedHeap::abandon_collection_set() {
   G1AbandonCollectionSetClosure cl;
   collection_set_iterate_all(&cl);
 
-  collection_set->clear();
-  collection_set->stop_incremental_building();
+  collection_set()->clear();
+  collection_set()->stop_incremental_building();
+
+  collection_set()->abandon_all_candidates();
+
+  young_regions_cset_group()->clear();
 }
 
 bool G1CollectedHeap::is_old_gc_alloc_region(G1HeapRegion* hr) {
   return _allocator->is_retained_old_region(hr);
-}
-
-void G1CollectedHeap::set_region_short_lived_locked(G1HeapRegion* hr) {
-  _eden.add(hr);
-  _policy->set_region_eden(hr);
-  young_regions_cset_group()->add(hr);
 }
 
 #ifdef ASSERT
@@ -2959,9 +2968,13 @@ G1HeapRegion* G1CollectedHeap::new_mutator_alloc_region(size_t word_size,
                                                 false /* do_expand */,
                                                 node_index);
     if (new_alloc_region != nullptr) {
-      set_region_short_lived_locked(new_alloc_region);
-      G1HeapRegionPrinter::alloc(new_alloc_region);
+      new_alloc_region->set_eden();
+      _eden.add(new_alloc_region);
+      _policy->set_region_eden(new_alloc_region);
       _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+      // Install the group cardset.
+      young_regions_cset_group()->add(new_alloc_region);
+      G1HeapRegionPrinter::alloc(new_alloc_region);
       return new_alloc_region;
     }
   }

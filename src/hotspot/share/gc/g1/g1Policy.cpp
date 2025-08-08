@@ -67,7 +67,7 @@ G1Policy::G1Policy(STWGCTimer* gc_timer) :
   _reserve_regions(0),
   _young_gen_sizer(),
   _free_regions_at_end_of_collection(0),
-  _card_rs_length(0),
+  DEBUG_ONLY(_num_young_rem_set_cards_at_start(0) COMMA)
   _pending_cards_at_gc_start(0),
   _concurrent_start_to_mixed(),
   _collection_set(nullptr),
@@ -570,7 +570,6 @@ void G1Policy::record_full_collection_start() {
   // Release the future to-space so that it is available for compaction into.
   collector_state()->set_in_young_only_phase(false);
   collector_state()->set_in_full_gc(true);
-  _collection_set->abandon_all_candidates();
   _pending_cards_at_gc_start = 0;
 }
 
@@ -927,7 +926,7 @@ void G1Policy::record_young_collection_end(bool concurrent_operation_is_full_mar
     _analytics->report_constant_other_time_ms(constant_other_time_ms(pause_time_ms));
 
     _analytics->report_pending_cards((double)pending_cards_at_gc_start(), is_young_only_pause);
-    _analytics->report_card_rs_length((double)_card_rs_length, is_young_only_pause);
+    _analytics->report_card_rs_length((double)_g1h->young_regions_cardset()->occupied(), is_young_only_pause);
     _analytics->report_code_root_rs_length((double)total_code_roots_scanned, is_young_only_pause);
   }
 
