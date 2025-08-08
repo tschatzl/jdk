@@ -2445,18 +2445,7 @@ void G1CollectedHeap::update_perf_counter_cpu_time() {
 }
 
 void G1CollectedHeap::start_new_collection_set() {
-  collection_set()->start_incremental_building();
-
-  assert(policy()->collector_state()->in_full_gc() ||
-         young_regions_cardset()->occupied() == policy()->num_young_rem_set_cards_at_start(),
-         "Should not add cards to young gen remembered set during young GC, but "
-         "changed from %zu at start to %zu now.",
-         policy()->num_young_rem_set_cards_at_start(), young_regions_cardset()->occupied());
-  // Clear current young only collection set. As cards will be refined, they will
-  // be added to the remembered set.
-  // It is fine to clear it this late - evacuation does not add any remembered sets
-  // by itself, but only mark cards.
-  young_regions_cset_group()->clear();
+  collection_set()->start();
 
   clear_region_attr();
 
@@ -2808,12 +2797,7 @@ void G1CollectedHeap::abandon_collection_set() {
   G1AbandonCollectionSetClosure cl;
   collection_set_iterate_all(&cl);
 
-  collection_set()->clear();
-  collection_set()->stop_incremental_building();
-
-  collection_set()->abandon_all_candidates();
-
-  young_regions_cset_group()->clear();
+  collection_set()->abandon();
 }
 
 bool G1CollectedHeap::is_old_gc_alloc_region(G1HeapRegion* hr) {
@@ -3173,10 +3157,4 @@ void G1CollectedHeap::start_codecache_marking_cycle_if_inactive(bool concurrent_
 void G1CollectedHeap::finish_codecache_marking_cycle() {
   CodeCache::on_gc_marking_cycle_finish();
   CodeCache::arm_all_nmethods();
-}
-
-void G1CollectedHeap::prepare_group_cardsets_for_scan() {
-  young_regions_cardset()->reset_table_scanner_for_groups();
-
-  collection_set()->prepare_for_scan();
 }
