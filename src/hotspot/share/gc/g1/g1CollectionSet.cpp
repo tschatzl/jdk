@@ -68,7 +68,8 @@ G1CollectionSet::G1CollectionSet(G1CollectedHeap* g1h, G1Policy* policy) :
   _optional_groups(),
   DEBUG_ONLY(_inc_build_state(CSetBuildType::Inactive) COMMA)
   _regions_inc_part_start(0),
-  _groups_inc_part_start(0) {
+  _groups_inc_part_start(0)
+  DEBUG_ONLY(COMMA _num_young_rem_set_cards_at_start(0)) {
 }
 
 G1CollectionSet::~G1CollectionSet() {
@@ -99,12 +100,21 @@ void G1CollectionSet::initialize(uint max_region_length) {
   _candidates.initialize(max_region_length);
 }
 
+void G1CollectionSet::abandon() {
+  clear();
+  _g1h->young_regions_cset_group()->clear();
+
+  stop_incremental_building();
+  abandon_all_candidates();
+}
+
 void G1CollectionSet::abandon_all_candidates() {
   _candidates.clear();
   _initial_old_region_length = 0;
 }
 
 void G1CollectionSet::prepare_for_scan () {
+  _g1h->young_regions_cset_group()->card_set()->reset_table_scanner_for_groups();
   _groups.prepare_for_scan();
 }
 
@@ -127,12 +137,19 @@ void G1CollectionSet::add_old_region(G1HeapRegion* hr) {
   _g1h->old_set_remove(hr);
 }
 
-void G1CollectionSet::start_incremental_building() {
-  assert(_collection_set_cur_length == 0, "Collection set must be empty before starting a new collection set.");
-  assert(selected_groups_cur_length() == 0, "Collection set groups must be empty before starting a new collection set.");
+void G1CollectionSet::start() {
+  assert(_regions_cur_length == 0, "Collection set must be empty before starting a new collection set.");
+  assert(groups_cur_length() == 0, "Collection set groups must be empty before starting a new collection set.");
   assert(_optional_groups.length() == 0, "Collection set optional gorups must be empty before starting a new collection set.");
 
   continue_incremental_building();
+
+  G1CSetCandidateGroup* young_group = _g1h->young_regions_cset_group();
+  // Before clearing the current young collection set, verify that no cards
+  // were added during the garbage collection.
+  assert(young_group->card_set()->occupied() == _num_young_rem_set_cards_at_start, "must be");
+  young_group->clear();
+  _num_young_rem_set_cards_at_start = 0;
 }
 
 void G1CollectionSet::continue_incremental_building() {
@@ -300,7 +317,7 @@ void G1CollectionSet::print(outputStream* st) {
 // pinned by JNI) to allow faster future evacuation. We already "paid" for this work
 // when sizing the young generation.
 double G1CollectionSet::finalize_young_part(double target_pause_time_ms, G1SurvivorRegions* survivors) {
-  assert(_inc_build_state == Active, "Precondition");
+  assert(_inc_build_state == CSetBuildType::Active, "Precondition");
   assert(SafepointSynchronize::is_at_safepoint(), "should be at a safepoint");
 
   Ticks start_time = Ticks::now();
@@ -323,7 +340,10 @@ double G1CollectionSet::finalize_young_part(double target_pause_time_ms, G1Survi
 
   verify_young_cset_indices();
 
-  double predicted_base_time_ms = _policy->predict_base_time_ms(pending_cards, _g1h->young_regions_cardset()->occupied());
+  size_t num_cards_in_young_rem_set = _g1h->young_regions_cset_group()->cards_occupied();
+  DEBUG_ONLY(_num_young_rem_set_cards_at_start = num_cards_in_young_rem_set);
+
+  double predicted_base_time_ms = _policy->predict_base_time_ms(pending_cards, num_cards_in_young_rem_set);
   // Base time already includes the whole remembered set related time, so do not add that here
   // again.
   double predicted_eden_time = _policy->predict_young_region_other_time_ms(eden_region_length) +
