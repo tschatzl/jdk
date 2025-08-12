@@ -25,11 +25,11 @@
 #include "gc/g1/g1BarrierSet.hpp"
 #include "gc/g1/g1BatchedTask.hpp"
 #include "gc/g1/g1BlockOffsetTable.inline.hpp"
-#include "gc/g1/g1CardSet.inline.hpp"
 #include "gc/g1/g1CardTable.inline.hpp"
 #include "gc/g1/g1CardTableEntryClosure.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1CollectionSet.inline.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1ConcurrentRefine.hpp"
 #include "gc/g1/g1DirtyCardQueue.hpp"
 #include "gc/g1/g1FromCardCache.hpp"
@@ -893,9 +893,9 @@ void G1RemSet::assert_scan_top_is_null(uint hrm_index) {
 void G1RemSet::prepare_region_for_scan(G1HeapRegion* r) {
   uint hrm_index = r->hrm_index();
 
-  r->prepare_remset_for_scan();
+  r->prepare_rem_set_for_scan(); // Code roots preparation.
 
-  // Only update non-collection set old regions, others must have already been set
+  // Only update non-collection set, others must have already been set
   // to null (don't scan) in the initialization.
   if (r->in_collection_set()) {
     assert_scan_top_is_null(hrm_index);
@@ -1162,7 +1162,7 @@ class G1MergeHeapRootsTask : public WorkerTask {
         // remembered sets for this region.
         // We want to continue collecting remembered set entries for humongous regions
         // that were not reclaimed.
-        r->rem_set()->clear(true /* only_cardset */, true /* keep_tracked */);
+        r->rem_set()->clear(true /* only_cardset */);
       }
 
       // Postcondition
@@ -1308,6 +1308,14 @@ public:
   }
 
   ~G1MergeHeapRootsTask() {
+    if (_initial_evacuation) {
+      // FIXME: move
+      // Clear humongous candidates remembered set.
+      for (G1CSetCandidateGroup* gr : *G1CollectedHeap::heap()->collection_set()->humongous_groups()) {
+        gr->clear(false /* uninstall_group_cardset */);
+      }
+    }
+
     if (_dirty_card_buffers != nullptr) {
       using Stack = BufferNode::Stack;
       for (uint i = 0; i < _num_workers; i++) {
@@ -1338,10 +1346,19 @@ public:
 
           G1GCParPhaseTimesTracker subphase_x(p, G1GCPhaseTimes::MergeER, worker_id);
 
-          G1FlushHumongousCandidateRemSets cl(_scan_state);
-          g1h->heap_region_iterate(&cl);
-          G1MergeCardSetStats stats = cl.stats();
+          G1MergeCardSetClosure cl(_scan_state);
 
+          for (G1CSetCandidateGroup* gr: *g1h->collection_set()->humongous_groups()) {
+            G1HeapRegion* r = gr->first().r();
+            assert(g1h->region_attr(r->hrm_index()).is_humongous_candidate(), "must be");
+
+            if (!gr->card_rem_set()->is_empty()) {
+              G1HeapRegionRemSet::iterate_for_merge(gr->card_rem_set(), cl);
+              gr->card_rem_set()->clear_rem_set_contents();
+            }
+          }
+
+          G1MergeCardSetStats stats = cl.stats();
           for (uint i = 0; i < G1GCPhaseTimes::MergeRSContainersSentinel; i++) {
             p->record_or_add_thread_work_item(merge_remset_phase, worker_id, stats.merged(i), i);
           }

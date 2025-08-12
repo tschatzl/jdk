@@ -25,6 +25,7 @@
 #ifndef SHARE_GC_G1_G1REMSETTRACKINGPOLICY_HPP
 #define SHARE_GC_G1_G1REMSETTRACKINGPOLICY_HPP
 
+#include "gc/g1/g1CardRemSet.hpp"
 #include "gc/g1/g1HeapRegion.hpp"
 #include "gc/g1/g1HeapRegionType.hpp"
 #include "memory/allocation.hpp"
@@ -34,21 +35,27 @@
 // set is complete.
 class G1RemSetTrackingPolicy : public CHeapObj<mtGC> {
 public:
+  enum Result : uint {
+    Remove,
+    Keep,
+    SetUpdating,
+    SetComplete
+  };
   // Update remembered set tracking state at allocation of the region. May be
   // called at any time. The caller makes sure that the changes to the remembered
   // set state are visible to other threads.
-  void update_at_allocate(G1HeapRegion* r);
+  Result update_at_allocate(G1HeapRegion* r);
   // Update remembered set tracking state for humongous regions before we are going to
   // rebuild remembered sets. Called at safepoint in the remark pause.
-  bool update_humongous_before_rebuild(G1HeapRegion* r);
+  Result update_humongous_before_rebuild(G1HeapRegion* r);
   // Update remembered set tracking state for old regions before we are going
   // to rebuild remembered sets. Called at safepoint in the remark pause.
-  bool update_old_before_rebuild(G1HeapRegion* r);
+  Result update_old_before_rebuild(G1HeapRegion* r);
   // Update remembered set tracking state after rebuild is complete, i.e. the cleanup
   // pause. Called at safepoint.
-  void update_after_rebuild(G1HeapRegion* r);
+  Result update_after_rebuild(G1HeapRegion* r);
   // Update remembered set tracking state when the region is freed.
-  void update_at_free(G1HeapRegion* r);
+  Result update_at_free(G1HeapRegion* r);
 };
 
 #endif // SHARE_GC_G1_G1REMSETTRACKINGPOLICY_HPP

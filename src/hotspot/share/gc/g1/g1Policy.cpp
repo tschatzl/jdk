@@ -523,7 +523,7 @@ double G1Policy::predict_retained_regions_evac_time() const {
 
   for (G1CSetCandidateGroup* group : *retained_groups) {
     assert(group->length() == 1, "We should only have one region in a retained group");
-    G1HeapRegion* r = group->region_at(0); // We only have one region per group.
+    G1HeapRegion* r = group->first().r(); // We only have one region per group.
     // We optimistically assume that any of these marking candidate regions will
     // be reclaimable the next gc, so just consider them as normal.
     if (r->has_pinned_objects()) {

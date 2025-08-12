@@ -41,8 +41,8 @@ class G1HeapRegionClosure;
 
 // The collection set.
 //
-// The set of regions and candidate groups that were evacuated during an
-// evacuation pause.
+// The set of regions that are evacuated during an evacuation pause and their
+// associated remembered sets.
 //
 // At the end of a collection, before freeing it, this set contains all regions
 // and collection set groups that were evacuated during this collection:
@@ -152,9 +152,12 @@ class G1CollectionSet {
   volatile uint _regions_cur_length;
 
   // Old gen groups selected for evacuation.
-  G1CSetCandidateGroupList _groups;
+  G1CSetCandidateGroupList _old_groups;
 
-  uint groups_cur_length() const;
+  uint old_groups_cur_length() const;
+
+  // Humongous region groups selected for eager reclaim.
+  G1CSetCandidateGroupList _humongous_groups;
 
   uint _eden_region_length;
   uint _survivor_region_length;
@@ -187,17 +190,20 @@ class G1CollectionSet {
 
   void verify_young_cset_indices() const NOT_DEBUG_RETURN;
 
+  // Update the incremental collection set information when adding a region.
   void add_young_region_common(G1HeapRegion* hr);
+
+public:
 
   // Add the given old region to the current collection set.
   void add_old_region(G1HeapRegion* hr);
 
   void prepare_optional_group(G1CSetCandidateGroup* gr, uint cur_index);
 
-  void add_group_to_collection_set(G1CSetCandidateGroup* gr);
+  void add_group_to_old(G1CSetCandidateGroup* gr);
+  void add_group_to_humongous(G1CSetCandidateGroup* gr);
 
-  void add_region_to_collection_set(G1HeapRegion* r);
-
+public:
   double select_candidates_from_marking(double time_remaining_ms);
 
   void select_candidates_from_retained(double time_remaining_ms);
@@ -216,6 +222,7 @@ class G1CollectionSet {
   // and retained collection set candidates.
   void finalize_old_part(double time_remaining_ms);
 
+  void finalize_humongous_part();
   // Iterate the part of the collection set given by the offset and length applying the given
   // G1HeapRegionClosure. The worker_id will determine where in the part to start the iteration
   // to allow for more efficient parallel iteration.
@@ -242,6 +249,9 @@ public:
   const G1CollectionSetCandidates* candidates() const { return &_candidates; }
 
   void prepare_for_scan();
+
+  G1CSetCandidateGroupList* humongous_groups() { return &_humongous_groups; }
+  const G1CSetCandidateGroupList* humongous_groups() const { return &_humongous_groups; }
 
   void init_region_lengths(uint eden_cset_region_length,
                            uint survivor_cset_region_length);

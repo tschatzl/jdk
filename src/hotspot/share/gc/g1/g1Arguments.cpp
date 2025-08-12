@@ -30,7 +30,7 @@
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1HeapRegion.hpp"
 #include "gc/g1/g1HeapRegionBounds.inline.hpp"
-#include "gc/g1/g1HeapRegionRemSet.hpp"
+#include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/g1/g1HeapVerifier.hpp"
 #include "gc/shared/cardTable.hpp"
 #include "gc/shared/fullGCForwarding.hpp"

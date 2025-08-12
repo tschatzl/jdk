@@ -46,8 +46,8 @@ class G1HeapRegionRemSet : public CHeapObj<mtGC> {
   // the region that owns this RSet.
   G1CodeRootSet _code_roots;
 
-  // The collection set groups to which the region owning this RSet is assigned.
-  G1CSetCandidateGroup* _cset_group;
+  // The card based remembered set for this region.
+  G1CardRemSet* _card_rem_set;
 
   G1HeapRegion* _hr;
 
@@ -56,57 +56,32 @@ class G1HeapRegionRemSet : public CHeapObj<mtGC> {
 
   void clear_fcc();
 
-  G1CardSet* card_set() {
-    assert(is_added_to_cset_group(), "pre-condition");
-    return cset_group()->card_set();
-  }
-
-  const G1CardSet* card_set() const {
-    assert(is_added_to_cset_group(), "pre-condition");
-    return cset_group()->card_set();
-  }
-
+  inline bool card_rem_set_is_empty() const;
+  
 public:
   G1HeapRegionRemSet(G1HeapRegion* hr);
   ~G1HeapRegionRemSet();
 
-  bool cardset_is_empty() const {
-    return !is_added_to_cset_group() || card_set()->is_empty();
-  }
+  inline bool has_card_rem_set() const;
 
-  void install_cset_group(G1CSetCandidateGroup* cset_group) {
-    assert(cset_group != nullptr, "pre-condition");
-    assert(_cset_group == nullptr, "pre-condition");
+  inline G1CardRemSet* card_rem_set();
+  inline const G1CardRemSet* card_rem_set() const;
 
-    _cset_group = cset_group;
-  }
+  inline bool has_single_region_card_rem_set() const;
 
-  void uninstall_cset_group();
+  inline bool is_tracked() const; // FIXME: renames?
+  inline bool is_updating() const;
+  inline bool is_complete() const;
 
-  bool is_added_to_cset_group() const {
-    return _cset_group != nullptr;
-  }
+  inline void set_state_untracked();
+  inline void set_state_updating();
+  inline void set_state_complete(); // FIXME: renames until here
 
-  G1CSetCandidateGroup* cset_group() {
-    return _cset_group;
-  }
+  void install_card_rem_set(G1CardRemSet* card_rem_set);
+  void uninstall_card_rem_set();
 
-  const G1CSetCandidateGroup* cset_group() const {
-    return _cset_group;
-  }
-
-  uint cset_group_id() const {
-    assert(is_added_to_cset_group(), "pre-condition");
-    return cset_group()->group_id();
-  }
-
-  bool is_empty() const {
-    return (code_roots_list_length() == 0) && cardset_is_empty();
-  }
-
-  bool occupancy_less_or_equal_than(size_t occ) const {
-    return (code_roots_list_length() == 0) && card_set()->occupancy_less_or_equal_to(occ);
-  }
+  inline bool is_empty() const;
+  inline bool occupancy_less_or_equal_than(size_t occ) const;
 
   // Iterate the card based remembered set for merging them into the card table.
   // The passed closure must be a CardOrRangeVisitor; we use a template parameter
@@ -115,13 +90,9 @@ public:
   inline void iterate_for_merge(CardOrRangeVisitor& cl);
 
   template <class CardOrRangeVisitor>
-  inline static void iterate_for_merge(G1CardSet* card_set, CardOrRangeVisitor& cl);
+  inline static void iterate_for_merge(G1CardRemSet* card_rem_set, CardOrRangeVisitor& cl);
 
-  size_t occupied() {
-    assert(is_added_to_cset_group(), "pre-condition");
-    return card_set()->occupied();
-  }
-
+  inline size_t occupied();
 
   static void initialize(MemRegion reserved);
 
@@ -130,35 +101,11 @@ public:
 
   inline uintptr_t to_card(OopOrNarrowOopStar from) const;
 
-private:
-  enum RemSetState {
-    Untracked,
-    Updating,
-    Complete
-  };
-
-  RemSetState _state;
-
-  static const char* _state_strings[];
-  static const char* _short_state_strings[];
-public:
-
-  const char* get_state_str() const { return _state_strings[_state]; }
-  const char* get_short_state_str() const { return _short_state_strings[_state]; }
-
-  bool is_tracked() { return _state != Untracked; }
-  bool is_updating() { return _state == Updating; }
-  bool is_complete() { return _state == Complete; }
-
-  inline void set_state_untracked();
-  inline void set_state_updating();
-  inline void set_state_complete();
-
   inline void add_reference(OopOrNarrowOopStar from, uint tid);
 
   // The region is being reclaimed; clear its remset, and any mention of
   // entries for this region in other remsets.
-  void clear(bool only_cardset = false, bool keep_tracked = false);
+  void clear(bool only_cardset = false);
 
   void reset_table_scanner();
 
@@ -180,7 +127,7 @@ public:
 
   inline bool contains_reference(OopOrNarrowOopStar from);
 
-  inline void print_info(outputStream* st, OopOrNarrowOopStar from);
+  //inline void print_info(outputStream* st, OopOrNarrowOopStar from);
 
   // Routines for managing the list of code roots that point into
   // the heap region that owns this RSet.

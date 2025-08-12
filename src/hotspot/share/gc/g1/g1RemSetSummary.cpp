@@ -23,8 +23,10 @@
  */
 
 #include "gc/g1/g1BarrierSet.hpp"
+#include "gc/g1/g1CardRemSet.inline.hpp"
 #include "gc/g1/g1CardSetMemory.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1ConcurrentRefine.hpp"
 #include "gc/g1/g1ConcurrentRefineThread.hpp"
 #include "gc/g1/g1DirtyCardQueue.hpp"
@@ -228,8 +230,8 @@ public:
 
     // Accumulate card set details for regions that are assigned to single region
     // groups. G1HeapRegionRemSet::mem_size() includes the size of the code roots
-    if (hrrs->is_added_to_cset_group() && hrrs->cset_group()->length() == 1) {
-      G1CardSet* card_set = hrrs->cset_group()->card_set();
+    if (hrrs->has_single_region_card_rem_set()) {
+      G1CardRemSet* card_set = hrrs->card_rem_set();
 
       rs_mem_sz = hrrs->mem_size() + card_set->mem_size();
       rs_unused_mem_sz = card_set->unused_mem_size();
@@ -272,7 +274,7 @@ public:
     // If the group has only a single region, then stats were accumulated
     // during region iteration. Skip these.
     if (group->length() > 1) {
-      G1CardSet* card_set = group->card_set();
+      G1CardRemSet* card_set = group->card_rem_set();
 
       size_t rs_mem_sz = card_set->mem_size();
       size_t rs_unused_mem_sz = card_set->unused_mem_size();
@@ -337,9 +339,9 @@ public:
       G1CSetCandidateGroup* cset_group = max_cardset_mem_sz_group();
       out->print_cr("    Collectionset Candidate Group with largest cardset = %u:(%u regions), "
                     "size = %zu occupied = %zu",
-                    cset_group->group_id(), cset_group->length(),
-                    cset_group->card_set()->mem_size(),
-                    cset_group->card_set()->occupied());
+                    cset_group->id(), cset_group->length(),
+                    cset_group->card_rem_set()->mem_size(),
+                    cset_group->card_rem_set()->occupied());
     }
 
     G1HeapRegionRemSet::print_static_mem_size(out);

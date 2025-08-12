@@ -26,6 +26,7 @@
 #define SHARE_GC_G1_G1COLLECTIONSETCHOOSER_HPP
 
 #include "gc/g1/g1HeapRegion.hpp"
+#include "gc/g1/g1RemSetTrackingPolicy.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "memory/allStatic.hpp"
 #include "runtime/globals.hpp"
@@ -36,6 +37,8 @@ class WorkerThreads;
 // Helper class to calculate collection set candidates, and containing some related
 // methods.
 class G1CollectionSetChooser : public AllStatic {
+  using TrackingResult = G1RemSetTrackingPolicy::Result;
+
   static uint calculate_work_chunk_size(uint num_workers, uint num_regions);
 
 public:
@@ -49,7 +52,10 @@ public:
 
   // Build and return set of collection set candidates sorted by decreasing gc
   // efficiency.
-  static void build(WorkerThreads* workers, uint max_num_regions, G1CollectionSetCandidates* candidates);
+  static void build(WorkerThreads* workers,
+                    uint max_num_regions,
+                    TrackingResult const* rem_set_updates,
+                    G1CollectionSetCandidates* candidates);
 };
 
 #endif // SHARE_GC_G1_G1COLLECTIONSETCHOOSER_HPP

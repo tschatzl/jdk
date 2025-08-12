@@ -25,7 +25,7 @@
 #include "ci/ciUtilities.hpp"
 #include "gc/g1/g1CardSetMemory.inline.hpp"
 #include "gc/g1/g1CollectedHeap.hpp"
-#include "gc/g1/g1HeapRegionRemSet.hpp"
+#include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/g1/g1MonotonicArenaFreeMemoryTask.hpp"
 #include "gc/g1/g1MonotonicArenaFreePool.hpp"
 #include "gc/shared/gc_globals.hpp"
@@ -193,11 +193,13 @@ void G1MonotonicArenaFreeMemoryTask::execute() {
 }
 
 void G1MonotonicArenaFreeMemoryTask::notify_new_stats(G1MonotonicArenaMemoryStats* young_gen_stats,
-                                                      G1MonotonicArenaMemoryStats* collection_set_candidate_stats) {
+                                                      G1MonotonicArenaMemoryStats* collection_set_candidate_stats,
+                                                      G1MonotonicArenaMemoryStats* humongous_card_set_stats) {
   assert_at_safepoint_on_vm_thread();
 
   _total_used = *young_gen_stats;
   _total_used.add(*collection_set_candidate_stats);
+  _total_used.add(*humongous_card_set_stats);
 
   if (!is_active()) {
     set_state(State::CalculateUsed);

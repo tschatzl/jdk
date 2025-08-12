@@ -101,14 +101,15 @@ void G1HeapRegion::setup_heap_region_size(size_t max_heap_size) {
   }
 }
 
-void G1HeapRegion::handle_evacuation_failure(bool retain) {
+void G1HeapRegion::handle_evacuation_failure() {
   uninstall_surv_rate_group();
   clear_young_index_in_cset();
   clear_index_in_opt_cset();
   move_to_old();
 
   _rem_set->clean_code_roots(this);
-  _rem_set->clear(true /* only_cardset */, retain /* keep_tracked */);
+  _rem_set->uninstall_card_rem_set();
+  _rem_set->clear(true /* only_cardset */);
 }
 
 void G1HeapRegion::unlink_from_list() {
@@ -122,10 +123,10 @@ void G1HeapRegion::hr_clear(bool clear_space) {
   clear_young_index_in_cset();
   clear_index_in_opt_cset();
   uninstall_surv_rate_group();
-  uninstall_cset_group();
   set_free();
   reset_pre_dummy_top();
 
+  rem_set()->uninstall_card_rem_set();
   rem_set()->clear();
 
   G1CollectedHeap::heap()->concurrent_mark()->reset_top_at_mark_start(this);
@@ -184,9 +185,6 @@ void G1HeapRegion::set_starts_humongous(HeapWord* obj_top, size_t fill_size) {
   _type.set_starts_humongous();
   _humongous_start_region = this;
 
-  G1CSetCandidateGroup* cset_group = new G1CSetCandidateGroup();
-  cset_group->add(this);
-
   _bot->update_for_block(bottom(), obj_top);
   if (fill_size > 0) {
     _bot->update_for_block(obj_top, obj_top + fill_size);
@@ -206,21 +204,10 @@ void G1HeapRegion::set_continues_humongous(G1HeapRegion* first_hr) {
 void G1HeapRegion::clear_humongous() {
   assert(is_humongous(), "pre-condition");
 
-  assert(capacity() == G1HeapRegion::GrainBytes, "pre-condition");
-  if (is_starts_humongous()) {
-    G1CSetCandidateGroup* cset_group = _rem_set->cset_group();
-    assert(cset_group != nullptr, "pre-condition %u missing cardset", hrm_index());
-    uninstall_cset_group();
-    cset_group->clear();
-    delete cset_group;
-  }
   _humongous_start_region = nullptr;
 }
 
-void G1HeapRegion::prepare_remset_for_scan() {
-  if (is_young()) {
-    uninstall_cset_group();
-  }
+void G1HeapRegion::prepare_rem_set_for_scan() {
   _rem_set->reset_table_scanner();
 }
 
@@ -432,7 +419,7 @@ void G1HeapRegion::print_on(outputStream* st) const {
   }
   G1ConcurrentMark* cm = G1CollectedHeap::heap()->concurrent_mark();
   st->print("|TAMS " PTR_FORMAT "| PB " PTR_FORMAT "| %s ",
-            p2i(cm->top_at_mark_start(this)), p2i(parsable_bottom_acquire()), rem_set()->get_state_str());
+            p2i(cm->top_at_mark_start(this)), p2i(parsable_bottom_acquire()), G1CardRemSet::get_state_str(rem_set()->card_rem_set()));
   if (UseNUMA) {
     G1NUMA* numa = G1NUMA::numa();
     if (node_index() < numa->num_active_nodes()) {
@@ -538,7 +525,8 @@ class G1VerifyLiveAndRemSetClosure : public BasicOopIterateClosure {
 
     void print_referenced_obj(outputStream* out, G1HeapRegion* to, const char* explanation) {
       log_error(gc, verify)("points to %sobj " PTR_FORMAT " in region " HR_FORMAT " remset %s",
-                            explanation, p2i(_obj), HR_FORMAT_PARAMS(to), to->rem_set()->get_state_str());
+                            explanation, p2i(_obj), HR_FORMAT_PARAMS(to),
+                            G1CardRemSet::get_state_str(to->rem_set()->card_rem_set()));
       print_object(out, _obj);
     }
   };
@@ -607,7 +595,7 @@ class G1VerifyLiveAndRemSetClosure : public BasicOopIterateClosure {
     bool failed() const {
       if (_from != _to && !_from->is_young() &&
           _to->rem_set()->is_complete() &&
-          _from->rem_set()->cset_group() != _to->rem_set()->cset_group()) {
+          _from->rem_set()->card_rem_set() != _to->rem_set()->card_rem_set()) {
         const CardValue dirty = G1CardTable::dirty_card_val();
         return !(_to->rem_set()->contains_reference(this->_p) ||
                  (this->_containing_obj->is_objArray() ?

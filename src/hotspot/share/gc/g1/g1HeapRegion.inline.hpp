@@ -29,7 +29,9 @@
 
 #include "classfile/vmClasses.hpp"
 #include "gc/g1/g1BlockOffsetTable.inline.hpp"
+#include "gc/g1/g1CardRemSet.inline.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1ConcurrentMarkBitMap.inline.hpp"
 #include "gc/g1/g1MonotonicArena.inline.hpp"
 #include "gc/g1/g1Policy.hpp"
@@ -514,12 +516,12 @@ inline void G1HeapRegion::add_pinned_object_count(size_t value) {
   Atomic::add(&_pinned_object_count, value, memory_order_relaxed);
 }
 
-inline void G1HeapRegion::install_cset_group(G1CSetCandidateGroup* cset_group) {
-  _rem_set->install_cset_group(cset_group);
+inline void G1HeapRegion::install_card_rem_set(G1CardRemSet* card_rem_set) {
+  _rem_set->install_card_rem_set(card_rem_set);
 }
 
-inline void G1HeapRegion::uninstall_cset_group() {
-  _rem_set->uninstall_cset_group();
+inline void G1HeapRegion::uninstall_card_rem_set() {
+  _rem_set->uninstall_card_rem_set();
 }
 
 #endif // SHARE_GC_G1_G1HEAPREGION_INLINE_HPP

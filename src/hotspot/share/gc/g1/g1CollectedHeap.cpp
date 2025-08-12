@@ -33,7 +33,7 @@
 #include "gc/g1/g1BatchedTask.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1CollectionSet.hpp"
-#include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1CollectorState.hpp"
 #include "gc/g1/g1ConcurrentMarkThread.inline.hpp"
 #include "gc/g1/g1ConcurrentRefine.hpp"
@@ -229,10 +229,6 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
   first_hr->hr_clear(false /* clear_space */);
   first_hr->set_starts_humongous(obj_top, words_fillable);
 
-  if (update_remsets) {
-    _policy->remset_tracker()->update_at_allocate(first_hr);
-  }
-
   // Indices of first and last regions in the series.
   uint first = first_hr->hrm_index();
   uint last = first + num_regions - 1;
@@ -242,9 +238,14 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
     hr = region_at(i);
     hr->hr_clear(false /* clear_space */);
     hr->set_continues_humongous(first_hr);
-    if (update_remsets) {
-      _policy->remset_tracker()->update_at_allocate(hr);
-    }
+  }
+
+  if (update_remsets) {
+    G1RemSetTrackingPolicy::Result result = _policy->remset_tracker()->update_at_allocate(first_hr);
+    assert(result == G1RemSetTrackingPolicy::SetComplete, "must be");
+    collection_set()->candidates()->add_humongous_candidates(&first_hr,
+                                                             1,
+                                                             true /* rem_set_is_complete */);
   }
 
   // Up to this point no concurrent thread would have been able to
@@ -1199,7 +1200,7 @@ G1CollectedHeap::G1CollectedHeap() :
   _rem_set(nullptr),
   _card_set_config(),
   _card_set_freelist_pool(G1CardSetConfiguration::num_mem_object_types()),
-  _young_regions_cset_group(card_set_config(), &_card_set_freelist_pool, 1u /* group_id */),
+  _young_regions_cset_group(card_set_config(), &_card_set_freelist_pool, true /* rem_set_complete */, G1CSetCandidateGroup::YoungRegionId),
   _cm(nullptr),
   _cm_thread(nullptr),
   _cr(nullptr),
@@ -2332,7 +2333,8 @@ void G1CollectedHeap::gc_epilogue(bool full) {
   _collection_pause_end = Ticks::now();
 
   _free_arena_memory_task->notify_new_stats(&_young_gen_card_set_stats,
-                                            &_collection_set_candidates_card_set_stats);
+                                            &_collection_set_candidates_card_set_stats,
+                                            &_humongous_card_set_stats);
 
   update_perf_counter_cpu_time();
 }
@@ -2399,6 +2401,67 @@ bool G1CollectedHeap::is_potential_eager_reclaim_candidate(G1HeapRegion* r) cons
   G1HeapRegionRemSet* rem_set = r->rem_set();
 
   return rem_set->occupancy_less_or_equal_than(G1EagerReclaimRemSetThreshold);
+}
+
+bool G1CollectedHeap::is_eager_reclaim_candidate(G1HeapRegion* region) const {
+  assert_at_safepoint();
+  assert(region->is_starts_humongous(), "Must start a humongous object");
+
+  oop obj = cast_to_oop(region->bottom());
+
+  // Dead objects cannot be eager reclaim candidates. Due to class
+  // unloading it is unsafe to query their classes so we return early.
+  if (is_obj_dead(obj, region)) {
+    return false;
+  }
+
+  // If we do not have a complete remembered set for the region, then we can
+  // not be sure that we have all references to it.
+  if (!region->rem_set()->is_complete()) {
+    return false;
+  }
+  // We also cannot collect the humongous object if it is pinned.
+  if (region->has_pinned_objects()) {
+    return false;
+  }
+  // Candidate selection must satisfy the following constraints
+  // while concurrent marking is in progress:
+  //
+  // * In order to maintain SATB invariants, an object must not be
+  // reclaimed if it was allocated before the start of marking and
+  // has not had its references scanned.  Such an object must have
+  // its references (including type metadata) scanned to ensure no
+  // live objects are missed by the marking process.  Objects
+  // allocated after the start of concurrent marking don't need to
+  // be scanned.
+  //
+  // * An object must not be reclaimed if it is on the concurrent
+  // mark stack.  Objects allocated after the start of concurrent
+  // marking are never pushed on the mark stack.
+  //
+  // Nominating only objects allocated after the start of concurrent
+  // marking is sufficient to meet both constraints.  This may miss
+  // some objects that satisfy the constraints, but the marking data
+  // structures don't support efficiently performing the needed
+  // additional tests or scrubbing of the mark stack.
+  //
+  // However, we presently only nominate is_typeArray() objects.
+  // A humongous object containing references induces remembered
+  // set entries on other regions.  In order to reclaim such an
+  // object, those remembered sets would need to be cleaned up.
+  //
+  // We also treat is_typeArray() objects specially, allowing them
+  // to be reclaimed even if allocated before the start of
+  // concurrent mark.  For this we rely on mark stack insertion to
+  // exclude is_typeArray() objects, preventing reclaiming an object
+  // that is in the mark stack.  We also rely on the metadata for
+  // such objects to be built-in and so ensured to be kept live.
+  // Frequent allocation and drop of large binary blobs is an
+  // important use case for eager reclaim, and this special handling
+  // may reduce needed headroom.
+
+  return obj->is_typeArray() &&
+         is_potential_eager_reclaim_candidate(region);
 }
 
 #ifndef PRODUCT
@@ -2685,12 +2748,16 @@ bool G1CollectedHeap::should_sample_collection_set_candidates() const {
   return !candidates->is_empty();
 }
 
-void G1CollectedHeap::set_collection_set_candidates_stats(G1MonotonicArenaMemoryStats& stats) {
+void G1CollectedHeap::set_young_gen_card_set_stats(const G1MonotonicArenaMemoryStats& stats) {
+  _young_gen_card_set_stats = stats;
+}
+
+void G1CollectedHeap::set_collection_set_candidates_stats(const G1MonotonicArenaMemoryStats& stats) {
   _collection_set_candidates_card_set_stats = stats;
 }
 
-void G1CollectedHeap::set_young_gen_card_set_stats(const G1MonotonicArenaMemoryStats& stats) {
-  _young_gen_card_set_stats = stats;
+void G1CollectedHeap::set_humongous_candidates_stats(const G1MonotonicArenaMemoryStats& stats) {
+  _humongous_card_set_stats = stats;
 }
 
 void G1CollectedHeap::record_obj_copy_mem_stats() {
@@ -2722,7 +2789,9 @@ void G1CollectedHeap::free_region(G1HeapRegion* hr, G1FreeRegionList* free_list)
 
   // Reset region metadata to allow reuse.
   hr->hr_clear(true /* clear_space */);
-  _policy->remset_tracker()->update_at_free(hr);
+  G1RemSetTrackingPolicy::Result result = _policy->remset_tracker()->update_at_free(hr);
+  assert(result == G1RemSetTrackingPolicy::Remove, "must be");
+  hr->uninstall_card_rem_set();
 
   if (free_list != nullptr) {
     free_list->add_ordered(hr);
@@ -2765,10 +2834,6 @@ void G1CollectedHeap::decrement_summary_bytes(size_t bytes) {
 
 void G1CollectedHeap::clear_eden() {
   _eden.clear();
-}
-
-void G1CollectedHeap::clear_collection_set() {
-  collection_set()->clear();
 }
 
 void G1CollectedHeap::rebuild_free_region_list() {
@@ -2937,7 +3002,7 @@ void G1CollectedHeap::rebuild_region_sets(bool free_list_only) {
 // Methods for the mutator alloc region
 
 G1HeapRegion* G1CollectedHeap::new_mutator_alloc_region(size_t word_size,
-                                                      uint node_index) {
+                                                        uint node_index) {
   assert_heap_locked_or_at_safepoint(true /* should_be_vm_thread */);
   bool should_allocate = policy()->should_allocate_mutator_region();
   if (should_allocate) {
@@ -2951,6 +3016,8 @@ G1HeapRegion* G1CollectedHeap::new_mutator_alloc_region(size_t word_size,
       _policy->set_region_eden(new_alloc_region);
       _policy->remset_tracker()->update_at_allocate(new_alloc_region);
       // Install the group cardset.
+      G1RemSetTrackingPolicy::Result result = _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+      assert(result == G1RemSetTrackingPolicy::SetComplete, "must be");
       young_regions_cset_group()->add(new_alloc_region);
       G1HeapRegionPrinter::alloc(new_alloc_region);
       return new_alloc_region;
@@ -3009,12 +3076,18 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
       new_alloc_region->set_survivor();
       _survivor.add(new_alloc_region);
       register_new_survivor_region_with_region_attr(new_alloc_region);
-      // Install the group cardset.
+
+      G1RemSetTrackingPolicy::Result result = _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+      assert(result == G1RemSetTrackingPolicy::SetComplete, "must be for Survivor regions");
       young_regions_cset_group()->add(new_alloc_region);
     } else {
       new_alloc_region->set_old();
+
+      G1RemSetTrackingPolicy::Result result = _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+      assert(result == G1RemSetTrackingPolicy::Keep, "must be for Survivor regions");
+      // No need to track, so do not add remembered set (group).
     }
-    _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+
     register_region_with_region_attr(new_alloc_region);
     G1HeapRegionPrinter::alloc(new_alloc_region);
     return new_alloc_region;

@@ -36,7 +36,7 @@
 #include "runtime/mutex.hpp"
 #include "utilities/macros.hpp"
 
-class G1CardSet;
+class G1CardRemSet;
 class G1CardSetConfiguration;
 class G1CollectedHeap;
 class G1CMBitMap;
@@ -435,7 +435,7 @@ public:
 
   inline bool in_collection_set() const;
 
-  void prepare_remset_for_scan();
+  void prepare_rem_set_for_scan();
 
   // Methods used by the G1HeapRegionSetBase class and subclasses.
 
@@ -515,8 +515,8 @@ public:
   void install_surv_rate_group(G1SurvRateGroup* surv_rate_group);
   void uninstall_surv_rate_group();
 
-  void install_cset_group(G1CSetCandidateGroup* cset_group);
-  void uninstall_cset_group();
+  void install_card_rem_set(G1CardRemSet* card_rem_set);
+  void uninstall_card_rem_set();
 
   void record_surv_words_in_group(size_t words_survived);
 
@@ -525,7 +525,7 @@ public:
   inline static bool is_in_parsable_area(const void* const addr, const void* const pb);
 
   // Update the region state after a failed evacuation.
-  void handle_evacuation_failure(bool retain);
+  void handle_evacuation_failure();
 
   // Iterate over the objects overlapping the given memory region, applying cl
   // to all references in the region.  This is a helper for

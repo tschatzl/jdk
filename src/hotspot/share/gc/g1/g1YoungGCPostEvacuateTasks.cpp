@@ -336,11 +336,19 @@ G1PostEvacuateCollectionSetCleanupTask1::G1PostEvacuateCollectionSetCleanupTask1
   }
 }
 
-class G1FreeHumongousRegionClosure : public G1HeapRegionIndexClosure {
-  uint _humongous_objects_reclaimed;
+#if COMPILER2_OR_JVMCI
+class G1PostEvacuateCollectionSetCleanupTask2::UpdateDerivedPointersTask : public G1AbstractSubTask {
+public:
+  UpdateDerivedPointersTask() : G1AbstractSubTask(G1GCPhaseTimes::UpdateDerivedPointers) { }
+
+  double worker_cost() const override { return 1.0; }
+  void do_work(uint worker_id) override {   DerivedPointerTable::update_pointers(); }
+};
+#endif
+
+class G1PostEvacuateCollectionSetCleanupTask2::EagerlyReclaimHumongousObjectsTask : public G1AbstractSubTask {
   uint _humongous_regions_reclaimed;
-  size_t _freed_bytes;
-  G1CollectedHeap* _g1h;
+  size_t _bytes_freed;
 
   // Returns whether the given humongous object defined by the start region index
   // is reclaimable.
@@ -378,80 +386,6 @@ class G1FreeHumongousRegionClosure : public G1HeapRegionIndexClosure {
   }
 
 public:
-  G1FreeHumongousRegionClosure() :
-    _humongous_objects_reclaimed(0),
-    _humongous_regions_reclaimed(0),
-    _freed_bytes(0),
-    _g1h(G1CollectedHeap::heap())
-  {}
-
-  bool do_heap_region_index(uint region_index) override {
-    if (!is_reclaimable(region_index)) {
-      return false;
-    }
-
-    G1HeapRegion* r = _g1h->region_at(region_index);
-
-    oop obj = cast_to_oop(r->bottom());
-    guarantee(obj->is_typeArray(),
-              "Only eagerly reclaiming type arrays is supported, but the object "
-              PTR_FORMAT " is not.", p2i(r->bottom()));
-
-    log_debug(gc, humongous)("Reclaimed humongous region %u (object size %zu @ " PTR_FORMAT ")",
-                             region_index,
-                             obj->size() * HeapWordSize,
-                             p2i(r->bottom())
-                            );
-
-    G1ConcurrentMark* const cm = _g1h->concurrent_mark();
-    cm->humongous_object_eagerly_reclaimed(r);
-    assert(!cm->is_marked_in_bitmap(obj),
-           "Eagerly reclaimed humongous region %u should not be marked at all but is in bitmap %s",
-           region_index,
-           BOOL_TO_STR(cm->is_marked_in_bitmap(obj)));
-    _humongous_objects_reclaimed++;
-
-    auto free_humongous_region = [&] (G1HeapRegion* r) {
-      _freed_bytes += r->used();
-      r->set_containing_set(nullptr);
-      _humongous_regions_reclaimed++;
-      G1HeapRegionPrinter::eager_reclaim(r);
-      _g1h->free_humongous_region(r, nullptr);
-    };
-
-    _g1h->humongous_obj_regions_iterate(r, free_humongous_region);
-
-    return false;
-  }
-
-  uint humongous_objects_reclaimed() {
-    return _humongous_objects_reclaimed;
-  }
-
-  uint humongous_regions_reclaimed() {
-    return _humongous_regions_reclaimed;
-  }
-
-  size_t bytes_freed() const {
-    return _freed_bytes;
-  }
-};
-
-#if COMPILER2_OR_JVMCI
-class G1PostEvacuateCollectionSetCleanupTask2::UpdateDerivedPointersTask : public G1AbstractSubTask {
-public:
-  UpdateDerivedPointersTask() : G1AbstractSubTask(G1GCPhaseTimes::UpdateDerivedPointers) { }
-
-  double worker_cost() const override { return 1.0; }
-  void do_work(uint worker_id) override {   DerivedPointerTable::update_pointers(); }
-};
-#endif
-
-class G1PostEvacuateCollectionSetCleanupTask2::EagerlyReclaimHumongousObjectsTask : public G1AbstractSubTask {
-  uint _humongous_regions_reclaimed;
-  size_t _bytes_freed;
-
-public:
   EagerlyReclaimHumongousObjectsTask() :
     G1AbstractSubTask(G1GCPhaseTimes::EagerlyReclaimHumongousObjects),
     _humongous_regions_reclaimed(0),
@@ -467,16 +401,55 @@ public:
   double worker_cost() const override { return 1.0; }
   void do_work(uint worker_id) override {
     G1CollectedHeap* g1h = G1CollectedHeap::heap();
+    G1CSetCandidateGroupList* humongous_candidates = g1h->collection_set()->humongous_groups();
 
-    G1FreeHumongousRegionClosure cl;
-    g1h->heap_region_iterate(&cl);
+    uint humongous_objects_reclaimed = 0;
+
+    for (G1CSetCandidateGroup* gr : *humongous_candidates) {
+      G1HeapRegion* r = gr->first().r();
+      assert(r->is_starts_humongous(), "must be");
+
+      assert(gr->card_rem_set()->is_empty(), "must have been emptied earlier");
+
+      if (!is_reclaimable(r->hrm_index())) {
+        // Move back to candidates.
+        g1h->collection_set()->candidates()->humongous_groups().append(gr);
+        continue;
+      }
+
+      oop obj = oop(r->bottom());
+      log_debug(gc, humongous)("Reclaimed humongous region %u (object size %zu @ " PTR_FORMAT ")",
+                               r->hrm_index(),
+                               obj->size() * HeapWordSize,
+                               p2i(obj)
+                              );
+
+      G1ConcurrentMark* const cm = g1h->concurrent_mark();
+      cm->humongous_object_eagerly_reclaimed(r);
+      assert(!cm->is_marked_in_bitmap(obj),
+             "Eagerly reclaimed humongous region %u should not be marked at all but is in bitmap %s",
+             r->hrm_index(),
+             BOOL_TO_STR(cm->is_marked_in_bitmap(obj)));
+
+      humongous_objects_reclaimed++;
+
+      auto free_humongous_region = [&] (G1HeapRegion* r) {
+        _bytes_freed += r->used();
+        r->set_containing_set(nullptr);
+        _humongous_regions_reclaimed++;
+        G1HeapRegionPrinter::eager_reclaim(r);
+        g1h->free_humongous_region(r, nullptr);
+      };
+
+      g1h->humongous_obj_regions_iterate(r, free_humongous_region);
+    }
+
+    // Free the remainder, they are reclaimed now.
+    humongous_candidates->clear(false /* uninstall_group_cardset */);
 
     record_work_item(worker_id, G1GCPhaseTimes::EagerlyReclaimNumTotal, g1h->num_humongous_objects());
     record_work_item(worker_id, G1GCPhaseTimes::EagerlyReclaimNumCandidates, g1h->num_humongous_reclaim_candidates());
-    record_work_item(worker_id, G1GCPhaseTimes::EagerlyReclaimNumReclaimed, cl.humongous_objects_reclaimed());
-
-    _humongous_regions_reclaimed = cl.humongous_regions_reclaimed();
-    _bytes_freed = cl.bytes_freed();
+    record_work_item(worker_id, G1GCPhaseTimes::EagerlyReclaimNumReclaimed, humongous_objects_reclaimed);
   }
 };
 
@@ -735,7 +708,7 @@ class FreeCSetClosure : public G1HeapRegionClosure {
     stats()->account_evacuated_region(r);
 
     G1HeapRegionPrinter::evac_reclaim(r);
-    // Free the region and its remembered set.
+    // Finally free the region.
     _g1h->free_region(r, nullptr);
   }
 
@@ -752,17 +725,18 @@ class FreeCSetClosure : public G1HeapRegionClosure {
                                       _worker_id,
                                       1,
                                       G1GCPhaseTimes::RestoreEvacFailureRegionsEvacFailedNum);
-
-    bool retain_region = _g1h->policy()->should_retain_evac_failed_region(r);
     // Update the region state due to the failed evacuation.
-    r->handle_evacuation_failure(retain_region);
+    r->handle_evacuation_failure();
     assert(r->is_old(), "must already be relabelled as old");
 
+    bool retain_region = _g1h->policy()->should_retain_evac_failed_region(r);
     if (retain_region) {
       _g1h->retain_region(r);
       _num_retained_regions++;
     }
-    assert(retain_region == r->rem_set()->is_tracked(), "When retaining a region, remembered set should be kept.");
+    assert(retain_region == r->rem_set()->is_complete(),
+           "When retaining a region, remembered set should be kept and complete "
+           "otherwise unavailable.");
 
     // Add region to old set, need to hold lock.
     MutexLocker x(G1OldSets_lock, Mutex::_no_safepoint_check_flag);
@@ -881,7 +855,7 @@ public:
     }
     FREE_C_HEAP_ARRAY(FreeCSetStats, _worker_stats);
 
-    _g1h->clear_collection_set();
+    _g1h->collection_set()->clear();
 
     G1GCPhaseTimes* p = _g1h->phase_times();
     p->record_serial_free_cset_time_ms((Ticks::now() - serial_time).seconds() * 1000.0);

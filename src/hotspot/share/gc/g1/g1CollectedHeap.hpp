@@ -188,6 +188,8 @@ private:
   G1MonotonicArenaMemoryStats _young_gen_card_set_stats;
   // Collection set candidates memory statistics after GC.
   G1MonotonicArenaMemoryStats _collection_set_candidates_card_set_stats;
+  // Humongous memory statistics before GC.
+  G1MonotonicArenaMemoryStats _humongous_card_set_stats;
 
   // The block offset table for the G1 heap.
   G1BlockOffsetTable* _bot;
@@ -259,8 +261,10 @@ public:
   void set_humongous_stats(uint num_humongous_total, uint num_humongous_candidates);
 
   bool should_sample_collection_set_candidates() const;
-  void set_collection_set_candidates_stats(G1MonotonicArenaMemoryStats& stats);
+
   void set_young_gen_card_set_stats(const G1MonotonicArenaMemoryStats& stats);
+  void set_collection_set_candidates_stats(const G1MonotonicArenaMemoryStats& stats);
+  void set_humongous_candidates_stats(const G1MonotonicArenaMemoryStats& stats);
 
   void update_perf_counter_cpu_time();
 private:
@@ -602,8 +606,13 @@ public:
   void gc_prologue(bool full);
   void gc_epilogue(bool full);
 
-  // Does the given region fulfill remembered set based eager reclaim candidate requirements?
+  // Does the given region fulfill remembered set based eager reclaim candidate
+  // requirements based on static properties? Used to pre-filter candidates that
+  // are never going to be eligible for eager reclaim.
   bool is_potential_eager_reclaim_candidate(G1HeapRegion* r) const;
+  // Does the given region fulfill remembered set based eager reclaim candidate
+  // requirements based on current properties?
+  bool is_eager_reclaim_candidate(G1HeapRegion* r) const;
 
   inline bool is_humongous_reclaim_candidate(uint region);
 
@@ -793,9 +802,8 @@ public:
 
   G1CSetCandidateGroup* young_regions_cset_group() { return &_young_regions_cset_group; }
 
-  // After a collection pause, reset eden and the collection set.
+  // After a collection pause, reset eden.
   void clear_eden();
-  void clear_collection_set();
 
   // Abandon the current collection set without recording policy
   // statistics or updating free lists.

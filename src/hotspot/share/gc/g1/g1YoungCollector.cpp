@@ -286,175 +286,36 @@ void G1YoungCollector::calculate_collection_set(G1EvacInfo* evacuation_info, dou
 class G1PrepareEvacuationTask : public WorkerTask {
   class G1PrepareRegionsClosure : public G1HeapRegionClosure {
     G1CollectedHeap* _g1h;
-    G1PrepareEvacuationTask* _parent_task;
-    uint _worker_humongous_total;
-    uint _worker_humongous_candidates;
-
-    G1MonotonicArenaMemoryStats _card_set_stats;
-
-    void sample_card_set_size(G1HeapRegion* hr) {
-      // Sample card set sizes for humongous before GC: this makes the policy to give
-      // back memory to the OS keep the most recent amount of memory for these regions.
-      if (hr->is_starts_humongous()) {
-        _card_set_stats.add(hr->rem_set()->card_set_memory_stats());
-      }
-    }
-
-    bool humongous_region_is_candidate(G1HeapRegion* region) const {
-      assert(region->is_starts_humongous(), "Must start a humongous object");
-
-      oop obj = cast_to_oop(region->bottom());
-
-      // Dead objects cannot be eager reclaim candidates. Due to class
-      // unloading it is unsafe to query their classes so we return early.
-      if (_g1h->is_obj_dead(obj, region)) {
-        return false;
-      }
-
-      // If we do not have a complete remembered set for the region, then we can
-      // not be sure that we have all references to it.
-      if (!region->rem_set()->is_complete()) {
-        return false;
-      }
-      // We also cannot collect the humongous object if it is pinned.
-      if (region->has_pinned_objects()) {
-        return false;
-      }
-      // Candidate selection must satisfy the following constraints
-      // while concurrent marking is in progress:
-      //
-      // * In order to maintain SATB invariants, an object must not be
-      // reclaimed if it was allocated before the start of marking and
-      // has not had its references scanned.  Such an object must have
-      // its references (including type metadata) scanned to ensure no
-      // live objects are missed by the marking process.  Objects
-      // allocated after the start of concurrent marking don't need to
-      // be scanned.
-      //
-      // * An object must not be reclaimed if it is on the concurrent
-      // mark stack.  Objects allocated after the start of concurrent
-      // marking are never pushed on the mark stack.
-      //
-      // Nominating only objects allocated after the start of concurrent
-      // marking is sufficient to meet both constraints.  This may miss
-      // some objects that satisfy the constraints, but the marking data
-      // structures don't support efficiently performing the needed
-      // additional tests or scrubbing of the mark stack.
-      //
-      // However, we presently only nominate is_typeArray() objects.
-      // A humongous object containing references induces remembered
-      // set entries on other regions.  In order to reclaim such an
-      // object, those remembered sets would need to be cleaned up.
-      //
-      // We also treat is_typeArray() objects specially, allowing them
-      // to be reclaimed even if allocated before the start of
-      // concurrent mark.  For this we rely on mark stack insertion to
-      // exclude is_typeArray() objects, preventing reclaiming an object
-      // that is in the mark stack.  We also rely on the metadata for
-      // such objects to be built-in and so ensured to be kept live.
-      // Frequent allocation and drop of large binary blobs is an
-      // important use case for eager reclaim, and this special handling
-      // may reduce needed headroom.
-
-      return obj->is_typeArray() &&
-             _g1h->is_potential_eager_reclaim_candidate(region);
-    }
 
   public:
-    G1PrepareRegionsClosure(G1CollectedHeap* g1h, G1PrepareEvacuationTask* parent_task) :
-      _g1h(g1h),
-      _parent_task(parent_task),
-      _worker_humongous_total(0),
-      _worker_humongous_candidates(0) { }
-
-    ~G1PrepareRegionsClosure() {
-      _parent_task->add_humongous_candidates(_worker_humongous_candidates);
-      _parent_task->add_humongous_total(_worker_humongous_total);
-    }
+    G1PrepareRegionsClosure(G1CollectedHeap* g1h) :
+      _g1h(g1h) { }
 
     virtual bool do_heap_region(G1HeapRegion* hr) {
-      // First prepare the region for scanning
+      // First prepare the region for scanning.
       _g1h->rem_set()->prepare_region_for_scan(hr);
-
-      sample_card_set_size(hr);
-
-      // Now check if region is a humongous candidate
-      if (!hr->is_starts_humongous()) {
-        _g1h->register_region_with_region_attr(hr);
-        return false;
-      }
-
-      uint index = hr->hrm_index();
-      if (humongous_region_is_candidate(hr)) {
-        _g1h->register_humongous_candidate_region_with_region_attr(index);
-        _worker_humongous_candidates++;
-        // We will later handle the remembered sets of these regions.
-      } else {
+      // We register humongous candidates regions separately.
+      G1CollectionSetCandidates* candidates = _g1h->collection_set()->candidates();
+      if (candidates->contains(hr) && !candidates->is_humongous(hr)) {
         _g1h->register_region_with_region_attr(hr);
       }
-      log_debug(gc, humongous)("Humongous region %u (object size %zu @ " PTR_FORMAT ") remset %zu code roots %zu "
-                               "marked %d pinned count %zu reclaim candidate %d type array %d",
-                               index,
-                               cast_to_oop(hr->bottom())->size() * HeapWordSize,
-                               p2i(hr->bottom()),
-                               hr->rem_set()->occupied(),
-                               hr->rem_set()->code_roots_list_length(),
-                               _g1h->concurrent_mark()->mark_bitmap()->is_marked(hr->bottom()),
-                               hr->pinned_count(),
-                               _g1h->is_humongous_reclaim_candidate(index),
-                               cast_to_oop(hr->bottom())->is_typeArray()
-                              );
-      _worker_humongous_total++;
 
       return false;
-    }
-
-    G1MonotonicArenaMemoryStats card_set_stats() const {
-      return _card_set_stats;
     }
   };
 
   G1CollectedHeap* _g1h;
   G1HeapRegionClaimer _claimer;
-  volatile uint _humongous_total;
-  volatile uint _humongous_candidates;
-
-  G1MonotonicArenaMemoryStats _all_card_set_stats;
 
 public:
   G1PrepareEvacuationTask(G1CollectedHeap* g1h) :
     WorkerTask("Prepare Evacuation"),
     _g1h(g1h),
-    _claimer(_g1h->workers()->active_workers()),
-    _humongous_total(0),
-    _humongous_candidates(0) { }
+    _claimer(_g1h->workers()->active_workers()) { }
 
   void work(uint worker_id) {
-    G1PrepareRegionsClosure cl(_g1h, this);
+    G1PrepareRegionsClosure cl(_g1h);
     _g1h->heap_region_par_iterate_from_worker_offset(&cl, &_claimer, worker_id);
-
-    MutexLocker x(G1RareEvent_lock, Mutex::_no_safepoint_check_flag);
-    _all_card_set_stats.add(cl.card_set_stats());
-  }
-
-  void add_humongous_candidates(uint candidates) {
-    Atomic::add(&_humongous_candidates, candidates);
-  }
-
-  void add_humongous_total(uint total) {
-    Atomic::add(&_humongous_total, total);
-  }
-
-  uint humongous_candidates() {
-    return _humongous_candidates;
-  }
-
-  uint humongous_total() {
-    return _humongous_total;
-  }
-
-  const G1MonotonicArenaMemoryStats all_card_set_stats() const {
-    return _all_card_set_stats;
   }
 };
 
@@ -515,12 +376,6 @@ void G1YoungCollector::pre_evacuate_collection_set(G1EvacInfo* evacuation_info) 
   {
     G1PrepareEvacuationTask g1_prep_task(_g1h);
     Tickspan task_time = run_task_timed(&g1_prep_task);
-
-    G1MonotonicArenaMemoryStats sampled_card_set_stats = g1_prep_task.all_card_set_stats();
-    sampled_card_set_stats.add(_g1h->young_regions_cset_group()->card_set_memory_stats());
-    _g1h->set_young_gen_card_set_stats(sampled_card_set_stats);
-    _g1h->set_humongous_stats(g1_prep_task.humongous_total(), g1_prep_task.humongous_candidates());
-
     phase_times()->record_register_regions(task_time.seconds() * 1000.0);
   }
 

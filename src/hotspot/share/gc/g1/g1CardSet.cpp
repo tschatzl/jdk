@@ -349,10 +349,6 @@ public:
     }
   }
 
-  void reset_table_scanner() {
-    reset_table_scanner(BucketClaimSize);
-  }
-
   void reset_table_scanner_for_groups() {
     reset_table_scanner(GroupBucketClaimSize);
   }
@@ -779,15 +775,6 @@ G1AddCardResult G1CardSet::add_card(uintptr_t card) {
   uint card_within_region;
   split_card(card, card_region, card_within_region);
 
-#ifdef ASSERT
-  {
-    uint region_idx = card_region >> config()->log2_card_regions_per_heap_region();
-    G1HeapRegion* r = G1CollectedHeap::heap()->region_at(region_idx);
-    assert(!r->rem_set()->is_added_to_cset_group() ||
-           r->rem_set()->cset_group()->card_set() != this, "Should not be sharing a cardset");
-  }
-#endif
-
   return add_card(card_region, card_within_region, true /* increment_total */);
 }
 
@@ -1057,10 +1044,6 @@ void G1CardSet::clear() {
   _table->reset();
   _num_occupied = 0;
   _mm->flush();
-}
-
-void G1CardSet::reset_table_scanner() {
-  _table->reset_table_scanner();
 }
 
 void G1CardSet::reset_table_scanner_for_groups() {

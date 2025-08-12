@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2024, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,97 +27,90 @@
 
 #include "gc/g1/g1HeapRegionRemSet.hpp"
 
-#include "gc/g1/g1CardSet.inline.hpp"
+#include "gc/g1/g1CardRemSet.inline.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "utilities/bitMap.inline.hpp"
 
+inline bool G1HeapRegionRemSet::card_rem_set_is_empty() const {
+  return !has_card_rem_set() || card_rem_set()->is_empty();
+}
+
+inline bool G1HeapRegionRemSet::has_single_region_card_rem_set() const {
+  return has_card_rem_set() && (card_rem_set()->length() == 1);
+}
+
+inline bool G1HeapRegionRemSet::has_card_rem_set() const {
+  return _card_rem_set != nullptr;
+}
+
+inline G1CardRemSet* G1HeapRegionRemSet::card_rem_set() {
+  return _card_rem_set;
+}
+
+inline const G1CardRemSet* G1HeapRegionRemSet::card_rem_set() const {
+  return _card_rem_set;
+}
+
+inline bool G1HeapRegionRemSet::is_empty() const {
+  return (code_roots_list_length() == 0) && card_rem_set_is_empty();
+}
+
+inline bool G1HeapRegionRemSet::occupancy_less_or_equal_than(size_t occ) const {
+  return (code_roots_list_length() == 0) && card_rem_set()->occupancy_less_or_equal_to(occ);
+}
+
+inline size_t G1HeapRegionRemSet::occupied() {
+  assert(has_card_rem_set(), "pre-condition");
+  return card_rem_set()->occupied();
+}
+
+bool G1HeapRegionRemSet::is_tracked() const {
+  return has_card_rem_set() && (card_rem_set()->state() != G1CardRemSet::Untracked);
+}
+
+bool G1HeapRegionRemSet::is_updating() const {
+  return has_card_rem_set() && (card_rem_set()->state() == G1CardRemSet::Updating);
+}
+
+bool G1HeapRegionRemSet::is_complete() const {
+  return has_card_rem_set() && (card_rem_set()->state() == G1CardRemSet::Complete);
+}
+
 void G1HeapRegionRemSet::set_state_untracked() {
   guarantee(SafepointSynchronize::is_at_safepoint() || !is_tracked(),
-            "Should only set to Untracked during safepoint but is %s.", get_state_str());
-  if (_state == Untracked) {
+            "Should only set to Untracked during safepoint but is %s.",
+            G1CardRemSet::get_state_str(card_rem_set()));
+  if (!is_tracked()) {
     return;
   }
   clear_fcc();
-  _state = Untracked;
+  card_rem_set()->set_state(G1CardRemSet::Untracked);
 }
 
 void G1HeapRegionRemSet::set_state_updating() {
-  guarantee(SafepointSynchronize::is_at_safepoint() && !is_tracked(),
-            "Should only set to Updating from Untracked during safepoint but is %s", get_state_str());
+  assert(SafepointSynchronize::is_at_safepoint(), "Should only set during safepoint");
+  assert(has_card_rem_set(), "must have card rem set");
+  assert(!is_tracked(), "must only set from Untracked to Updating");
   clear_fcc();
-  _state = Updating;
+  card_rem_set()->set_state(G1CardRemSet::Updating);
 }
 
 void G1HeapRegionRemSet::set_state_complete() {
+  assert(has_card_rem_set(), "must have card rem set");
   clear_fcc();
-  _state = Complete;
+  card_rem_set()->set_state(G1CardRemSet::Complete);
 }
-
-template <typename Closure>
-class G1ContainerCardsOrRanges {
-  Closure& _cl;
-  uint _region_idx;
-  uint _offset;
-
-public:
-  G1ContainerCardsOrRanges(Closure& cl, uint region_idx, uint offset) : _cl(cl), _region_idx(region_idx), _offset(offset) { }
-
-  bool start_iterate(uint tag) {
-    return _cl.start_iterate(tag, _region_idx);
-  }
-
-  void operator()(uint card_idx) {
-    _cl.do_card(card_idx + _offset);
-  }
-
-  void operator()(uint card_idx, uint length) {
-    _cl.do_card_range(card_idx + _offset, length);
-  }
-};
-
-template <typename Closure, template <typename> class CardOrRanges>
-class G1HeapRegionRemSetMergeCardClosure : public G1CardSet::ContainerPtrClosure {
-  G1CardSet* _card_set;
-  Closure& _cl;
-  uint _log_card_regions_per_region;
-  uint _card_regions_per_region_mask;
-  uint _log_card_region_size;
-
-public:
-
-  G1HeapRegionRemSetMergeCardClosure(G1CardSet* card_set,
-                                      Closure& cl,
-                                      uint log_card_regions_per_region,
-                                      uint log_card_region_size) :
-    _card_set(card_set),
-    _cl(cl),
-    _log_card_regions_per_region(log_card_regions_per_region),
-    _card_regions_per_region_mask((1 << log_card_regions_per_region) - 1),
-    _log_card_region_size(log_card_region_size) {
-  }
-
-  void do_containerptr(uint card_region_idx, size_t num_occupied, G1CardSet::ContainerPtr container) override {
-    CardOrRanges<Closure> cl(_cl,
-                             card_region_idx >> _log_card_regions_per_region,
-                             (card_region_idx & _card_regions_per_region_mask) << _log_card_region_size);
-    _card_set->iterate_cards_or_ranges_in_container(container, cl);
-  }
-};
 
 template <class CardOrRangeVisitor>
 inline void G1HeapRegionRemSet::iterate_for_merge(CardOrRangeVisitor& cl) {
-  iterate_for_merge(card_set(), cl);
+  iterate_for_merge(card_rem_set(), cl);
 }
 
 template <class CardOrRangeVisitor>
-void G1HeapRegionRemSet::iterate_for_merge(G1CardSet* card_set, CardOrRangeVisitor& cl) {
-  G1HeapRegionRemSetMergeCardClosure<CardOrRangeVisitor, G1ContainerCardsOrRanges> cl2(card_set,
-                                                                                       cl,
-                                                                                       card_set->config()->log2_card_regions_per_heap_region(),
-                                                                                       card_set->config()->log2_cards_per_card_region());
-  card_set->iterate_containers(&cl2, true /* at_safepoint */);
+void G1HeapRegionRemSet::iterate_for_merge(G1CardRemSet* card_rem_set, CardOrRangeVisitor& cl) {
+  card_rem_set->iterate_for_merge(cl);
 }
 
 uintptr_t G1HeapRegionRemSet::to_card(OopOrNarrowOopStar from) const {
@@ -125,9 +118,7 @@ uintptr_t G1HeapRegionRemSet::to_card(OopOrNarrowOopStar from) const {
 }
 
 void G1HeapRegionRemSet::add_reference(OopOrNarrowOopStar from, uint tid) {
-  assert(is_added_to_cset_group(), "pre-condition");
-
-  assert(_state != Untracked, "must be");
+  assert(is_tracked(), "must be");
 
   uint cur_idx = _hr->hrm_index();
   uintptr_t from_card = uintptr_t(from) >> CardTable::card_shift();
@@ -139,15 +130,26 @@ void G1HeapRegionRemSet::add_reference(OopOrNarrowOopStar from, uint tid) {
     return;
   }
 
-  card_set()->add_card(to_card(from));
+#ifdef ASSERT
+  {
+    G1HeapRegion* from_region = G1CollectedHeap::heap()->heap_region_containing(from);
+    assert(!from_region->rem_set()->has_card_rem_set() ||
+           from_region->rem_set()->card_rem_set() != card_rem_set(),
+           "Should not add reference within the same card remembered set");
+  }
+#endif
+
+  card_rem_set()->add_card(to_card(from));
 }
 
 bool G1HeapRegionRemSet::contains_reference(OopOrNarrowOopStar from) {
-  return card_set()->contains_card(to_card(from));
+  return card_rem_set()->contains_card(to_card(from));
 }
 
+/*
 void G1HeapRegionRemSet::print_info(outputStream* st, OopOrNarrowOopStar from) {
-  card_set()->print_info(st, to_card(from));
+  card_rem_set()->print_info(st, to_card(from));
 }
+ */
 
 #endif // SHARE_VM_GC_G1_G1HEAPREGIONREMSET_INLINE_HPP

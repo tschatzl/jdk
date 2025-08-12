@@ -27,14 +27,40 @@
 
 #include "gc/g1/g1CollectionSetCandidates.hpp"
 
+#include "gc/g1/g1CardRemSet.inline.hpp"
 #include "utilities/growableArray.hpp"
+
+inline bool G1CollectionSetRegionInfo::update_num_unreclaimed() {
+  ++_num_unreclaimed;
+  return _num_unreclaimed < G1NumCollectionsKeepPinned;
+}
+
+inline G1HeapRegion* G1CollectionSetRegionInfo::r() const {
+  return _r;
+}
+
+inline uint G1CSetCandidateGroup::length() const { return (uint)_candidate_infos.length(); }
+
+inline G1CardRemSet* G1CSetCandidateGroup::card_rem_set() { return &_card_rem_set; }
+inline const G1CardRemSet* G1CSetCandidateGroup::card_rem_set() const { return &_card_rem_set; }
+
+inline size_t G1CSetCandidateGroup::cards_occupied() const { return _card_rem_set.occupied(); }
+
+inline uint G1CSetCandidateGroup::id() const { return _id; }
+
+inline G1CollectionSetRegionInfo G1CSetCandidateGroup::first() const {
+  return _candidate_infos.first();
+}
+
+inline G1MonotonicArenaMemoryStats G1CSetCandidateGroup::card_set_memory_stats() const {
+   return _card_rem_set.memory_stats();
+}
 
 template<typename Func>
 void G1CSetCandidateGroupList::iterate(Func&& f) const {
   for (G1CSetCandidateGroup* group : _groups) {
-    for (G1CollectionSetCandidateInfo ci : *group) {
-      G1HeapRegion* r = ci._r;
-      f(r);
+    for (G1CollectionSetRegionInfo ci : *group) {
+      f(ci.r());
     }
   }
 }
@@ -42,8 +68,8 @@ void G1CSetCandidateGroupList::iterate(Func&& f) const {
 template<typename Func>
 void G1CollectionSetCandidates::iterate_regions(Func&& f) const {
   _from_marking_groups.iterate(f);
-
   _retained_groups.iterate(f);
+  _humongous_groups.iterate(f);
 }
 
 #endif /* SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP */

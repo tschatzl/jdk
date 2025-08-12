@@ -23,7 +23,7 @@
  */
 
 #include "gc/g1/g1CollectedHeap.inline.hpp"
-#include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1CollectionSetChooser.hpp"
 #include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/shared/space.hpp"
@@ -37,8 +37,7 @@
 // put them into some work area without sorting. At the end that array is sorted and
 // moved to the destination.
 class G1BuildCandidateRegionsTask : public WorkerTask {
-
-  using CandidateInfo = G1CollectionSetCandidateInfo;
+  using TrackingResult = G1RemSetTrackingPolicy::Result;
 
   // Work area for building the set of collection set candidates. Contains references
   // to heap regions with their GC efficiencies calculated. To reduce contention
@@ -51,7 +50,7 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
     uint const _max_size;
     uint const _chunk_size;
 
-    CandidateInfo* _data;
+    G1HeapRegion** _data;
 
     uint volatile _cur_claim_idx;
 
@@ -68,15 +67,15 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
     G1BuildCandidateArray(uint max_num_regions, uint chunk_size, uint num_workers) :
       _max_size(required_array_size(max_num_regions, chunk_size, num_workers)),
       _chunk_size(chunk_size),
-      _data(NEW_C_HEAP_ARRAY(CandidateInfo, _max_size, mtGC)),
+      _data(NEW_C_HEAP_ARRAY(G1HeapRegion*, _max_size, mtGC)),
       _cur_claim_idx(0) {
       for (uint i = 0; i < _max_size; i++) {
-        _data[i] = CandidateInfo();
+        _data[i] = nullptr;
       }
     }
 
     ~G1BuildCandidateArray() {
-      FREE_C_HEAP_ARRAY(CandidateInfo, _data);
+      FREE_C_HEAP_ARRAY(G1HeapRegion*, _data);
     }
 
     // Claim a new chunk, returning its bounds [from, to[.
@@ -92,8 +91,8 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
     // Set element in array.
     void set(uint idx, G1HeapRegion* hr) {
       assert(idx < _max_size, "Index %u out of bounds %u", idx, _max_size);
-      assert(_data[idx]._r == nullptr, "Value must not have been set.");
-      _data[idx] = CandidateInfo(hr);
+      assert(_data[idx] == nullptr, "Value must not have been set.");
+      _data[idx] = hr;
     }
 
     void sort_by_gc_efficiency() {
@@ -101,46 +100,74 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
         return;
       }
       for (uint i = _cur_claim_idx; i < _max_size; i++) {
-        assert(_data[i]._r == nullptr, "must be");
+        assert(_data[i] == nullptr, "must be");
       }
-      qsort(_data, _cur_claim_idx, sizeof(_data[0]), (_sort_Fn)G1CollectionSetCandidateInfo::compare_region_gc_efficiency);
+      qsort(_data, _cur_claim_idx, sizeof(_data[0]), (_sort_Fn)G1CollectionSetRegionInfo::compare_region_gc_efficiency);
       for (uint i = _cur_claim_idx; i < _max_size; i++) {
-        assert(_data[i]._r == nullptr, "must be");
+        assert(_data[i] == nullptr, "must be");
       }
     }
 
-    CandidateInfo* array() const { return _data; }
+    void remove_nulls() {
+      if (_cur_claim_idx == 0) {
+        return;
+      }
+      uint write_pos = 0;
+      for (uint i = 0; i < _cur_claim_idx; i++) {
+        G1HeapRegion* temp = _data[i];
+        if (temp != nullptr) {
+          _data[i] = nullptr;
+          _data[write_pos++] = temp;
+        }
+      }
+      for (uint i = write_pos; i < _max_size; i++) {
+        assert(_data[i] == nullptr, "must be");
+      }
+    }
+
+    G1HeapRegion** array() const { return _data; }
   };
 
   // Per-region closure. In addition to determining whether a region should be
   // added to the candidates, and calculating those regions' gc efficiencies, also
   // gather additional statistics.
   class G1BuildCandidateRegionsClosure : public G1HeapRegionClosure {
-    G1BuildCandidateArray* _array;
+    TrackingResult const* _rem_set_updates;
 
-    uint _cur_chunk_idx;
-    uint _cur_chunk_end;
+    class BuildCandidateArrayClaimer {
+      G1BuildCandidateArray* _array;
 
-    uint _regions_added;
+      uint _cur_chunk_idx;
+      uint _cur_chunk_end;
 
-    void add_region(G1HeapRegion* hr) {
-      if (_cur_chunk_idx == _cur_chunk_end) {
-        _array->claim_chunk(_cur_chunk_idx, _cur_chunk_end);
+      uint _regions_added;
+
+    public:
+      BuildCandidateArrayClaimer(G1BuildCandidateArray* array) :
+        _array(array), _cur_chunk_idx(0), _cur_chunk_end(0), _regions_added(0) { }
+
+      void add(G1HeapRegion* r) {
+        if (_cur_chunk_idx == _cur_chunk_end) {
+          _array->claim_chunk(_cur_chunk_idx, _cur_chunk_end);
+        }
+        assert(_cur_chunk_idx < _cur_chunk_end, "Must be");
+
+        _array->set(_cur_chunk_idx, r);
+        _cur_chunk_idx++;
+
+        _regions_added++;
       }
-      assert(_cur_chunk_idx < _cur_chunk_end, "Must be");
 
-      _array->set(_cur_chunk_idx, hr);
-      _cur_chunk_idx++;
-
-      _regions_added++;
-    }
+      uint regions_added() const { return _regions_added; }
+    } _old_claimer, _humongous_claimer;
 
   public:
-    G1BuildCandidateRegionsClosure(G1BuildCandidateArray* array) :
-      _array(array),
-      _cur_chunk_idx(0),
-      _cur_chunk_end(0),
-      _regions_added(0) { }
+    G1BuildCandidateRegionsClosure(TrackingResult const* rem_set_updates,
+                                   G1BuildCandidateArray* old_regions_array,
+                                   G1BuildCandidateArray* humongous_regions_array) :
+      _rem_set_updates(rem_set_updates),
+      _old_claimer(old_regions_array),
+      _humongous_claimer(humongous_regions_array) { }
 
     bool do_heap_region(G1HeapRegion* r) {
       // Candidates from marking are always old; also keep regions that are already
@@ -151,10 +178,16 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
       }
 
       // Can not add a region without a remembered set to the candidates.
-      if (!r->rem_set()->is_tracked()) {
+      TrackingResult result = _rem_set_updates[r->hrm_index()];
+      if (result == TrackingResult::Keep) {
         return false;
       }
+      assert(result == TrackingResult::SetUpdating, "must be");
 
+      if (r->is_humongous()) {
+        _humongous_claimer.add(r);
+        return false;
+      }
       // Skip any region that is currently used as an old GC alloc region. We should
       // not consider those for collection before we fill them up as the effective
       // gain from them is small. I.e. we only actually reclaim from the filled part,
@@ -165,38 +198,35 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
       bool should_add = !G1CollectedHeap::heap()->is_old_gc_alloc_region(r) &&
                         G1CollectionSetChooser::region_occupancy_low_enough_for_evac(r->live_bytes());
       if (should_add) {
-        add_region(r);
-      } else {
-        r->rem_set()->clear(true /* only_cardset */);
+        _old_claimer.add(r);
       }
       return false;
     }
 
-    uint regions_added() const { return _regions_added; }
+    uint old_regions_added() const { return _old_claimer.regions_added(); }
+    uint humongous_regions_added() const { return _humongous_claimer.regions_added(); }
   };
 
   G1CollectedHeap* _g1h;
   G1HeapRegionClaimer _hrclaimer;
 
-  uint volatile _num_regions_added;
+  TrackingResult const* _rem_set_updates;
 
-  G1BuildCandidateArray _result;
+  uint volatile _num_old_regions_added;
+  uint volatile _num_humongous_regions_added;
 
-  void update_totals(uint num_regions) {
-    if (num_regions > 0) {
-      Atomic::add(&_num_regions_added, num_regions);
-    }
-  }
+  G1BuildCandidateArray _old_regions_array;
+  G1BuildCandidateArray _humongous_regions_array;
 
   // Early prune (remove) regions meeting the G1HeapWastePercent criteria. That
   // is, either until only the minimum amount of old collection set regions are
   // available (for forward progress in evacuation) or the waste accumulated by the
   // removed regions is above the maximum allowed waste.
   // Updates number of candidates and reclaimable bytes given.
-  void prune(CandidateInfo* data) {
+  void prune(G1HeapRegion** data) {
     G1Policy* p = G1CollectedHeap::heap()->policy();
 
-    uint num_candidates = Atomic::load(&_num_regions_added);
+    uint num_candidates = Atomic::load(&_num_old_regions_added);
 
     uint min_old_cset_length = p->calc_min_old_cset_length(num_candidates);
     uint num_pruned = 0;
@@ -211,13 +241,12 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
     uint max_to_prune = num_candidates - min_old_cset_length;
 
     while (true) {
-      G1HeapRegion* r = data[num_candidates - num_pruned - 1]._r;
+      G1HeapRegion* r = data[num_candidates - num_pruned - 1];
       size_t const reclaimable = r->reclaimable_bytes();
       if (num_pruned >= max_to_prune ||
           wasted_bytes + reclaimable > allowed_waste) {
         break;
       }
-      r->rem_set()->clear(true /* cardset_only */);
 
       wasted_bytes += reclaimable;
       num_pruned++;
@@ -229,28 +258,41 @@ class G1BuildCandidateRegionsTask : public WorkerTask {
                               wasted_bytes,
                               allowed_waste);
 
-    Atomic::sub(&_num_regions_added, num_pruned, memory_order_relaxed);
+    Atomic::sub(&_num_old_regions_added, num_pruned, memory_order_relaxed);
   }
 
 public:
-  G1BuildCandidateRegionsTask(uint max_num_regions, uint chunk_size, uint num_workers) :
+  G1BuildCandidateRegionsTask(uint max_num_regions,
+                              uint chunk_size,
+                              uint num_workers,
+                              TrackingResult const* rem_set_updates) :
     WorkerTask("G1 Build Candidate Regions"),
     _g1h(G1CollectedHeap::heap()),
     _hrclaimer(num_workers),
-    _num_regions_added(0),
-    _result(max_num_regions, chunk_size, num_workers) { }
+    _rem_set_updates(rem_set_updates),
+    _num_old_regions_added(0),
+    _num_humongous_regions_added(0),
+    _old_regions_array(max_num_regions, chunk_size, num_workers),
+    _humongous_regions_array(max_num_regions, chunk_size, num_workers) { }
 
   void work(uint worker_id) {
-    G1BuildCandidateRegionsClosure cl(&_result);
+    G1BuildCandidateRegionsClosure cl(_rem_set_updates, &_old_regions_array, &_humongous_regions_array);
     _g1h->heap_region_par_iterate_from_worker_offset(&cl, &_hrclaimer, worker_id);
-    update_totals(cl.regions_added());
+
+    Atomic::add(&_num_old_regions_added, cl.old_regions_added(), memory_order_relaxed);
+    Atomic::add(&_num_humongous_regions_added, cl.humongous_regions_added(), memory_order_relaxed);
   }
 
   void sort_and_prune_into(G1CollectionSetCandidates* candidates) {
-    _result.sort_by_gc_efficiency();
-    prune(_result.array());
-    candidates->set_candidates_from_marking(_result.array(),
-                                            _num_regions_added);
+    _old_regions_array.sort_by_gc_efficiency();
+    prune(_old_regions_array.array());
+    candidates->add_old_candidates_from_marking(_old_regions_array.array(),
+                                                _num_old_regions_added);
+
+    _humongous_regions_array.remove_nulls();
+    candidates->add_humongous_candidates(_humongous_regions_array.array(),
+                                         _num_humongous_regions_added,
+                                         false /* rem_sets_are_complete */);
   }
 };
 
@@ -259,11 +301,17 @@ uint G1CollectionSetChooser::calculate_work_chunk_size(uint num_workers, uint nu
   return MAX2(num_regions / num_workers, 1U);
 }
 
-void G1CollectionSetChooser::build(WorkerThreads* workers, uint max_num_regions, G1CollectionSetCandidates* candidates) {
+void G1CollectionSetChooser::build(WorkerThreads* workers,
+                                   uint max_num_regions,
+                                   TrackingResult const* rem_set_updates,
+                                   G1CollectionSetCandidates* candidates) {
   uint num_workers = workers->active_workers();
   uint chunk_size = calculate_work_chunk_size(num_workers, max_num_regions);
 
-  G1BuildCandidateRegionsTask cl(max_num_regions, chunk_size, num_workers);
+  G1BuildCandidateRegionsTask cl(max_num_regions,
+                                 chunk_size,
+                                 num_workers,
+                                 rem_set_updates);
   workers->run_task(&cl, num_workers);
 
   cl.sort_and_prune_into(candidates);

@@ -87,10 +87,10 @@ public:
 
   void execute() override;
 
-  // Notify the task of new used remembered set memory statistics for the young
-  // generation and the collection set candidate sets.
+  // Notify the task of new used remembered set memory statistics.
   void notify_new_stats(G1MonotonicArenaMemoryStats* young_gen_stats,
-                        G1MonotonicArenaMemoryStats* collection_set_candidate_stats);
+                        G1MonotonicArenaMemoryStats* collection_set_candidate_stats,
+                        G1MonotonicArenaMemoryStats* humongous_card_set_stats);
 };
 
 #endif // SHARE_GC_G1_G1MONOTONICARENAFREEMEMORYTASK_HPP

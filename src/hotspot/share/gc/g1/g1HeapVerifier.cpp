@@ -25,9 +25,10 @@
 #include "code/nmethod.hpp"
 #include "gc/g1/g1Allocator.inline.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1ConcurrentMarkThread.hpp"
 #include "gc/g1/g1HeapRegion.inline.hpp"
-#include "gc/g1/g1HeapRegionRemSet.hpp"
+#include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/g1/g1HeapVerifier.hpp"
 #include "gc/g1/g1Policy.hpp"
 #include "gc/g1/g1RemSet.hpp"
@@ -246,21 +247,25 @@ public:
 
   bool do_heap_region(G1HeapRegion* r) {
     guarantee(!r->has_index_in_opt_cset(), "Region %u still has opt collection set index %u", r->hrm_index(), r->index_in_opt_cset());
-    guarantee(!r->is_young() || r->rem_set()->is_complete(), "Remembered set for Young region %u must be complete, is %s", r->hrm_index(), r->rem_set()->get_state_str());
+    guarantee(!r->is_young() || r->rem_set()->is_complete(),
+              "Remembered set for Young region %u must be complete, is %s",
+              r->hrm_index(), G1CardRemSet::get_state_str(r->rem_set()->card_rem_set()));
     // Humongous and old regions regions might be of any state, so can't check here.
-    guarantee(!r->is_free() || !r->rem_set()->is_tracked(), "Remembered set for free region %u must be untracked, is %s", r->hrm_index(), r->rem_set()->get_state_str());
+    guarantee(!r->is_free() || !r->rem_set()->is_tracked(),
+              "Remembered set for free region %u must be untracked, is %s",
+              r->hrm_index(), G1CardRemSet::get_state_str(r->rem_set()->card_rem_set()));
 
     if (r->is_continues_humongous()) {
-      // Verify that the continues humongous regions' remembered set state
-      // matches the one from the starts humongous region.
-      if (r->rem_set()->get_state_str() != r->humongous_start_region()->rem_set()->get_state_str()) {
-         log_error(gc, verify)("Remset states differ: Region %u (%s) remset %s with starts region %u (%s) remset %s",
+      // Verify that the continues humongous regions' remembered set is the same
+      // as for the starts_humongous region.
+      if (r->rem_set()->card_rem_set() != r->humongous_start_region()->rem_set()->card_rem_set()) {
+         log_error(gc, verify)("Remsets differ: Region %u (%s) remset %u with starts region %u (%s) remset %u",
                                r->hrm_index(),
                                r->get_short_type_str(),
-                               r->rem_set()->get_state_str(),
+                               G1CardRemSet::id(r->rem_set()->card_rem_set()),
                                r->humongous_start_region()->hrm_index(),
                                r->humongous_start_region()->get_short_type_str(),
-                               r->humongous_start_region()->rem_set()->get_state_str());
+                               G1CardRemSet::id(r->humongous_start_region()->rem_set()->card_rem_set()));
          _failures = true;
       }
     } else {

@@ -25,7 +25,6 @@
 #ifndef SHARE_GC_G1_G1REMSETSUMMARY_HPP
 #define SHARE_GC_G1_G1REMSETSUMMARY_HPP
 
-#include "gc/g1/g1CardSet.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ostream.hpp"
 

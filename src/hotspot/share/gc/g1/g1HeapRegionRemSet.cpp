@@ -44,60 +44,53 @@
 
 HeapWord* G1HeapRegionRemSet::_heap_base_address = nullptr;
 
-const char* G1HeapRegionRemSet::_state_strings[] =  {"Untracked", "Updating", "Complete"};
-const char* G1HeapRegionRemSet::_short_state_strings[] =  {"UNTRA", "UPDAT", "CMPLT"};
-
 void G1HeapRegionRemSet::initialize(MemRegion reserved) {
   G1CardSet::initialize(reserved);
   _heap_base_address = reserved.start();
 }
 
-void G1HeapRegionRemSet::uninstall_cset_group() {
-  _cset_group = nullptr;
+void G1HeapRegionRemSet::install_card_rem_set(G1CardRemSet* card_rem_set) {
+  assert(card_rem_set != nullptr, "pre-condition");
+  assert(_card_rem_set == nullptr, "pre-condition");
+
+  _card_rem_set = card_rem_set;
+}
+
+void G1HeapRegionRemSet::uninstall_card_rem_set() {
+  _card_rem_set = nullptr;
 }
 
 G1HeapRegionRemSet::G1HeapRegionRemSet(G1HeapRegion* hr) :
   _code_roots(),
-  _cset_group(nullptr),
-  _hr(hr),
-  _state(Untracked) { }
+  _card_rem_set(nullptr),
+  _hr(hr) { }
 
 G1HeapRegionRemSet::~G1HeapRegionRemSet() {
-  assert(!is_added_to_cset_group(), "Still assigned to a CSet group");
+  assert(!has_card_rem_set(), "Still assigned to a CSet group");
 }
 
 void G1HeapRegionRemSet::clear_fcc() {
   G1FromCardCache::clear(_hr->hrm_index());
 }
 
-void G1HeapRegionRemSet::clear(bool only_cardset, bool keep_tracked) {
+void G1HeapRegionRemSet::clear(bool only_cardset) {
   if (!only_cardset) {
     _code_roots.clear();
   }
   clear_fcc();
 
-  if (is_added_to_cset_group()) {
-    card_set()->clear();
-    assert(card_set()->occupied() == 0, "Should be clear.");
-  }
-
-  if (!keep_tracked) {
-    set_state_untracked();
-  } else {
-    assert(is_tracked(), "must be");
-  }
+  // The card-based remset is handled externally.
 }
 
 void G1HeapRegionRemSet::reset_table_scanner() {
   _code_roots.reset_table_scanner();
-  if (is_added_to_cset_group()) {
-    card_set()->reset_table_scanner();
-  }
+
+  // The card-based remset is handled externally.
 }
 
 G1MonotonicArenaMemoryStats G1HeapRegionRemSet::card_set_memory_stats() const {
-  assert(is_added_to_cset_group(), "pre-condition");
-  return cset_group()->card_set_memory_stats();
+  assert(has_card_rem_set(), "pre-condition");
+  return card_rem_set()->memory_stats();
 }
 
 void G1HeapRegionRemSet::print_static_mem_size(outputStream* out) {
