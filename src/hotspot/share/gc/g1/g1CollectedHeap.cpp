@@ -769,12 +769,6 @@ void G1CollectedHeap::prepare_heap_for_full_collection() {
   _allocator->release_mutator_alloc_regions();
   _allocator->abandon_gc_alloc_regions();
 
-  // We may have added regions to the current incremental collection
-  // set between the last GC or pause and now. We need to clear the
-  // incremental collection set and then start rebuilding it afresh
-  // after this full GC.
-  abandon_collection_set();
-
   _hrm.remove_all_free_regions();
 }
 
@@ -800,6 +794,12 @@ void G1CollectedHeap::prepare_for_mutator_after_full_collection(size_t allocatio
 
   // Rebuild the code root lists for each region
   rebuild_code_roots();
+
+  // We may have added regions to the current incremental collection
+  // set between the last GC or pause and now. We need to clear the
+  // incremental collection set and then start rebuilding it afresh
+  // after this full GC.
+  abandon_collection_set();
 
   start_new_collection_set();
   _allocator->init_mutator_alloc_regions();
