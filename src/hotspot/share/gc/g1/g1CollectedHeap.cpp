@@ -151,7 +151,7 @@ uint G1CollectedHeap::get_chunks_per_region_for_scan() {
   // Limit the expected input values to current known possible values of the
   // (log) region size. Adjust as necessary after testing if changing the permissible
   // values for region size.
-  assert(log_region_size >= 20 && log_region_size <= 29,
+  assert(log_region_size >= 18 && log_region_size <= 29,
          "expected value in [20,29], but got %u", log_region_size);
   return 1u << (log_region_size / 2 - 4);
 }
@@ -161,11 +161,11 @@ uint G1CollectedHeap::get_chunks_per_region_for_merge() {
   // Limit the expected input values to current known possible values of the
   // (log) region size. Adjust as necessary after testing if changing the permissible
   // values for region size.
-  assert(log_region_size >= 20 && log_region_size <= 29,
-         "expected value in [20,29], but got %u", log_region_size);
+  assert(log_region_size >= 18 && log_region_size <= 29,
+         "expected value in [18,29], but got %u", log_region_size);
 
   uint half_log_region_size = (log_region_size + 1) / 2;
-  return 1 << (half_log_region_size - 9);
+  return 1 << (half_log_region_size - 7);
 }
 
 G1HeapRegion* G1CollectedHeap::new_heap_region(uint hrs_index,

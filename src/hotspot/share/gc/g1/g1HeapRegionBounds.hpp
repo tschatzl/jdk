@@ -33,7 +33,7 @@ private:
   // Minimum region size; we won't go lower than that.
   // We might want to decrease this in the future, to deal with small
   // heaps a bit more efficiently.
-  static const size_t MIN_REGION_SIZE = 1024 * 1024;
+  static const size_t MIN_REGION_SIZE = 256 * 1024;
 
   // Maximum region size determined ergonomically.
   static const size_t MAX_ERGONOMICS_SIZE = 32 * 1024 * 1024;

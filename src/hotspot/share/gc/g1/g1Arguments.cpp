@@ -139,7 +139,7 @@ void G1Arguments::initialize_mark_stack_size() {
 void G1Arguments::initialize_card_set_configuration() {
   assert(G1HeapRegion::LogOfHRGrainBytes != 0, "not initialized");
   // Array of Cards card set container globals.
-  const uint LOG_M = 20;
+  const uint LOG_M = 18;
   assert(log2i_exact(G1HeapRegionBounds::min_size()) == LOG_M, "inv");
   assert(G1HeapRegion::LogOfHRGrainBytes >= LOG_M, "from the above");
   uint region_size_log_mb = G1HeapRegion::LogOfHRGrainBytes - LOG_M;
