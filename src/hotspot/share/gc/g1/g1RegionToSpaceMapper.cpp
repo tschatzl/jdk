@@ -91,7 +91,6 @@ class G1RegionsLargerThanCommitSizeMapper : public G1RegionToSpaceMapper {
   }
 
   virtual void commit_regions(uint start_idx, size_t num_regions, WorkerThreads* pretouch_workers) {
-    jlong start = os::elapsed_counter();
     guarantee(is_range_uncommitted(start_idx, num_regions),
               "Range not uncommitted, start: %u, num_regions: %zu",
               start_idx, num_regions);
@@ -111,9 +110,6 @@ class G1RegionsLargerThanCommitSizeMapper : public G1RegionToSpaceMapper {
     }
     _region_commit_map.par_set_range(start_idx, start_idx + num_regions, BitMap::unknown_range);
     fire_on_commit(start_idx, num_regions, zero_filled);
-
-    log_debug(gc)("largerthancommit pgzs %zu K ppr: %zu %s time %.2f",
-                  _storage.page_size() / K, _pages_per_region, NMTUtil::tag_to_enum_name(_memory_tag), TimeHelper::counter_to_millis(os::elapsed_counter() - start));
   }
 
   virtual void uncommit_regions(uint start_idx, size_t num_regions) {
@@ -163,6 +159,16 @@ class G1RegionsSmallerThanCommitSizeMapper : public G1RegionToSpaceMapper {
     }
   }
 
+  bool commit_pages(size_t start_page, size_t size_in_pages) {
+    bool result = _storage.commit(start_page, size_in_pages);
+    if (_memory_tag == mtJavaHeap && G1NUMA::numa()->is_enabled()) {
+      for (size_t page = start_page; page < start_page + size_in_pages; page++) {
+        numa_request_on_node(page);
+      }
+    }
+    return result;
+  }
+
  public:
   G1RegionsSmallerThanCommitSizeMapper(ReservedSpace rs,
                                        size_t actual_size,
@@ -198,8 +204,11 @@ class G1RegionsSmallerThanCommitSizeMapper : public G1RegionToSpaceMapper {
     // Concurrent operations might operate on regions sharing the same
     // underlying OS page. See lock declaration for more details.
     {
+      const size_t NoPage = ~(size_t)0;
+      size_t cur_start_page = NoPage;
+      size_t cur_end_page = NoPage;
+
       MutexLocker ml(&_lock, Mutex::_no_safepoint_check_flag);
-      GrowableArray<size_t> pagelist(10, mtGC);
       for (size_t page = start_page; page <= end_page; page++) {
         if (!is_page_committed(page)) {
           // Page not committed.
@@ -208,39 +217,31 @@ class G1RegionsSmallerThanCommitSizeMapper : public G1RegionToSpaceMapper {
           }
           num_committed++;
 
-          pagelist.insert_before(0, page);
+          if (cur_start_page == NoPage) {
+            cur_start_page = page;
+            cur_end_page = page;
+          } else if (cur_end_page + 1 != page) {
+            // Discontigous memory to be committed detected.
+            if (!commit_pages(cur_start_page, cur_end_page - cur_start_page + 1)) {
+              all_zero_filled = false;
+            }
+            cur_start_page = page;
+            cur_end_page = page;
+          } else {
+            cur_end_page = page;
+          }
 
-          // Move memory to correct NUMA node for the heap.
-          numa_request_on_node(page);
         } else {
           // Page already committed.
           all_zero_filled = false;
-        }
-      }
-
-      if (pagelist.length() > 0) {
-        size_t start = pagelist.pop();
-        size_t end = start;
-
-        while (pagelist.length() > 0) {
-          size_t next = pagelist.pop();
-          if (end + 1 == next) {
-            end = next;
-          } else {
-            log_debug(gc)("committing from %zu to %zu len %zu", start, end, end-start+1);
-            if (!_storage.commit(start, end - start + 1)) {
-              all_zero_filled = false;
-            }
-            start = next;
-            end = start;
-          }
-        }
-
-        log_debug(gc)("committing last from %zu to %zu len %zu", start, end, end-start+1);
-        if (!_storage.commit(start, end - start + 1)) {
-          all_zero_filled = false;
         }       
       }
+
+      // Handle last pages (if any).
+      if ((cur_start_page != NoPage) && !commit_pages(cur_start_page, cur_end_page - cur_start_page + 1)) {
+        all_zero_filled = false;
+      }
+
       // Update the commit map for the given range. Not using the par_set_range
       // since updates to _region_commit_map for this mapper is protected by _lock.
       _region_commit_map.set_range(start_idx, region_limit, BitMap::unknown_range);
