@@ -192,13 +192,17 @@ public class TestEagerReclaimHumongousRegions {
 
 class TestEagerReclaimHumongousRegionsClearMarkBitsRunner {
     private static final WhiteBox WB = WhiteBox.getWhiteBox();
-    private static final int SIZE = 1024 * 1024;
+    private static final int SIZE = 1024 * 1024 * 3 / 2;
 
     private static Object allocateHumongousObj(boolean useTypeArray) {
         if (useTypeArray) {
             return new int[SIZE];
         } else {
-            return new Object[SIZE];
+            Object[] result = new Object[SIZE];
+            // Create a self-references from outside the humongous-starts
+            // region should not prevent reclamation.
+            result[result.length - 1] = result;
+            return result;
         }
     }
 

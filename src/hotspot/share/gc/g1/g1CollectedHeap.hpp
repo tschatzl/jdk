@@ -627,7 +627,8 @@ public:
 
   // Remove from the reclaim candidate set.  Also remove from the
   // collection set so that later encounters avoid the slow path.
-  inline void set_humongous_is_live(oop obj);
+  template <class T>
+  inline void set_humongous_is_live(T* p, oop obj);
 
   // Register the given region to be part of the collection set.
   inline void register_humongous_candidate_region_with_region_attr(uint index);

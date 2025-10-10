@@ -274,7 +274,8 @@ inline bool G1CollectedHeap::is_humongous_reclaim_candidate(uint region) {
   return _region_attr.is_humongous_candidate(region);
 }
 
-inline void G1CollectedHeap::set_humongous_is_live(oop obj) {
+template <class T>
+inline void G1CollectedHeap::set_humongous_is_live(T* p, oop obj) {
   uint region = addr_to_region(obj);
   // Reset the entry in the region attribute table so that subsequent
   // references to the same humongous object do not go into the slow path
@@ -283,7 +284,16 @@ inline void G1CollectedHeap::set_humongous_is_live(oop obj) {
   // humongous-candidate to not, and the write, in evacuation, is
   // separated from the read, in post-evacuation.
   if (_region_attr.is_humongous_candidate(region)) {
-    _region_attr.clear_humongous_candidate(region);
+    // Avoid that humongous object self-references are keeping the object alive.
+    // References may be from outside the heap (heap roots), so check this first.
+    if (!is_in_reserved(p)) {
+      _region_attr.clear_humongous_candidate(region);
+      return;
+    }
+    G1HeapRegion* from_region = heap_region_containing(p);
+    if (!from_region->is_humongous() || from_region->humongous_start_region()->hrm_index() != region) {
+      _region_attr.clear_humongous_candidate(region);
+    }
   }
 }
 
