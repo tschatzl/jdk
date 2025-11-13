@@ -42,7 +42,7 @@ class G1CodeRootSet {
   G1CodeRootSet();
   ~G1CodeRootSet();
 
-  void add(nmethod* method);
+  void add(nmethod* method, bool containsCheck = true);
   bool remove(nmethod* method);
   void bulk_remove();
   bool contains(nmethod* method);

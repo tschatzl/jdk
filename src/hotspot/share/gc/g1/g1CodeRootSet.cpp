@@ -244,11 +244,12 @@ uintx G1CodeRootSetHashTableConfig::get_hash(Value const& value, bool* is_dead) 
 
 size_t G1CodeRootSet::length() const { return _table->number_of_entries(); }
 
-void G1CodeRootSet::add(nmethod* method) {
-  if (!contains(method)) {
+void G1CodeRootSet::add(nmethod* method, bool containsCheck) {
+  if (containsCheck && contains(method)) {
+    return;
+  }
     assert(!_is_iterating, "must be");
     _table->insert(method);
-  }
 }
 
 G1CodeRootSet::G1CodeRootSet() :
