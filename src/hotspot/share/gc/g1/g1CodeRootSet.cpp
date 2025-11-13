@@ -122,7 +122,7 @@ public:
     if (inserted) {
       AtomicAccess::inc(&_num_entries);
     }
-    if (grow_hint) {
+    if (grow_hint && (!UseNewCode || !SafepointSynchronize::is_at_safepoint())) {
       _table.grow(Thread::current());
     }
   }

@@ -23,6 +23,8 @@
  */
 
 
+#include "gc/g1/g1CodeRootSet.hpp"
+
 #include "classfile/classLoaderDataGraph.inline.hpp"
 #include "classfile/javaClasses.inline.hpp"
 #include "code/nmethod.hpp"
@@ -700,6 +702,8 @@ protected:
 private:
   volatile bool _pinned_regions_recorded;
 
+  
+  G1CodeRootSet _test_table;
 public:
   G1EvacuateRegionsBaseTask(const char* name,
                             G1ParScanThreadStateSet* per_thread_states,
@@ -710,7 +714,8 @@ public:
     _per_thread_states(per_thread_states),
     _task_queues(task_queues),
     _terminator(num_workers, _task_queues),
-    _pinned_regions_recorded(false)
+    _pinned_regions_recorded(false),
+            _test_table()
   { }
 
   void work(uint worker_id) {
@@ -718,6 +723,12 @@ public:
 
     {
       ResourceMark rm;
+      jlong start = os::elapsed_counter();
+      for (int i = 0; i < HammerCount; i++) {
+        _test_table.add((nmethod*)((uintptr_t)worker_id * 138907 + i));
+      }
+      double duration = TimeHelper::counter_to_millis(os::elapsed_counter() - start);
+      log_debug(gc)("Worker %u took %fms", worker_id, duration);
 
       G1ParScanThreadState* pss = _per_thread_states->state_for_worker(worker_id);
       pss->set_ref_discoverer(_g1h->ref_processor_stw());
