@@ -725,7 +725,7 @@ public:
       ResourceMark rm;
       jlong start = os::elapsed_counter();
       for (int i = 0; i < HammerCount; i++) {
-        _test_table.add((nmethod*)((uintptr_t)worker_id * 138907 + i));
+        _test_table.add((nmethod*)((uintptr_t)worker_id * 138907 + i), UseNewCode2);
       }
       double duration = TimeHelper::counter_to_millis(os::elapsed_counter() - start);
       log_debug(gc)("Worker %u took %fms", worker_id, duration);
