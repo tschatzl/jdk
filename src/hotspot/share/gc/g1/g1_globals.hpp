@@ -107,6 +107,9 @@
   product(int, HammerCount, 10000,                                    \
           "something something.")                                                      \
                                                                             \
+  product(int, Log2Size, 2,                                    \
+          "something something.")                                                      \
+                                                                            \
   product(size_t, G1AdaptiveIHOPNumInitialSamples, 3, EXPERIMENTAL,         \
           "How many completed time periods from concurrent start to first " \
           "mixed gc are required to use the input values for prediction "   \

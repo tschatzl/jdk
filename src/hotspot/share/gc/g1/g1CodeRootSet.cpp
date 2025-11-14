@@ -84,7 +84,7 @@ public:
   G1CodeRootSetHashTable() :
     _table(Mutex::service-1,
            nullptr,
-           Log2DefaultNumBuckets,
+           Log2Size,
            false /* enable_statistics */),
     _table_scanner(&_table, BucketClaimSize), _num_entries(0) {
     clear();
@@ -117,17 +117,56 @@ public:
 
   void insert(nmethod* method) {
     HashTableLookUp lookup(method);
+    size_t cur_log2_size = _table.get_size_log2(Thread::current());
+    size_t num_entries_before = number_of_entries();
+
     bool grow_hint = false;
     bool inserted = _table.insert(Thread::current(), lookup, method, &grow_hint);
     if (inserted) {
       AtomicAccess::inc(&_num_entries);
+      num_entries_before++;
     }
-    if (UseNewCode && !SafepointSynchronize::is_at_safepoint()) {
+    if (UseNewCode && SafepointSynchronize::is_at_safepoint()) {
       return;
     }
-    if (grow_hint) {
-      _table.grow(Thread::current());
+        grow_hint = number_of_entries() / 4 > bucket_size();
+
+        struct GrowData {
+            size_t _log2_size;
+            size_t _num_entries;
+            size_t _bucket_size;
+            bool _success;
+            bool _need;
+            GrowData() : _log2_size(0), _num_entries(0), _bucket_size(0), _success(0), _need(0) { }
+            void set1(size_t log2_size, size_t num_entries, size_t bucket_size) {
+                _log2_size = log2_size; _num_entries = num_entries; _bucket_size = bucket_size;
+            }
+            void set2(bool success, bool need) {
+                _success = success; _need = need;
+            }        
+            void print() {
+                log_debug(gc,remset)(PTR_FORMAT " log_size %zu num_entries %zu bucket_size %zu succeed %u need %u", p2i(Thread::current()), _log2_size, _num_entries, _bucket_size, _success, _need);
+            }
+        } grow_data[21];
+        int cur_idx = 0;
+    while (grow_hint) {
+        
+        grow_data[cur_idx].set1(_table.get_size_log2(Thread::current()), _num_entries, bucket_size());
+
+      bool grow_success = _table.grow(Thread::current());
+      bool needs_grow = (number_of_entries() / 4 > bucket_size());
+        grow_data[cur_idx].set2(grow_success, needs_grow);
+        cur_idx++;
+
+      grow_hint = grow_success && needs_grow;
+      if (UseNewCode3 && !grow_success && _num_entries / 8 > bucket_size()) {
+          // give time to catch up with expansion.
+          os::naked_sleep(1);
+      }
     }
+        for (int i = 0; i < cur_idx; i++) {
+            grow_data[i].print();
+        }
   }
 
   bool remove(nmethod* method) {
@@ -206,10 +245,10 @@ public:
     const float WantedLoadFactor = 0.5;
     size_t min_expected_size = checked_cast<size_t>(ceil(current_size / WantedLoadFactor));
 
-    size_t result = Log2DefaultNumBuckets;
+    size_t result = Log2Size;
     if (min_expected_size != 0) {
       size_t log2_bound = checked_cast<size_t>(log2i_exact(round_up_power_of_2(min_expected_size)));
-      result = clamp(log2_bound, Log2DefaultNumBuckets, HashTable::DEFAULT_MAX_SIZE_LOG2);
+      result = clamp(log2_bound, (size_t)Log2Size, HashTable::DEFAULT_MAX_SIZE_LOG2);
     }
     return result;
   }
@@ -230,6 +269,8 @@ public:
   size_t mem_size() { return sizeof(*this) + _table.get_mem_size(Thread::current()); }
 
   size_t number_of_entries() const { return AtomicAccess::load(&_num_entries); }
+
+  size_t bucket_size() { return (size_t)1 << _table.get_size_log2(Thread::current()); }
 };
 
 uintx G1CodeRootSetHashTable::HashTableLookUp::get_hash() const {
@@ -247,8 +288,10 @@ uintx G1CodeRootSetHashTableConfig::get_hash(Value const& value, bool* is_dead) 
 
 size_t G1CodeRootSet::length() const { return _table->number_of_entries(); }
 
+size_t G1CodeRootSet::bucket_length() { return _table->bucket_size(); }
+
 void G1CodeRootSet::add(nmethod* method, bool containsCheck) {
-  if (containsCheck && contains(method)) {
+  if (!UseNewCode2 && contains(method)) {
     return;
   }
     assert(!_is_iterating, "must be");

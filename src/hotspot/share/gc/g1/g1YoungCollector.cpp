@@ -728,7 +728,7 @@ public:
         _test_table.add((nmethod*)((uintptr_t)worker_id * 138907 + i), UseNewCode2);
       }
       double duration = TimeHelper::counter_to_millis(os::elapsed_counter() - start);
-      log_debug(gc)("Worker %u took %fms", worker_id, duration);
+      log_debug(gc)("Worker %u (" PTR_FORMAT ") took %fms entries %zu bucket size %zu", worker_id, p2i(Thread::current()), duration, _test_table.length(), _test_table.bucket_length());
 
       G1ParScanThreadState* pss = _per_thread_states->state_for_worker(worker_id);
       pss->set_ref_discoverer(_g1h->ref_processor_stw());

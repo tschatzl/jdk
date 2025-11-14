@@ -807,17 +807,21 @@ inline bool ConcurrentHashTable<CONFIG, MT>::
   //  we only do in grow path, since grow means high load on table
   // while shrink means low load.
   if (is_max_size_reached()) {
+    log_debug(gc,remset)(PTR_FORMAT " grow_prolog grow: no from %zu max size reached", p2i(Thread::current()), _table->_log2_size);
     return false;
   }
   if (!try_resize_lock(thread)) {
     // Either we have an ongoing resize or an operation which doesn't want us
     // to resize now.
+    log_debug(gc,remset)(PTR_FORMAT " grow_prolog grow: no from %zu ongoing resize", p2i(Thread::current()), _table->_log2_size);
     return false;
   }
   if (is_max_size_reached() || _table->_log2_size >= log2_size) {
+    log_debug(gc,remset)(PTR_FORMAT " grow_prolog grow: no from %zu max size reached after lock", p2i(Thread::current()), _table->_log2_size);
     unlock_resize_lock(thread);
     return false;
   }
+  log_debug(gc,remset)(PTR_FORMAT " grow_prolog grow: yes from %zu to %zu", p2i(Thread::current()), _table->_log2_size, _table->_log2_size + 1);
 
   _new_table = new InternalTable(_table->_log2_size + 1);
   _size_limit_reached = _new_table->_log2_size == _log2_size_limit;

@@ -59,6 +59,7 @@ class G1CodeRootSet {
 
   // Length in elements
   size_t length() const;
+  size_t bucket_length();
 
   // Memory size in bytes taken by this set.
   size_t mem_size();
