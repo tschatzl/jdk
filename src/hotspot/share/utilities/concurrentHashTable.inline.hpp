@@ -895,14 +895,19 @@ inline bool ConcurrentHashTable<CONFIG, MT>::
   bool locked;
   size_t loops = 0;
   size_t i = 0;
+  size_t j = 0;
   uintx hash = lookup_f.get_hash();
   Node* new_node = Node::create_node(_context, value, nullptr);
   DEBUG_ONLY(new_node->set_saved_hash(hash);)
 
+  bool first_iteration = true;
   while (true) {
     {
       ScopedCS cs(thread, this); /* protected the table/bucket */
       Bucket* bucket = get_bucket(hash);
+//      if (!first_iteration && bucket->is_locked()) {
+//          locked = true;
+//      } else {
       Node* first_at_start = bucket->first();
       Node* old = get_node(bucket, lookup_f, &clean, &loops);
       if (old == nullptr) {
@@ -921,8 +926,10 @@ inline bool ConcurrentHashTable<CONFIG, MT>::
         foundf(old->value());
         break; /* leave critical section */
       }
+//      }
     } /* leave critical section */
-    i++;
+//      first_iteration = false;
+    i++; j++;
     if (locked) {
       os::naked_yield();
     } else {

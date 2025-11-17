@@ -159,7 +159,7 @@ public:
         cur_idx++;
 
       grow_hint = grow_success && needs_grow;
-      if (UseNewCode3 && !grow_success && _num_entries / 6 > bucket_size()) {
+      if (UseNewCode3 && !grow_success && _num_entries / 5 > bucket_size()) {
           // give time to catch up with expansion.
           os::naked_short_nanosleep(0);
       }
