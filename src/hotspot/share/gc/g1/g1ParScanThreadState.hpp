@@ -274,7 +274,6 @@ class G1ParScanThreadStateSet : public StackObj {
   size_t* _surviving_young_words_total;
   uint _num_workers;
   bool _flushed;
-  bool _deleted;
   G1EvacFailureRegions* _evac_failure_regions;
 
  public:
@@ -295,8 +294,6 @@ class G1ParScanThreadStateSet : public StackObj {
   G1ParScanThreadState* state_for_worker(uint worker_id);
   uint num_workers() const { return _num_workers; }
   
-  void verify_nmethod_tables();
-
   const size_t* surviving_young_words() const;
 };
 

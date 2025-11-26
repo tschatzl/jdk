@@ -713,10 +713,6 @@ public:
     _pinned_regions_recorded(false)
   { }
 
-  ~G1EvacuateRegionsBaseTask() {
-    _per_thread_states->verify_nmethod_tables();
-  }
-
   void work(uint worker_id) {
     start_work(worker_id);
 
@@ -730,9 +726,7 @@ public:
         record_pinned_regions(pss, worker_id);
       }
       scan_roots(pss, worker_id);
-      pss->verify_nmethod_table();
       evacuate_live_objects(pss, worker_id);
-      pss->verify_nmethod_table();
     }
 
     end_work(worker_id);
@@ -766,7 +760,6 @@ class G1EvacuateRegionsTask : public G1EvacuateRegionsBaseTask {
 
   void evacuate_live_objects(G1ParScanThreadState* pss, uint worker_id) {
     G1EvacuateRegionsBaseTask::evacuate_live_objects(pss, worker_id, G1GCPhaseTimes::ObjCopy, G1GCPhaseTimes::Termination);
-    pss->verify_nmethod_table();
   }
 
   void start_work(uint worker_id) {
@@ -775,8 +768,6 @@ class G1EvacuateRegionsTask : public G1EvacuateRegionsBaseTask {
 
   void end_work(uint worker_id) {
     _g1h->phase_times()->record_time_secs(G1GCPhaseTimes::GCWorkerEnd, worker_id, Ticks::now().seconds());
-        _per_thread_states->verify_nmethod_tables();
-
   }
 
 public:
@@ -816,18 +807,13 @@ void G1YoungCollector::evacuate_initial_collection_set(G1ParScanThreadStateSet* 
     // time of this scope, we get the "NMethod List Cleanup" time. This list is
     // constructed during "STW two-phase nmethod root processing", see more in
     // nmethod.hpp
-      per_thread_states->verify_nmethod_tables();
-
   }
-    per_thread_states->verify_nmethod_tables();
-
   Tickspan total_processing = Ticks::now() - start_processing;
 
   p->record_initial_evac_time(task_time.seconds() * 1000.0);
   p->record_or_add_nmethod_list_cleanup_time((total_processing - task_time).seconds() * 1000.0);
 
   rem_set()->complete_evac_phase(has_optional_evacuation_work);
-  per_thread_states->verify_nmethod_tables();
 }
 
 class G1EvacuateOptionalRegionsTask : public G1EvacuateRegionsBaseTask {

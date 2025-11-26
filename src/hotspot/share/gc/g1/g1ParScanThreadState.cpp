@@ -112,8 +112,6 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h,
   _oops_into_optional_regions = new G1OopStarChunkedList[_max_num_optional_regions];
 
   initialize_numa_stats();
-
-  log_debug(gc)("code root worker %u " PTR_FORMAT " no-of-entries %d", worker_id, p2i(_nmethod_table), _nmethod_table->number_of_entries());
 }
 
 size_t G1ParScanThreadState::flush_stats(size_t* surviving_young_words, uint num_workers) {
@@ -581,7 +579,6 @@ G1ParScanThreadState* G1ParScanThreadStateSet::state_for_worker(uint worker_id) 
   assert(!_flushed, "Per thread states already deleted.");
   assert(worker_id < _num_workers, "out of bounds access");
   if (_states[worker_id] == nullptr) {
-    ResourceMark rm;
     _states[worker_id] =
       new G1ParScanThreadState(_g1h,
                                worker_id,
@@ -589,7 +586,6 @@ G1ParScanThreadState* G1ParScanThreadStateSet::state_for_worker(uint worker_id) 
                                _collection_set,
                                _evac_failure_regions);
   }
-  _states[worker_id]->verify_nmethod_table();
   return _states[worker_id];
 }
 
@@ -625,13 +621,11 @@ void G1ParScanThreadStateSet::flush_stats() {
     p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, marked_cards, G1GCPhaseTimes::MergePSSMarked);
 
     nmethod_hash_table* table = pss->nmethod_table();
-        log_debug(gc)("pass on code root worker before %u " PTR_FORMAT " no-of-entries %d",
-                  worker_id, p2i(table), table->number_of_entries());
 
     _nmethod_tables[worker_id] = table;
     delete pss;
 
-    log_debug(gc)("pass on code root worker after %u " PTR_FORMAT " no-of-entries %d",
+    log_debug(gc)("pass on code root worker %u " PTR_FORMAT " no-of-entries %d",
                   worker_id, p2i(table), table->number_of_entries());
     _states[worker_id] = nullptr;
   }
@@ -694,8 +688,6 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m, Kla
   }
 }
 
-void G1ParScanThreadState::verify_nmethod_table() { _nmethod_table->verify(); }
-
 void G1ParScanThreadState::initialize_numa_stats() {
   if (_numa->is_enabled()) {
     LogTarget(Info, gc, heap, numa) lt;
@@ -740,7 +732,7 @@ G1ParScanThreadStateSet::G1ParScanThreadStateSet(G1CollectedHeap* g1h,
     _nmethod_tables(NEW_C_HEAP_ARRAY(nmethod_hash_table*, num_workers, mtGC)),
     _surviving_young_words_total(NEW_C_HEAP_ARRAY(size_t, collection_set->young_region_length() + 1, mtGC)),
     _num_workers(num_workers),
-    _flushed(false), _deleted(false),
+    _flushed(false),
     _evac_failure_regions(evac_failure_regions)
 {
   for (uint i = 0; i < num_workers; ++i) {
@@ -756,32 +748,30 @@ G1ParScanThreadStateSet::~G1ParScanThreadStateSet() {
   assert(_nmethod_tables[0] == nullptr, "huh");
   FREE_C_HEAP_ARRAY(nmethod_hash_table*, _nmethod_tables);
   FREE_C_HEAP_ARRAY(size_t, _surviving_young_words_total);
-  _deleted = true;
-}
-
-void G1ParScanThreadStateSet::verify_nmethod_tables() {
-  for (uint i = 0; i < _num_workers; i++) {
-    state_for_worker(i)->verify_nmethod_table();
-  }
 }
 
 void G1ParScanThreadStateSet::merge_code_roots(uint worker_id) {
   assert(worker_id < _num_workers, "must be");
   assert(_flushed, "must be");
-  assert(!_deleted, "must be");
   nmethod_hash_table* cur_table = _nmethod_tables[worker_id];
   assert(cur_table != nullptr, "must be");
   uint num_nmethods = 0;
+
   cur_table->iterate_all([&] (G1HeapRegion*& r, nmethod_value*& nmethods) {
+
+    log_debug(gc)("code root worker %u region %u entries %d (" PTR_FORMAT ")", worker_id, r->hrm_index(), nmethods->length(), p2i(cur_table));
+
     for (nmethod* nm : *nmethods) {
+      log_debug(gc)("code root worker %u " PTR_FORMAT " merge %u/" PTR_FORMAT,
+                    worker_id, p2i(cur_table), r->hrm_index(), p2i(nm));
+
       r->add_code_root(nm);
       num_nmethods++;
     }
     delete nmethods;
   });
-  log_debug(gc)("code root worker %u regions %d entries %u (" PTR_FORMAT ")", worker_id, cur_table->number_of_entries(), num_nmethods, p2i(cur_table));
 
-  //delete cur_table;//??? why not work
+  delete cur_table;
   _nmethod_tables[worker_id] = nullptr;
 }
 

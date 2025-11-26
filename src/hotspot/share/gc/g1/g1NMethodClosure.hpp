@@ -75,7 +75,6 @@ class G1NMethodClosure : public NMethodClosure {
   MarkingOopClosure _marking_oc;
 
   bool _strong;
-
 public:
   G1NMethodClosure(G1ParScanThreadState* pss, OopClosure* oc, bool strong);
 

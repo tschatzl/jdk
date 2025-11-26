@@ -46,6 +46,7 @@
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/oop.inline.hpp"
+#include "runtime/atomic.hpp"
 #include "runtime/prefetch.hpp"
 #include "runtime/threads.hpp"
 #include "runtime/threadSMR.hpp"
@@ -892,9 +893,11 @@ class G1PostEvacuateCollectionSetCleanupTask2::MergeCodeRootsTask
 {
   G1ParScanThreadStateSet* _per_thread_states;
 
+  Atomic<uint> _worker_claim;
+
 public:
   MergeCodeRootsTask(G1ParScanThreadStateSet* per_thread_states)
-    : G1AbstractSubTask(G1GCPhaseTimes::MergeCodeRoots), _per_thread_states(per_thread_states)
+    : G1AbstractSubTask(G1GCPhaseTimes::MergeCodeRoots), _per_thread_states(per_thread_states), _worker_claim(0)
   {}
 
   double worker_cost() const override {
@@ -902,7 +905,10 @@ public:
   }
 
   void do_work(uint worker_id) override {
-    _per_thread_states->merge_code_roots(worker_id);
+    uint claimed;
+    while ((claimed = _worker_claim.fetch_then_add(1u)) < _per_thread_states->num_workers()) {
+      _per_thread_states->merge_code_roots(claimed);
+    }
   }
 };
 
