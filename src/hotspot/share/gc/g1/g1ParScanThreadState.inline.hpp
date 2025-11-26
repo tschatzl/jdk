@@ -89,6 +89,33 @@ inline void G1ParScanThreadState::remember_reference_into_optional_region(T* p) 
   verify_task(p);
 }
 
+inline void G1ParScanThreadState::remember_code_root(G1HeapRegion* r, nmethod* nm) {
+  if (nm == _last_nmethod && r == _last_nmethod_hr) {
+    return;
+  }
+  _last_nmethod = nm;
+  _last_nmethod_hr = r;
+
+  nmethod_value** v = _nmethod_table->get(r);
+  nmethod_value* val;
+  if (v == nullptr) {
+      {
+      ResourceMark rm;
+    val = new nmethod_value(4);
+      }
+      assert(val->capacity() == 4, "just be");
+    _nmethod_table->put_when_absent(r, val);
+  } else {
+    val = *v;
+  }
+  val->push(nm);
+
+
+  log_debug(gc)("code root worker %u " PTR_FORMAT " remember %u/" PTR_FORMAT " no-of-entries %d (pushed %d)",
+                worker_id(), p2i(_nmethod_table), r->hrm_index(), p2i(nm), _nmethod_table->number_of_entries(), val->length());
+  _nmethod_table->verify();
+}
+
 G1OopStarChunkedList* G1ParScanThreadState::oops_into_optional_region(const G1HeapRegion* hr) {
   assert(hr->index_in_opt_cset() < _max_num_optional_regions,
          "Trying to access optional region idx %u beyond %zu " HR_FORMAT,

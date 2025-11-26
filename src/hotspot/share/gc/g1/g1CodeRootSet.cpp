@@ -245,10 +245,7 @@ uintx G1CodeRootSetHashTableConfig::get_hash(Value const& value, bool* is_dead) 
 size_t G1CodeRootSet::length() const { return _table->number_of_entries(); }
 
 void G1CodeRootSet::add(nmethod* method) {
-  if (!contains(method)) {
-    assert(!_is_iterating, "must be");
-    _table->insert(method);
-  }
+  _table->insert(method);
 }
 
 G1CodeRootSet::G1CodeRootSet() :

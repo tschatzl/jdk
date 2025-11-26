@@ -887,6 +887,25 @@ public:
   }
 };
 
+class G1PostEvacuateCollectionSetCleanupTask2::MergeCodeRootsTask
+  : public G1AbstractSubTask
+{
+  G1ParScanThreadStateSet* _per_thread_states;
+
+public:
+  MergeCodeRootsTask(G1ParScanThreadStateSet* per_thread_states)
+    : G1AbstractSubTask(G1GCPhaseTimes::MergeCodeRoots), _per_thread_states(per_thread_states)
+  {}
+
+  double worker_cost() const override {
+    return 1;
+  }
+
+  void do_work(uint worker_id) override {
+    _per_thread_states->merge_code_roots(worker_id);
+  }
+};
+
 G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2(G1ParScanThreadStateSet* per_thread_states,
                                                                                  G1EvacInfo* evacuation_info,
                                                                                  G1EvacFailureRegions* evac_failure_regions) :
@@ -908,4 +927,5 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
                                               evac_failure_regions));
+  add_parallel_task(new MergeCodeRootsTask(per_thread_states));
 }

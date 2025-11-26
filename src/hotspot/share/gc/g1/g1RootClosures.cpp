@@ -35,6 +35,9 @@ public:
                        G1ParScanThreadState* pss,
                        bool in_young_gc) :
       _closures(g1h, pss, in_young_gc) {}
+  ~G1EvacuationClosures() {
+    log_debug(gc)("evac closures %u", _closures._nmethods._num_adds);
+  }
 
   OopClosure* strong_oops() { return &_closures._oops; }
 

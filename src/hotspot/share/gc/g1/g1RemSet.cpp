@@ -59,6 +59,9 @@
 #include "utilities/ticks.hpp"
 #include CPU_HEADER(gc/g1/g1Globals)
 
+
+#include "gc/g1/g1NMethodClosure.hpp"
+
 // Collects information about the overall heap root scan progress during an evacuation.
 //
 // Scanning the remembered sets works by first merging all sources of cards to be
@@ -600,6 +603,8 @@ public:
     G1ScanAndCountNMethodClosure cl(_pss->closures()->weak_nmethods());
     r->code_roots_do(&cl);
     _code_roots_scanned += cl.count();
+    _pss->verify_nmethod_table();
+    log_debug(gc)("scanned %zu added %u", _code_roots_scanned, ((G1NMethodClosure*)_pss->closures()->strong_nmethods())->_num_adds);
     return false;
   }
 

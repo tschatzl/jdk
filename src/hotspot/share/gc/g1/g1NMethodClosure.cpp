@@ -28,6 +28,7 @@
 #include "gc/g1/g1HeapRegion.hpp"
 #include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/g1/g1NMethodClosure.hpp"
+#include "gc/g1/g1ParScanThreadState.inline.hpp"
 #include "gc/shared/barrierSetNMethod.hpp"
 #include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
@@ -41,7 +42,9 @@ void G1NMethodClosure::HeapRegionGatheringOopClosure::do_oop_work(T* p) {
     oop o = CompressedOops::decode_not_null(oop_or_narrowoop);
     G1HeapRegion* hr = _g1h->heap_region_containing(o);
     assert(!_g1h->is_in_cset(o) || hr->rem_set()->code_roots_list_contains(_nm), "if o still in collection set then evacuation failed and nm must already be in the remset");
-    hr->add_code_root(_nm);
+    _pss->remember_code_root(hr, _nm);
+    if (!UseNewCode) hr->add_code_root(_nm);
+    (*_adds)++;
   }
 }
 
@@ -72,6 +75,9 @@ void G1NMethodClosure::MarkingOopClosure::do_oop(oop* o) {
 void G1NMethodClosure::MarkingOopClosure::do_oop(narrowOop* o) {
   do_oop_work(o);
 }
+
+G1NMethodClosure::G1NMethodClosure(G1ParScanThreadState* pss, OopClosure* oc, bool strong) :
+  _oc(pss, oc, &_num_adds), _marking_oc(pss->worker_id()), _strong(strong), _num_adds(0) { }
 
 void G1NMethodClosure::do_evacuation_and_fixup(nmethod* nm) {
   _oc.set_nm(nm);

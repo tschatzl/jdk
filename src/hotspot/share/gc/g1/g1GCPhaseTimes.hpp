@@ -86,6 +86,7 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
 #endif
     EagerlyReclaimHumongousObjects,
     ResetPartialArrayStateManager,
+    MergeCodeRoots,
     ProcessEvacuationFailedRegions,
     ResetMarkingState,
     NoteStartOfMark,

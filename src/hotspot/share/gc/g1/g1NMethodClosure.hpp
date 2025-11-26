@@ -29,20 +29,24 @@
 #include "memory/iterator.hpp"
 
 class G1ConcurrentMark;
+class G1ParScanThreadState;
 class nmethod;
 
 class G1NMethodClosure : public NMethodClosure {
   // Gather nmethod remembered set entries.
   class HeapRegionGatheringOopClosure : public OopClosure {
     G1CollectedHeap* _g1h;
+    G1ParScanThreadState* _pss;
     OopClosure* _work;
     nmethod* _nm;
+
+    uint* _adds;
 
     template <typename T>
     void do_oop_work(T* p);
 
   public:
-    HeapRegionGatheringOopClosure(OopClosure* oc) : _g1h(G1CollectedHeap::heap()), _work(oc), _nm(nullptr) {}
+    HeapRegionGatheringOopClosure(G1ParScanThreadState* pss, OopClosure* oc, uint* adds) : _g1h(G1CollectedHeap::heap()), _pss(pss), _work(oc), _nm(nullptr), _adds(adds) {}
 
     void do_oop(oop* o);
     void do_oop(narrowOop* o);
@@ -71,14 +75,16 @@ class G1NMethodClosure : public NMethodClosure {
   MarkingOopClosure _marking_oc;
 
   bool _strong;
+
 public:
-  G1NMethodClosure(uint worker_id, OopClosure* oc, bool strong) :
-    _oc(oc), _marking_oc(worker_id), _strong(strong) { }
+  G1NMethodClosure(G1ParScanThreadState* pss, OopClosure* oc, bool strong);
 
   void do_evacuation_and_fixup(nmethod* nm);
   void do_marking(nmethod* nm);
 
   void do_nmethod(nmethod* nm);
+
+  uint _num_adds;
 };
 
 #endif // SHARE_GC_G1_G1NMETHODCLOSURE_HPP

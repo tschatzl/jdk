@@ -37,6 +37,8 @@
 #include "gc/shared/taskqueue.hpp"
 #include "memory/allocation.hpp"
 #include "oops/oop.hpp"
+#include "utilities/growableArray.hpp"
+#include "utilities/resizableHashTable.hpp"
 #include "utilities/ticks.hpp"
 
 class G1CardTable;
@@ -46,7 +48,11 @@ class G1EvacuationRootClosures;
 class G1OopStarChunkedList;
 class G1PLABAllocator;
 class G1HeapRegion;
+class nmethod;
 class outputStream;
+
+using nmethod_value = GrowableArrayCHeap<nmethod*, mtGC>;
+using nmethod_hash_table = ResizeableHashTable<G1HeapRegion*, nmethod_value*, AnyObj::C_HEAP, mtGC>;
 
 class G1ParScanThreadState : public CHeapObj<mtGC> {
   G1CollectedHeap* _g1h;
@@ -89,6 +95,10 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
   // Maximum number of optional regions at start of gc.
   size_t _max_num_optional_regions;
   G1OopStarChunkedList* _oops_into_optional_regions;
+
+  G1HeapRegion* _last_nmethod_hr;
+  nmethod* _last_nmethod;
+  nmethod_hash_table* _nmethod_table;
 
   G1NUMA* _numa;
   // Records how many object allocations happened at each node during copy to survivor.
@@ -249,15 +259,22 @@ public:
   inline void remember_reference_into_optional_region(T* p);
 
   inline G1OopStarChunkedList* oops_into_optional_region(const G1HeapRegion* hr);
+
+  inline void remember_code_root(G1HeapRegion* r, nmethod* nm);
+
+  void verify_nmethod_table();
+  nmethod_hash_table* nmethod_table() { nmethod_hash_table* result = _nmethod_table; _nmethod_table = nullptr; return result; }
 };
 
 class G1ParScanThreadStateSet : public StackObj {
   G1CollectedHeap* _g1h;
   G1CollectionSet* _collection_set;
   G1ParScanThreadState** _states;
+  nmethod_hash_table** _nmethod_tables;
   size_t* _surviving_young_words_total;
   uint _num_workers;
   bool _flushed;
+  bool _deleted;
   G1EvacFailureRegions* _evac_failure_regions;
 
  public:
@@ -269,12 +286,16 @@ class G1ParScanThreadStateSet : public StackObj {
 
   void flush_stats();
   void record_unused_optional_region(G1HeapRegion* hr);
+
+  void merge_code_roots(uint worker_id);
 #if TASKQUEUE_STATS
   void print_partial_array_task_stats();
 #endif // TASKQUEUE_STATS
 
   G1ParScanThreadState* state_for_worker(uint worker_id);
   uint num_workers() const { return _num_workers; }
+  
+  void verify_nmethod_tables();
 
   const size_t* surviving_young_words() const;
 };
