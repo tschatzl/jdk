@@ -183,6 +183,7 @@ public:
   // Routines for managing the list of code roots that point into
   // the heap region that owns this RSet.
   void add_code_root(nmethod* nm);
+  void resize_code_roots(uint new_size);
   void remove_code_root(nmethod* nm);
   void bulk_remove_code_roots();
 

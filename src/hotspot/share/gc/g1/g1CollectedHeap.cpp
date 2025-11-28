@@ -1310,6 +1310,7 @@ G1CollectedHeap::G1CollectedHeap() :
   _old_marking_cycles_completed(0),
   _eden(),
   _survivor(),
+  _gc_allocated_regions(4, mtGC),
   _gc_timer_stw(new STWGCTimer()),
   _gc_tracer_stw(new G1NewTracer()),
   _policy(new G1Policy(_gc_timer_stw)),
@@ -2699,6 +2700,8 @@ void G1CollectedHeap::prepare_for_mutator_after_young_collection() {
   start_new_collection_set();
   _allocator->init_mutator_alloc_regions();
 
+  _gc_allocated_regions.clear();
+
   phase_times()->record_prepare_for_mutator_time_ms((Ticks::now() - start).seconds() * 1000.0);
 }
 
@@ -3209,6 +3212,8 @@ void G1CollectedHeap::retire_gc_alloc_region(G1HeapRegion* alloc_region,
     assert(dest.is_young(), "Retiring alloc region should be young (%d)", dest.type());
     _survivor.add_used_bytes(allocated_bytes);
   }
+
+  _gc_allocated_regions.push(alloc_region);
 
   bool const during_im = collector_state()->in_concurrent_start_gc();
   if (during_im && allocated_bytes > 0) {

@@ -84,7 +84,7 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h,
     _max_num_optional_regions(collection_set->num_optional_regions()),
     _last_nmethod_hr(nullptr),
     _last_nmethod(nullptr),
-    _nmethod_table(new (mtGC) nmethod_hash_table(3, g1h->max_num_regions())),
+    _nmethod_table(UseNewCode ? new (mtGC) nmethod_hash_table(3, g1h->max_num_regions()) : nullptr),
     _numa(g1h->numa()),
     _obj_alloc_stat(nullptr),
     ALLOCATION_FAILURE_INJECTOR_ONLY(_allocation_failure_inject_counter(0) COMMA)
@@ -596,6 +596,12 @@ const size_t* G1ParScanThreadStateSet::surviving_young_words() const {
 
 void G1ParScanThreadStateSet::flush_stats() {
   assert(!_flushed, "thread local state from the per thread states should be flushed once");
+
+  ResourceMark rm;
+
+  uint* code_root_lengths = NEW_RESOURCE_ARRAY(uint, _g1h->max_num_regions());
+  memset(code_root_lengths, 0, _g1h->max_num_regions() * sizeof(uint));
+
   for (uint worker_id = 0; worker_id < _num_workers; ++worker_id) {
     G1ParScanThreadState* pss = _states[worker_id];
     assert(pss != nullptr, "must be initialized");
@@ -620,14 +626,24 @@ void G1ParScanThreadStateSet::flush_stats() {
     p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, evac_failure_cards, G1GCPhaseTimes::MergePSSEvacFail);
     p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, marked_cards, G1GCPhaseTimes::MergePSSMarked);
 
-    nmethod_hash_table* table = pss->nmethod_table();
+    if (UseNewCode) {
+      // Move into PSS::flush_stats()....
+      nmethod_hash_table* table = pss->nmethod_table();
+      _nmethod_tables[worker_id] = table;
+    
+      table->iterate_all([&] (G1HeapRegion*& r, nmethod_value*& val) {
+        code_root_lengths[r->hrm_index()] += (int)val->length();
+      });
+    }
 
-    _nmethod_tables[worker_id] = table;
     delete pss;
-
-    log_debug(gc)("pass on code root worker %u " PTR_FORMAT " no-of-entries %d",
-                  worker_id, p2i(table), table->number_of_entries());
     _states[worker_id] = nullptr;
+  }
+
+  if (UseNewCode) {
+    for (G1HeapRegion* r : _g1h->_gc_allocated_regions) {
+      r->resize_code_roots(code_root_lengths[r->hrm_index()]);
+    }
   }
 
   _flushed = true;

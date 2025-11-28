@@ -41,9 +41,17 @@ void G1NMethodClosure::HeapRegionGatheringOopClosure::do_oop_work(T* p) {
   if (!CompressedOops::is_null(oop_or_narrowoop)) {
     oop o = CompressedOops::decode_not_null(oop_or_narrowoop);
     G1HeapRegion* hr = _g1h->heap_region_containing(o);
-    assert(!_g1h->is_in_cset(o) || hr->rem_set()->code_roots_list_contains(_nm), "if o still in collection set then evacuation failed and nm must already be in the remset");
-    _pss->remember_code_root(hr, _nm);
-    if (!UseNewCode) hr->add_code_root(_nm);
+    // Evacuation failed, the current region's code root set already contains this
+    // nmethod as we are iterating over it.
+    if (_g1h->is_in_cset(o)) {
+      assert(hr->rem_set()->code_roots_list_contains(_nm), "If o still in collection set, then evacuation for o failed, and nm must already be in the code root set");
+      return;
+    }
+    if (UseNewCode) {
+      _pss->remember_code_root(hr, _nm);
+    } else {
+      hr->add_code_root(_nm);
+    }
     (*_adds)++;
   }
 }

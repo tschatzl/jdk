@@ -47,6 +47,7 @@ class G1CodeRootSet {
   void bulk_remove();
   bool contains(nmethod* method);
   void clear();
+  void clear_and_resize(uint new_size);
 
   // Prepare for MT iteration. Must be called before nmethods_do.
   void reset_table_scanner();

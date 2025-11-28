@@ -901,7 +901,7 @@ public:
   {}
 
   double worker_cost() const override {
-    return 1;
+    return _per_thread_states->num_workers();
   }
 
   void do_work(uint worker_id) override {
@@ -933,5 +933,7 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
                                               evac_failure_regions));
-  add_parallel_task(new MergeCodeRootsTask(per_thread_states));
+  if (UseNewCode) {
+    add_parallel_task(new MergeCodeRootsTask(per_thread_states));
+  }
 }

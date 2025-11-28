@@ -405,6 +405,11 @@ private:
   G1EdenRegions _eden;
   G1SurvivorRegions _survivor;
 
+  // Allocated regions during GC
+public:
+  GrowableArray<G1HeapRegion*> _gc_allocated_regions;
+
+private:
   STWGCTimer* _gc_timer_stw;
 
   G1NewTracer* _gc_tracer_stw;

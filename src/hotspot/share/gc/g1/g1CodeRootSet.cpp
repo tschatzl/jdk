@@ -81,10 +81,10 @@ class G1CodeRootSetHashTable : public CHeapObj<mtGC> {
   };
 
 public:
-  G1CodeRootSetHashTable() :
+  G1CodeRootSetHashTable(size_t log2_num_buckets = Log2DefaultNumBuckets) :
     _table(Mutex::service-1,
            nullptr,
-           Log2DefaultNumBuckets,
+           log2_num_buckets,
            false /* enable_statistics */),
     _table_scanner(&_table, BucketClaimSize), _num_entries(0) {
     clear();
@@ -197,7 +197,7 @@ public:
   }
 
   // Calculate the log2 of the table size we want to shrink to.
-  size_t log2_target_shrink_size(size_t current_size) const {
+  static size_t log2_target_size(size_t current_size) {
     // A table with the new size should be at most filled by this factor. Otherwise
     // we would grow again quickly.
     const float WantedLoadFactor = 0.5;
@@ -211,10 +211,14 @@ public:
     return result;
   }
 
+  size_t log2_bucket_size() {
+    return _table.get_size_log2(Thread::current());
+  }
+
   // Shrink to keep table size appropriate to the given number of entries.
   void shrink_to_match(size_t current_size) {
     size_t prev_log2size = _table.get_size_log2(Thread::current());
-    size_t new_log2_table_size = log2_target_shrink_size(current_size);
+    size_t new_log2_table_size = log2_target_size(current_size);
     if (new_log2_table_size < prev_log2size) {
       _table.shrink(Thread::current(), new_log2_table_size);
     }
@@ -273,6 +277,20 @@ bool G1CodeRootSet::contains(nmethod* method) {
 void G1CodeRootSet::clear() {
   assert(!_is_iterating, "should not mutate while iterating the table");
   _table->clear();
+}
+
+void G1CodeRootSet::clear_and_resize(uint new_size) {
+  assert(!_is_iterating, "should not mutate while iterating the table");
+  size_t log2_old_size = _table->log2_bucket_size();
+  size_t log2_new_size = G1CodeRootSetHashTable::log2_target_size(new_size);
+  log_debug(gc)("Changing code root table size from %zu to %zu (%u entries)", log2_old_size, log2_new_size, new_size);
+
+  if (log2_old_size == log2_new_size) {
+    _table->clear();
+  } else {
+    delete _table;
+    _table = new G1CodeRootSetHashTable(log2_new_size);
+  }
 }
 
 size_t G1CodeRootSet::mem_size() {

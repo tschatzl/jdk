@@ -116,6 +116,10 @@ void G1HeapRegionRemSet::add_code_root(nmethod* nm) {
   _code_roots.add(nm);
 }
 
+void G1HeapRegionRemSet::resize_code_roots(uint new_size) {
+  _code_roots.clear_and_resize(new_size);
+}
+
 void G1HeapRegionRemSet::remove_code_root(nmethod* nm) {
   assert(nm != nullptr, "sanity");
 
