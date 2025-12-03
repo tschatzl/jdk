@@ -85,6 +85,7 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h,
     _last_nmethod_hr(nullptr),
     _last_nmethod(nullptr),
     _nmethod_table(UseNewCode ? new (mtGC) nmethod_hash_table(3, g1h->max_num_regions()) : nullptr),
+    _nmethod_push_time(0),
     _numa(g1h->numa()),
     _obj_alloc_stat(nullptr),
     ALLOCATION_FAILURE_INJECTOR_ONLY(_allocation_failure_inject_counter(0) COMMA)
@@ -634,6 +635,7 @@ void G1ParScanThreadStateSet::flush_stats() {
       table->iterate_all([&] (G1HeapRegion*& r, nmethod_value*& val) {
         code_root_lengths[r->hrm_index()] += (int)val->length();
       });
+      log_debug(gc,stats)("worker %u push time %f", worker_id, TimeHelper::counter_to_millis(pss->nmethod_push_time()));
     }
 
     delete pss;

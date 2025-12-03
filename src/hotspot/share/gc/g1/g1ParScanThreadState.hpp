@@ -99,6 +99,7 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
   G1HeapRegion* _last_nmethod_hr;
   nmethod* _last_nmethod;
   nmethod_hash_table* _nmethod_table;
+  jlong _nmethod_push_time;
 
   G1NUMA* _numa;
   // Records how many object allocations happened at each node during copy to survivor.
@@ -264,6 +265,7 @@ public:
 
   void verify_nmethod_table();
   nmethod_hash_table* nmethod_table() { nmethod_hash_table* result = _nmethod_table; _nmethod_table = nullptr; return result; }
+  jlong nmethod_push_time() const { return _nmethod_push_time; }
 };
 
 class G1ParScanThreadStateSet : public StackObj {

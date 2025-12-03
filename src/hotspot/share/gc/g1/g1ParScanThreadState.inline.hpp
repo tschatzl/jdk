@@ -104,8 +104,9 @@ inline void G1ParScanThreadState::remember_code_root(G1HeapRegion* r, nmethod* n
   } else {
     val = *v;
   }
+  jlong start = os::elapsed_counter();
   val->push(nm);
-  
+  _nmethod_push_time = os::elapsed_counter() - start;  
 
   log_debug(gc)("code root worker %u " PTR_FORMAT " remember %u/" PTR_FORMAT " no-of-entries %d (pushed %d)",
                 worker_id(), p2i(_nmethod_table), r->hrm_index(), p2i(nm), _nmethod_table->number_of_entries(), val->length());
