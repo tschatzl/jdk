@@ -925,6 +925,10 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
   }
   add_serial_task(new ResetPartialArrayStateManagerTask());
 
+  if (UseNewCode) {
+    add_parallel_task(new MergeCodeRootsTask(per_thread_states));
+  }
+
   if (evac_failure_regions->has_regions_evac_failed()) {
     add_parallel_task(new ProcessEvacuationFailedRegionsTask(evac_failure_regions));
   }
@@ -933,7 +937,4 @@ G1PostEvacuateCollectionSetCleanupTask2::G1PostEvacuateCollectionSetCleanupTask2
   add_parallel_task(new FreeCollectionSetTask(evacuation_info,
                                               per_thread_states->surviving_young_words(),
                                               evac_failure_regions));
-  if (UseNewCode) {
-    add_parallel_task(new MergeCodeRootsTask(per_thread_states));
-  }
 }
