@@ -283,7 +283,7 @@ void G1CodeRootSet::clear_and_resize(uint new_size) {
   assert(!_is_iterating, "should not mutate while iterating the table");
   size_t log2_old_size = _table->log2_bucket_size();
   size_t log2_new_size = G1CodeRootSetHashTable::log2_target_size(new_size);
-  log_debug(gc)("Changing code root table size from %zu to %zu (%u entries)", log2_old_size, log2_new_size, new_size);
+  //log_debug(gc)("Changing code root table size from %zu to %zu (%u entries)", log2_old_size, log2_new_size, new_size);
 
   if (log2_old_size == log2_new_size) {
     _table->clear();

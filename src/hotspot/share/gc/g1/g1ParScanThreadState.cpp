@@ -775,7 +775,7 @@ void G1ParScanThreadStateSet::merge_code_roots(uint worker_id) {
 
   cur_table->iterate_all([&] (G1HeapRegion*& r, nmethod_value*& nmethods) {
 
-    log_debug(gc)("code root worker %u region %u entries %d (" PTR_FORMAT ")", worker_id, r->hrm_index(), nmethods->length(), p2i(cur_table));
+    //log_debug(gc)("code root worker %u region %u entries %d (" PTR_FORMAT ")", worker_id, r->hrm_index(), nmethods->length(), p2i(cur_table));
 
     for (nmethod* nm : *nmethods) {
       log_debug(gc)("code root worker %u " PTR_FORMAT " merge %u/" PTR_FORMAT,

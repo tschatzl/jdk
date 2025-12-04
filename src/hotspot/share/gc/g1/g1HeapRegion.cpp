@@ -308,7 +308,7 @@ void G1HeapRegion::add_code_root(nmethod* nm) {
 }
 
 void G1HeapRegion::resize_code_roots(uint new_size) {
-  log_debug(gc)("Changing code root size region %u to %u", hrm_index(), new_size);
+  //log_debug(gc)("Changing code root size region %u to %u", hrm_index(), new_size);
   rem_set()->resize_code_roots(new_size);
 }
 
