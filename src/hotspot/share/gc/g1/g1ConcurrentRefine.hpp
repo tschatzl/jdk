@@ -108,7 +108,7 @@ public:
 // the garbage collection will interrupt this process, and go to Idle state.
 //
 class G1ConcurrentRefineSweepState {
-
+public:
   enum class State : uint {
     Idle,                        // Refinement is doing nothing.
     SwapGlobalCT,                // Swap global card table.
@@ -171,6 +171,9 @@ public:
   G1CardTableClaimTable* sweep_table() { return _sweep_table; }
   G1ConcurrentRefineStats* stats() { return &_stats; }
   void reset_stats();
+
+  const char* state_name() { return state_name(_state); }
+  State state() const { return _state; }
 
   void add_yield_during_sweep_duration(jlong duration);
 
