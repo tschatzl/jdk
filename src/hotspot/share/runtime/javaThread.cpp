@@ -110,6 +110,10 @@
 #include "jfr/jfr.hpp"
 #endif
 
+#include "gc/g1/g1CollectedHeap.hpp"
+#include "gc/g1/g1ThreadLocalData.hpp"
+#include "gc/g1/g1ConcurrentRefine.hpp"
+
 // Set by os layer.
 size_t      JavaThread::_stack_size_at_create = 0;
 
@@ -1189,6 +1193,8 @@ bool JavaThread::java_suspend(bool register_vthread_SR) {
   // But the suspender thread is an exclusive transition disablers, so there can't be other disabers here.
   JVMTI_ONLY(assert(!is_vthread_transition_disabler(), "suspender thread is an exclusive transition disabler");)
 
+  EventMark ev("Suspend " PTR_FORMAT " %u", p2i(this), osthread()->thread_id());
+
   guarantee(Thread::is_JavaThread_protected(/* target */ this),
             "target JavaThread is not protected in calling context.");
   return this->suspend_resume_manager()->suspend(register_vthread_SR);
@@ -1197,7 +1203,16 @@ bool JavaThread::java_suspend(bool register_vthread_SR) {
 bool JavaThread::java_resume(bool register_vthread_SR) {
   guarantee(Thread::is_JavaThread_protected_by_TLH(/* target */ this),
             "missing ThreadsListHandle in calling context.");
-  return this->suspend_resume_manager()->resume(register_vthread_SR);
+  bool result = this->suspend_resume_manager()->resume(register_vthread_SR);
+  EventMark ev("Resume " PTR_FORMAT " %u", p2i(this), osthread()->thread_id());
+#ifndef PRODUCT
+  if (UseG1GC) {
+    assert(G1CollectedHeap::heap()->concurrent_refine()->sweep_state().state() < G1ConcurrentRefineSweepState::State::SnapshotHeap ||
+           G1ThreadLocalData::get_byte_map_base(this) == G1CollectedHeap::heap()->card_table_base(), 
+           "resumed " PTR_FORMAT " has wrong CT", p2i(this));
+  }
+#endif
+  return result;
 }
 
 // Wait for another thread to perform object reallocation and relocking on behalf of

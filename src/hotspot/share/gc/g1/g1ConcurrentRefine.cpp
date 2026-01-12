@@ -42,6 +42,7 @@
 #include "runtime/java.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "utilities/debug.hpp"
+#include "utilities/events.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ticks.hpp"
 
@@ -177,6 +178,7 @@ void G1ConcurrentRefineSweepState::start_work() {
 }
 
 bool G1ConcurrentRefineSweepState::swap_global_card_table() {
+  EventMarkVMOperation ev("Swap global CT");
   assert_state(State::SwapGlobalCT);
 
   GCTraceTime(Info, gc, refine) tm("Concurrent Refine Global Card Table Swap");
@@ -201,6 +203,8 @@ bool G1ConcurrentRefineSweepState::swap_global_card_table() {
 }
 
 bool G1ConcurrentRefineSweepState::swap_java_threads_ct() {
+  EventMarkVMOperation ev("Swap Java Threads CT");
+
   assert_state(State::SwapJavaThreadsCT);
 
   GCTraceTime(Info, gc, refine) tm("Concurrent Refine Java Thread CT swap");
@@ -227,6 +231,8 @@ bool G1ConcurrentRefineSweepState::swap_java_threads_ct() {
   }
 
 bool G1ConcurrentRefineSweepState::swap_gc_threads_ct() {
+  EventMarkVMOperation ev("Swap GC Threads CT");
+
   assert_state(State::SynchronizeGCThreads);
 
   GCTraceTime(Info, gc, refine) tm("Concurrent Refine GC Thread CT swap");
@@ -270,6 +276,8 @@ bool G1ConcurrentRefineSweepState::swap_gc_threads_ct() {
 }
 
 void G1ConcurrentRefineSweepState::snapshot_heap(bool concurrent) {
+  EventMarkVMOperation ev("Snapshot Heap");
+
   if (concurrent) {
     GCTraceTime(Info, gc, refine) tm("Concurrent Refine Snapshot Heap");
 
@@ -481,7 +489,7 @@ void G1ConcurrentRefine::update_pending_cards_target(double pending_cards_time_m
                                                      size_t processed_pending_cards,
                                                      double goal_ms) {
   size_t minimum = minimum_pending_cards_target();
-  if ((processed_pending_cards < minimum) || (pending_cards_time_ms == 0.0)) {
+  if (false && ((processed_pending_cards < minimum) || (pending_cards_time_ms == 0.0))) {
     log_debug(gc, ergo, refine)("Unchanged pending cards target: %zu (processed %zu minimum %zu time %1.2f)",
                                 _pending_cards_target, processed_pending_cards, minimum, pending_cards_time_ms);
     return;
@@ -528,8 +536,8 @@ uint64_t G1ConcurrentRefine::adjust_threads_wait_ms() const {
       return 1;
     }
     double available_time_ms = _threads_needed.predicted_time_until_next_gc_ms();
-
-    return _policy->adjust_wait_time_ms(available_time_ms, adjust_threads_period_ms());
+    return adjust_threads_period_ms();
+    //return _policy->adjust_wait_time_ms(available_time_ms, adjust_threads_period_ms());
   } else {
     // If target not yet initialized then wait forever (until explicitly
     // activated).  This happens during startup, when we don't bother with
@@ -547,7 +555,7 @@ bool G1ConcurrentRefine::adjust_num_threads_periodically() {
   if (!_needs_adjust) {
     Tickspan since_adjust = Ticks::now() - _last_adjust;
     if (since_adjust.milliseconds() < adjust_threads_period_ms()) {
-      _num_threads_wanted = 0;
+      _num_threads_wanted = 1;
       return false;
     }
   }
@@ -564,6 +572,7 @@ bool G1ConcurrentRefine::adjust_num_threads_periodically() {
     _needs_adjust = true;
   }
 
+  _num_threads_wanted = 1; // force refinement.
   return (_num_threads_wanted > 0) && !heap_was_locked();
 }
 

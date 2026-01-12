@@ -2383,6 +2383,8 @@ void G1CollectedHeap::print_heap_on(outputStream* st) const {
     }
     st->cr();
   }
+
+  st->print("refine state: %s", concurrent_refine()->sweep_state().state_name());
 }
 
 void G1CollectedHeap::print_regions_on(outputStream* st) const {
