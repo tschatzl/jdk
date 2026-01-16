@@ -489,7 +489,7 @@ void G1ConcurrentRefine::update_pending_cards_target(double pending_cards_time_m
                                                      size_t processed_pending_cards,
                                                      double goal_ms) {
   size_t minimum = minimum_pending_cards_target();
-  if (false && ((processed_pending_cards < minimum) || (pending_cards_time_ms == 0.0))) {
+  if ((processed_pending_cards < minimum) || (pending_cards_time_ms == 0.0)) {
     log_debug(gc, ergo, refine)("Unchanged pending cards target: %zu (processed %zu minimum %zu time %1.2f)",
                                 _pending_cards_target, processed_pending_cards, minimum, pending_cards_time_ms);
     return;
