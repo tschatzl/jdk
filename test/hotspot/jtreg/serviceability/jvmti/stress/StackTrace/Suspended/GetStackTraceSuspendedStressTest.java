@@ -26,7 +26,7 @@
  * @summary Verifies JVMTI GetStackTrace functions called after vthread is suspended.
  * @library /test/lib
  * @compile GetStackTraceSuspendedStressTest.java
- * @run main/othervm/native -agentlib:GetStackTraceSuspendedStress -Xlog:gc -Xmx16m GetStackTraceSuspendedStressTest
+ * @run main/othervm/native -agentlib:GetStackTraceSuspendedStress GetStackTraceSuspendedStressTest
  */
 
 import jdk.test.lib.jvmti.DebugeeClass;
@@ -38,8 +38,8 @@ import java.util.concurrent.*;
 public class GetStackTraceSuspendedStressTest extends DebugeeClass {
     private static final String agentLib = "GetStackTraceSuspendedStress";
 
-    static final int MSG_COUNT = 5000;
-    static final int VTHREAD_COUNT = 300;
+    static final int MSG_COUNT = 1000;
+    static final int VTHREAD_COUNT = 60;
     static final SynchronousQueue<String> QUEUE = new SynchronousQueue<>();
 
     static void producer(String msg) throws InterruptedException {
@@ -52,21 +52,17 @@ public class GetStackTraceSuspendedStressTest extends DebugeeClass {
     }
 
     static void producer() {
-            Object o;
         try {
             for (int i = 0; i < MSG_COUNT; i++) {
                 producer("msg: ");
-                o = new Object[2000];
             }
         } catch (InterruptedException e) { }
     }
 
     static void consumer() {
-    Object o;
         try {
             for (int i = 0; i < MSG_COUNT; i++) {
                 String s = QUEUE.take();
-                o = new Object[2000];
             }
         } catch (InterruptedException e) { }
     }

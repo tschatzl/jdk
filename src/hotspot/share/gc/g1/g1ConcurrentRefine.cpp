@@ -536,8 +536,8 @@ uint64_t G1ConcurrentRefine::adjust_threads_wait_ms() const {
       return 1;
     }
     double available_time_ms = _threads_needed.predicted_time_until_next_gc_ms();
-    return adjust_threads_period_ms();
-    //return _policy->adjust_wait_time_ms(available_time_ms, adjust_threads_period_ms());
+
+    return _policy->adjust_wait_time_ms(available_time_ms, adjust_threads_period_ms());
   } else {
     // If target not yet initialized then wait forever (until explicitly
     // activated).  This happens during startup, when we don't bother with
@@ -555,7 +555,7 @@ bool G1ConcurrentRefine::adjust_num_threads_periodically() {
   if (!_needs_adjust) {
     Tickspan since_adjust = Ticks::now() - _last_adjust;
     if (since_adjust.milliseconds() < adjust_threads_period_ms()) {
-      _num_threads_wanted = 1;
+      _num_threads_wanted = 0;
       return false;
     }
   }
@@ -572,7 +572,6 @@ bool G1ConcurrentRefine::adjust_num_threads_periodically() {
     _needs_adjust = true;
   }
 
-  _num_threads_wanted = 1; // force refinement.
   return (_num_threads_wanted > 0) && !heap_was_locked();
 }
 
