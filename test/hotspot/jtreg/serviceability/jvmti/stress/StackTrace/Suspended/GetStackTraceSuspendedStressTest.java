@@ -26,7 +26,7 @@
  * @summary Verifies JVMTI GetStackTrace functions called after vthread is suspended.
  * @library /test/lib
  * @compile GetStackTraceSuspendedStressTest.java
- * @run main/othervm/native -agentlib:GetStackTraceSuspendedStress GetStackTraceSuspendedStressTest
+ * @run main/othervm/native -agentlib:GetStackTraceSuspendedStress -Xlog:gc,gc+start GetStackTraceSuspendedStressTest
  */
 
 import jdk.test.lib.jvmti.DebugeeClass;

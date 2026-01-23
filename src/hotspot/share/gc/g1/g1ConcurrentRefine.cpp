@@ -178,7 +178,7 @@ void G1ConcurrentRefineSweepState::start_work() {
 }
 
 bool G1ConcurrentRefineSweepState::swap_global_card_table() {
-  EventMarkVMOperation ev("Swap global CT");
+  //EventMarkVMOperation ev("Swap global CT");
   assert_state(State::SwapGlobalCT);
 
   GCTraceTime(Info, gc, refine) tm("Concurrent Refine Global Card Table Swap");
@@ -203,7 +203,7 @@ bool G1ConcurrentRefineSweepState::swap_global_card_table() {
 }
 
 bool G1ConcurrentRefineSweepState::swap_java_threads_ct() {
-  EventMarkVMOperation ev("Swap Java Threads CT");
+  //EventMarkVMOperation ev("Swap Java Threads CT");
 
   assert_state(State::SwapJavaThreadsCT);
 
@@ -231,7 +231,7 @@ bool G1ConcurrentRefineSweepState::swap_java_threads_ct() {
   }
 
 bool G1ConcurrentRefineSweepState::swap_gc_threads_ct() {
-  EventMarkVMOperation ev("Swap GC Threads CT");
+  //EventMarkVMOperation ev("Swap GC Threads CT");
 
   assert_state(State::SynchronizeGCThreads);
 
@@ -276,7 +276,7 @@ bool G1ConcurrentRefineSweepState::swap_gc_threads_ct() {
 }
 
 void G1ConcurrentRefineSweepState::snapshot_heap(bool concurrent) {
-  EventMarkVMOperation ev("Snapshot Heap");
+  //EventMarkVMOperation ev("Snapshot Heap");
 
   if (concurrent) {
     GCTraceTime(Info, gc, refine) tm("Concurrent Refine Snapshot Heap");

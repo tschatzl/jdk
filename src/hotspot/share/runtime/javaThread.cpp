@@ -1193,7 +1193,7 @@ bool JavaThread::java_suspend(bool register_vthread_SR) {
   // But the suspender thread is an exclusive transition disablers, so there can't be other disabers here.
   JVMTI_ONLY(assert(!is_vthread_transition_disabler(), "suspender thread is an exclusive transition disabler");)
 
-  EventMark ev("Suspend " PTR_FORMAT " %u", p2i(this), osthread()->thread_id());
+//  EventMark ev("Suspend " PTR_FORMAT " %u", p2i(this), osthread()->thread_id());
 
   guarantee(Thread::is_JavaThread_protected(/* target */ this),
             "target JavaThread is not protected in calling context.");
@@ -1204,6 +1204,7 @@ bool JavaThread::java_resume(bool register_vthread_SR) {
   guarantee(Thread::is_JavaThread_protected_by_TLH(/* target */ this),
             "missing ThreadsListHandle in calling context.");
   bool result = this->suspend_resume_manager()->resume(register_vthread_SR);
+/* 
   EventMark ev("Resume " PTR_FORMAT " %u", p2i(this), osthread()->thread_id());
 #ifndef PRODUCT
   if (UseG1GC) {
@@ -1212,6 +1213,7 @@ bool JavaThread::java_resume(bool register_vthread_SR) {
            "resumed " PTR_FORMAT " has wrong CT", p2i(this));
   }
 #endif
+ * */
   return result;
 }
 
