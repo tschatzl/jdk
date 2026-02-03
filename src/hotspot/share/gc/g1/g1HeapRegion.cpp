@@ -129,8 +129,6 @@ void G1HeapRegion::hr_clear(bool clear_space) {
 
   rem_set()->clear();
 
-  G1CollectedHeap::heap()->concurrent_mark()->reset_top_at_mark_start(this);
-
   _parsable_bottom.store_relaxed(bottom());
   _garbage_bytes.store_relaxed(0);
   _incoming_refs = 0;

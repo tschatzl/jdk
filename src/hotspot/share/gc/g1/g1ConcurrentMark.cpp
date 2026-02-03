@@ -519,9 +519,9 @@ G1ConcurrentMark::G1ConcurrentMark(G1CollectedHeap* g1h,
   _num_concurrent_workers(0),
   _max_concurrent_workers(0),
 
-  _region_mark_stats(NEW_C_HEAP_ARRAY(G1RegionMarkStats, _g1h->max_num_regions(), mtGC)),
-  _top_at_mark_starts(NEW_C_HEAP_ARRAY(Atomic<HeapWord*>, _g1h->max_num_regions(), mtGC)),
-  _top_at_rebuild_starts(NEW_C_HEAP_ARRAY(Atomic<HeapWord*>, _g1h->max_num_regions(), mtGC)),
+  _region_mark_stats(nullptr),
+  _top_at_mark_starts(nullptr),
+  _top_at_rebuild_starts(nullptr),
   _needs_remembered_set_rebuild(false)
 {
   assert(G1CGC_lock != nullptr, "CGC_lock must be initialized");
@@ -553,6 +553,10 @@ void G1ConcurrentMark::fully_initialize() {
     vm_exit_during_initialization("Failed to allocate initial concurrent mark overflow mark stack.");
   }
 
+  _region_mark_stats = NEW_C_HEAP_ARRAY(G1RegionMarkStats, _g1h->max_num_regions(), mtGC);
+  _top_at_mark_starts = NEW_C_HEAP_ARRAY(Atomic<HeapWord*>, _g1h->max_num_regions(), mtGC);
+  _top_at_rebuild_starts = NEW_C_HEAP_ARRAY(Atomic<HeapWord*>, _g1h->max_num_regions(), mtGC);
+
   _tasks = NEW_C_HEAP_ARRAY(G1CMTask*, _max_num_tasks, mtGC);
 
   // so that the assertion in MarkingTaskQueue::task_queue doesn't fail
@@ -583,6 +587,8 @@ PartialArrayStateManager* G1ConcurrentMark::partial_array_state_manager() const 
 }
 
 void G1ConcurrentMark::reset() {
+  assert_fully_initialized();
+
   _has_aborted.store_relaxed(false);
 
   reset_marking_for_restart();
@@ -595,6 +601,11 @@ void G1ConcurrentMark::reset() {
 
   uint max_num_regions = _g1h->max_num_regions();
   for (uint i = 0; i < max_num_regions; i++) {
+#ifdef ASSERT
+    if (_g1h->region_at_or_null(i) == nullptr) {
+      _top_at_mark_starts[i].store_relaxed(nullptr);
+    }
+#endif
     _top_at_rebuild_starts[i].store_relaxed(nullptr);
     _region_mark_stats[i].clear();
   }
@@ -603,6 +614,8 @@ void G1ConcurrentMark::reset() {
 }
 
 void G1ConcurrentMark::clear_statistics(G1HeapRegion* r) {
+  assert_fully_initialized();
+
   uint region_idx = r->hrm_index();
   for (uint j = 0; j < _max_num_tasks; ++j) {
     _tasks[j]->clear_mark_stats_cache(region_idx);
@@ -630,6 +643,8 @@ void G1ConcurrentMark::humongous_object_eagerly_reclaimed(G1HeapRegion* r) {
 }
 
 void G1ConcurrentMark::reset_marking_for_restart() {
+  assert_fully_initialized();
+
   _global_mark_stack.set_empty();
 
   // Expand the marking stack, if we have to and if we can.

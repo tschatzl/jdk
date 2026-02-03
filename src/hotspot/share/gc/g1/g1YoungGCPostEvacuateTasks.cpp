@@ -504,13 +504,16 @@ class G1PostEvacuateCollectionSetCleanupTask2::ProcessEvacuationFailedRegionsTas
       // Concurrent mark does not mark through regions that we retain (they are root
       // regions wrt to marking), so we must clear their mark data (tams, bitmap, ...)
       // set eagerly or during evacuation failure.
-      bool clear_mark_data = !g1h->collector_state()->in_concurrent_start_gc() ||
+      bool in_concurrent_start_gc = g1h->collector_state()->in_concurrent_start_gc();
+      bool clear_mark_data = !in_concurrent_start_gc ||
                              g1h->policy()->should_retain_evac_failed_region(r);
 
       if (clear_mark_data) {
         g1h->clear_bitmap_for_region(r);
+        cm->reset_top_at_mark_start(hr);
       } else {
         // This evacuation failed region is going to be marked through. Update mark data.
+        cm->clear_statistics(hr);
         cm->update_top_at_mark_start(r);
         cm->set_live_bytes(r->hrm_index(), r->live_bytes());
         assert(cm->mark_bitmap()->get_next_marked_addr(r->bottom(), cm->top_at_mark_start(r)) != cm->top_at_mark_start(r),

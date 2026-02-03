@@ -3206,6 +3206,12 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
       // Synchronize with region attribute table.
       update_region_attr(new_alloc_region);
     }
+
+    bool in_concurrent_start_gc = collector_state()->in_concurrent_start_gc();
+    if (in_concurrent_start_gc) {
+      _cm->update_top_at_mark_start(new_alloc_region);
+    }
+
     G1HeapRegionPrinter::alloc(new_alloc_region);
     return new_alloc_region;
   }
@@ -3223,8 +3229,8 @@ void G1CollectedHeap::retire_gc_alloc_region(G1HeapRegion* alloc_region,
     _survivor.add_used_bytes(allocated_bytes);
   }
 
-  bool const during_im = collector_state()->in_concurrent_start_gc();
-  if (during_im && allocated_bytes > 0) {
+  bool in_concurrent_start_gc = collector_state()->in_concurrent_start_gc();
+  if (in_concurrent_start_gc && allocated_bytes > 0) {
     _cm->add_root_region(alloc_region);
   }
   G1HeapRegionPrinter::retire(alloc_region);
