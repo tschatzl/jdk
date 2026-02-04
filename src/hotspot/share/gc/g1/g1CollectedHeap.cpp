@@ -155,6 +155,11 @@ public:
     _tcpu(tracer) {
 
     assert_at_safepoint_on_vm_thread();
+    G1CollectedHeap::heap()->collector_state()->set_in_gc(true);
+  }
+
+  ~G1GCMark() {
+    G1CollectedHeap::heap()->collector_state()->set_in_gc(false);   
   }
 };
 

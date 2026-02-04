@@ -73,6 +73,9 @@ class G1CollectorState {
   // Set during a full gc pause.
   bool _in_full_gc;
 
+  // Set during any GC.
+  bool _in_gc;
+
 public:
   G1CollectorState() :
     _in_young_only_phase(true),
@@ -84,7 +87,8 @@ public:
     _mark_in_progress(false),
     _mark_or_rebuild_in_progress(false),
     _clear_bitmap_in_progress(false),
-    _in_full_gc(false) { }
+    _in_full_gc(false),
+    _in_gc(false) { }
 
   // Phase setters
   void set_in_young_only_phase(bool v) { _in_young_only_phase = v; }
@@ -93,6 +97,7 @@ public:
   void set_in_young_gc_before_mixed(bool v) { _in_young_gc_before_mixed = v; }
   void set_in_concurrent_start_gc(bool v) { _in_concurrent_start_gc = v; }
   void set_in_full_gc(bool v) { _in_full_gc = v; }
+  void set_in_gc(bool v) { _in_gc = v; }
 
   void set_initiate_conc_mark_if_possible(bool v) { _initiate_conc_mark_if_possible = v; }
 
@@ -107,6 +112,7 @@ public:
   // Specific pauses
   bool in_young_gc_before_mixed() const { return _in_young_gc_before_mixed; }
   bool in_full_gc() const { return _in_full_gc; }
+  bool in_gc() const { return _in_gc; }
   bool in_concurrent_start_gc() const { return _in_concurrent_start_gc; }
 
   bool initiate_conc_mark_if_possible() const { return _initiate_conc_mark_if_possible; }

@@ -28,6 +28,7 @@
 #include "gc/g1/g1BarrierSet.hpp"
 
 #include "gc/g1/g1CardTable.hpp"
+#include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/g1/g1ThreadLocalData.hpp"
 #include "gc/shared/accessBarrierSupport.inline.hpp"
 #include "oops/access.inline.hpp"
@@ -70,6 +71,7 @@ inline void G1BarrierSet::write_ref_field_pre(T* field) {
 
 template <DecoratorSet decorators, typename T>
 inline void G1BarrierSet::write_ref_field_post(T* field) {
+  precond(!G1CollectedHeap::heap()->collector_state()->in_gc());
   // Make sure that the card table reference is read only once. Otherwise the compiler
   // might reload that value in the two accesses below, that could cause writes to
   // the wrong card table.
