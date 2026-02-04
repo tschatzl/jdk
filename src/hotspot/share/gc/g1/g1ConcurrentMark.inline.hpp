@@ -198,9 +198,23 @@ inline void G1ConcurrentMark::update_top_at_mark_start(G1HeapRegion* r) {
   _top_at_mark_starts[region].store_relaxed(r->top());
 }
 
-inline void G1ConcurrentMark::reset_top_at_mark_start(G1HeapRegion* r) {
-  assert_fully_initialized();
-  _top_at_mark_starts[r->hrm_index()].store_relaxed(r->bottom());
+inline void G1ConcurrentMark::assert_top_at_mark_start_clear(G1HeapRegion* r) {
+  // Can not assert anything if not initialized.
+  if (!is_fully_initialized()) {
+    return;
+  }
+  assert(top_at_mark_start(r) == nullptr, "must be");
+}
+
+inline HeapWord* G1ConcurrentMark::top_at_mark_start_safe(const G1HeapRegion* r) const {
+  if (!is_fully_initialized()) {
+    return nullptr;
+  }
+  return top_at_mark_start(r);
+}
+
+inline bool G1ConcurrentMark::has_top_at_mark_start(const G1HeapRegion* r) const {
+  return is_fully_initialized() && top_at_mark_start(r) != nullptr;
 }
 
 inline HeapWord* G1ConcurrentMark::top_at_mark_start(const G1HeapRegion* r) const {

@@ -613,6 +613,21 @@ void G1ConcurrentMark::reset() {
   _root_regions.reset();
 }
 
+void G1ConcurrentMark::assert_statistics_clear(G1HeapRegion* r) {
+  assert_fully_initialized();
+
+  uint region_idx = r->hrm_index();
+  for (uint j = 0; j < _max_num_tasks; ++j) {
+    _tasks[j]->verify_no_mark_stats_for(r);
+  }
+
+  assert(_top_at_rebuild_starts[region_idx].load_relaxed() == nullptr, "must be");
+
+  G1RegionMarkStats* s = &_region_mark_stats[region_idx];
+  assert(s->incoming_refs() == 0, "must be");
+  assert(s->live_words() == 0, "must be");
+}
+
 void G1ConcurrentMark::clear_statistics(G1HeapRegion* r) {
   assert_fully_initialized();
 
@@ -622,6 +637,18 @@ void G1ConcurrentMark::clear_statistics(G1HeapRegion* r) {
   }
   _top_at_rebuild_starts[region_idx].store_relaxed(nullptr);
   _region_mark_stats[region_idx].clear();
+}
+
+void G1ConcurrentMark::notify_new_region_to_mark_through(G1HeapRegion* r, size_t marked_live_bytes_below_tams) {
+  assert_vm_at_safepoint();
+  if (!is_fully_initialized()) {
+    return;
+  }
+  G1CollectorState* state = _g1h->collector_state();
+  if (state->in_concurrent_start_gc()) {
+    update_top_at_mark_start(r);
+    set_live_bytes(r->hrm_index(), marked_live_bytes_below_tams);
+  }
 }
 
 void G1ConcurrentMark::humongous_object_eagerly_reclaimed(G1HeapRegion* r) {
@@ -806,8 +833,6 @@ private:
         }
       }
       assert(cur >= end, "Must have completed iteration over the bitmap for region %u.", r->hrm_index());
-
-      _cm->reset_top_at_mark_start(r);
 
       return false;
     }
@@ -1834,8 +1859,8 @@ G1HeapRegion* G1ConcurrentMark::claim_region(uint worker_id) {
       if (limit > bottom) {
         return curr_region;
       } else {
-        assert(limit == bottom,
-               "The region limit should be at bottom");
+        assert(limit == nullptr,
+               "The region limit for region %u (%s) should be null but is " PTR_FORMAT, curr_region->hrm_index(), curr_region->get_short_type_str(), p2i(limit));
         // We return null and the caller should try calling
         // claim_region() again.
         return nullptr;
@@ -2422,6 +2447,10 @@ void G1CMTask::drain_satb_buffers() {
   // again, this was a potentially expensive operation, decrease the
   // limits to get the regular clock call early
   decrease_limits();
+}
+
+void G1CMTask::verify_no_mark_stats_for(uint region_idx) {
+  _mark_stats_cache.verify_no_mark_stats_for(uint region_idx);
 }
 
 void G1CMTask::clear_mark_stats_cache(uint region_idx) {

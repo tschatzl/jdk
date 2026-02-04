@@ -476,7 +476,7 @@ public:
                 "region %u (%s) live bytes actual %zu and cache %zu differ",
                 r->hrm_index(), r->get_short_type_str(), cl.marked_bytes(), marked_bytes);
     } else {
-      guarantee(r->bottom() == top_at_mark_start,
+      guarantee(top_at_mark_start == nullptr,
                 "region %u (%s) has TAMS set " PTR_FORMAT " " PTR_FORMAT,
                 r->hrm_index(), r->get_short_type_str(), p2i(r->bottom()), p2i(top_at_mark_start));
       guarantee(cm->live_bytes(r->hrm_index()) == 0,
@@ -547,7 +547,7 @@ void G1HeapVerifier::verify_bitmap_clear(bool from_tams) {
       G1ConcurrentMark* cm = G1CollectedHeap::heap()->concurrent_mark();
       G1CMBitMap* bitmap = cm->mark_bitmap();
 
-      HeapWord* start = _from_tams ? cm->top_at_mark_start(r) : r->bottom();
+      HeapWord* start = _from_tams && cm->has_top_at_mark_start(r) ? cm->top_at_mark_start(r) : r->bottom();
 
       HeapWord* mark = bitmap->get_next_marked_addr(start, r->end());
       guarantee(mark == r->end(), "Found mark at " PTR_FORMAT " in region %u from start " PTR_FORMAT, p2i(mark), r->hrm_index(), p2i(start));

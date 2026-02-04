@@ -3207,10 +3207,7 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
       update_region_attr(new_alloc_region);
     }
 
-    bool in_concurrent_start_gc = collector_state()->in_concurrent_start_gc();
-    if (in_concurrent_start_gc) {
-      _cm->update_top_at_mark_start(new_alloc_region);
-    }
+    _cm->notify_new_region_to_mark_through(new_alloc_region);
 
     G1HeapRegionPrinter::alloc(new_alloc_region);
     return new_alloc_region;

@@ -546,8 +546,11 @@ public:
   // Update the TAMS for the given region to the current top.
   inline void update_top_at_mark_start(G1HeapRegion* r);
   // Reset the TAMS for the given region to bottom of that region.
-  inline void reset_top_at_mark_start(G1HeapRegion* r);
+  inline void assert_top_at_mark_start_clear(G1HeapRegion* r);
 
+  inline HeapWord* top_at_mark_start_safe(const G1HeapRegion* r) const;
+
+  inline bool has_top_at_mark_start(const G1HeapRegion* r) const;
   inline HeapWord* top_at_mark_start(const G1HeapRegion* r) const;
   inline HeapWord* top_at_mark_start(uint region) const;
   // Returns whether the given object been allocated since marking start (i.e. >= TAMS in that region).
@@ -565,9 +568,11 @@ public:
   bool in_progress() const;
   uint max_num_tasks() const {return _max_num_tasks; }
 
+  void assert_statistics_clear(G1HeapRegion* r);
   // Clear statistics gathered during the concurrent cycle for the given region after
   // it has been reclaimed.
   void clear_statistics(G1HeapRegion* r);
+  void notify_new_region_to_mark_through(G1HeapRegion* r, size_t marked_live_bytes_below_tams = 0);
   // Notification for eagerly reclaimed regions to clean up.
   void humongous_object_eagerly_reclaimed(G1HeapRegion* r);
   // Manipulation of the global mark stack.
@@ -951,6 +956,7 @@ public:
 
   inline void inc_incoming_refs(oop const obj);
 
+  void verify_no_mark_stats_for(uint region_idx);
   // Clear (without flushing) the mark cache entry for the given region.
   void clear_mark_stats_cache(uint region_idx);
   // Evict the whole statistics cache into the global statistics. Returns the

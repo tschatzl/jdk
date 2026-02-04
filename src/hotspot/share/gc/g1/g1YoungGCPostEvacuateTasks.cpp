@@ -510,12 +510,15 @@ class G1PostEvacuateCollectionSetCleanupTask2::ProcessEvacuationFailedRegionsTas
 
       if (clear_mark_data) {
         g1h->clear_bitmap_for_region(r);
-        cm->reset_top_at_mark_start(hr);
+        // Must be because this is a region that should not have been selected to
+        // be marked through.
+        cm->assert_top_at_mark_start_clear(r);
       } else {
         // This evacuation failed region is going to be marked through. Update mark data.
-        cm->clear_statistics(hr);
-        cm->update_top_at_mark_start(r);
-        cm->set_live_bytes(r->hrm_index(), r->live_bytes());
+        // Since we have some marked live data information, pass that too.
+        cm->assert_statistics_clear(hr);
+        //cm->clear_statistics(hr); // ? Should not have accrued any statistics, so why?
+        cm->notify_new_region_to_mark_through(r, r->live_bytes());
         assert(cm->mark_bitmap()->get_next_marked_addr(r->bottom(), cm->top_at_mark_start(r)) != cm->top_at_mark_start(r),
                "Marks must be on bitmap for region %u", r->hrm_index());
       }

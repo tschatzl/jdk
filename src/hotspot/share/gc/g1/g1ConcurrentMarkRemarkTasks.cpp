@@ -61,7 +61,8 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
     _freed_bytes += hr->used();
     hr->set_containing_set(nullptr);
     hr->clear_both_card_tables();
-    _cm->clear_statistics(hr);
+    _cm->assert_statistics_clear(hr);
+    //_cm->clear_statistics(hr);  // ? Should not have aggregated any statistics to clear
     G1HeapRegionPrinter::mark_reclaim(hr);
     _g1h->concurrent_refine()->notify_region_reclaimed(hr);
   }
@@ -93,7 +94,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
     if (hr->is_starts_humongous()) {
       // The liveness of this humongous obj decided by either its allocation
       // time (allocated after conc-mark-start, i.e. live) or conc-marking.
-      const bool is_live = _cm->top_at_mark_start(hr) == hr->bottom()
+      const bool is_live = _cm->top_at_mark_start(hr) == nullptr
                         || _cm->contains_live_object(hr->hrm_index())
                         || hr->has_pinned_objects();
       if (is_live) {
