@@ -3207,7 +3207,7 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
       update_region_attr(new_alloc_region);
     }
 
-    _cm->notify_new_region_to_mark_through(new_alloc_region);
+    _cm->notify_new_region(new_alloc_region);
 
     G1HeapRegionPrinter::alloc(new_alloc_region);
     return new_alloc_region;

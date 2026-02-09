@@ -354,6 +354,8 @@ class G1ConcurrentMark : public CHeapObj<mtGC> {
   friend class G1CMTask;
   friend class G1ConcurrentMarkThread;
 
+  friend class NoteStartOfMarkHRClosure;
+
   G1ConcurrentMarkThread* _cm_thread;     // The thread doing the work
   G1CollectedHeap*        _g1h;           // The heap
 
@@ -525,7 +527,11 @@ class G1ConcurrentMark : public CHeapObj<mtGC> {
   // True when Remark pause selected regions for rebuilding.
   bool _needs_remembered_set_rebuild;
 
-  void assert_fully_initialized() { assert(is_fully_initialized(), "must be"); }
+  void assert_fully_initialized() const { assert(is_fully_initialized(), "must be"); }
+
+  // Update the TAMS for the given region to the current top.
+  inline void update_top_at_mark_start(G1HeapRegion* r);
+
 public:
   // To be called when an object is marked the first time, e.g. after a successful
   // mark_in_bitmap call. Updates various statistics data.
@@ -543,8 +549,6 @@ public:
   // Approximate number of incoming references found during marking.
   size_t incoming_refs(uint region) const { assert_fully_initialized(); return _region_mark_stats[region].incoming_refs(); }
 
-  // Update the TAMS for the given region to the current top.
-  inline void update_top_at_mark_start(G1HeapRegion* r);
   // Reset the TAMS for the given region to bottom of that region.
   inline void assert_top_at_mark_start_clear(G1HeapRegion* r);
 
@@ -572,7 +576,7 @@ public:
   // Clear statistics gathered during the concurrent cycle for the given region after
   // it has been reclaimed.
   void clear_statistics(G1HeapRegion* r);
-  void notify_new_region_to_mark_through(G1HeapRegion* r, size_t marked_live_bytes_below_tams = 0);
+  void notify_new_region(G1HeapRegion* r, size_t marked_live_bytes_below_tams = 0);
   // Notification for eagerly reclaimed regions to clean up.
   void humongous_object_eagerly_reclaimed(G1HeapRegion* r);
   // Manipulation of the global mark stack.

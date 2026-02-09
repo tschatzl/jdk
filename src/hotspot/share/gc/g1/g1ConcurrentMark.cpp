@@ -618,7 +618,7 @@ void G1ConcurrentMark::assert_statistics_clear(G1HeapRegion* r) {
 
   uint region_idx = r->hrm_index();
   for (uint j = 0; j < _max_num_tasks; ++j) {
-    _tasks[j]->verify_no_mark_stats_for(r);
+    _tasks[j]->verify_no_mark_stats_for(r->hrm_index());
   }
 
   assert(_top_at_rebuild_starts[region_idx].load_relaxed() == nullptr, "must be");
@@ -639,8 +639,8 @@ void G1ConcurrentMark::clear_statistics(G1HeapRegion* r) {
   _region_mark_stats[region_idx].clear();
 }
 
-void G1ConcurrentMark::notify_new_region_to_mark_through(G1HeapRegion* r, size_t marked_live_bytes_below_tams) {
-  assert_vm_at_safepoint();
+void G1ConcurrentMark::notify_new_region(G1HeapRegion* r, size_t marked_live_bytes_below_tams) {
+  assert_at_safepoint();
   if (!is_fully_initialized()) {
     return;
   }
@@ -1859,8 +1859,8 @@ G1HeapRegion* G1ConcurrentMark::claim_region(uint worker_id) {
       if (limit > bottom) {
         return curr_region;
       } else {
-        assert(limit == nullptr,
-               "The region limit for region %u (%s) should be null but is " PTR_FORMAT, curr_region->hrm_index(), curr_region->get_short_type_str(), p2i(limit));
+        assert(limit == nullptr || limit == bottom,
+               "The region limit for region %u (%s) should be null or bottom but is " PTR_FORMAT, curr_region->hrm_index(), curr_region->get_short_type_str(), p2i(limit));
         // We return null and the caller should try calling
         // claim_region() again.
         return nullptr;
@@ -2450,7 +2450,7 @@ void G1CMTask::drain_satb_buffers() {
 }
 
 void G1CMTask::verify_no_mark_stats_for(uint region_idx) {
-  _mark_stats_cache.verify_no_mark_stats_for(uint region_idx);
+  _mark_stats_cache.verify_no_mark_stats_for(region_idx);
 }
 
 void G1CMTask::clear_mark_stats_cache(uint region_idx) {

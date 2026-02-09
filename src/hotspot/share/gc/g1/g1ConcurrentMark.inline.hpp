@@ -193,6 +193,7 @@ inline void G1CMTask::process_array_chunk(objArrayOop obj, size_t start, size_t 
 
 inline void G1ConcurrentMark::update_top_at_mark_start(G1HeapRegion* r) {
   assert_fully_initialized();
+  assert(_g1h->collector_state()->in_concurrent_start_gc(), "must be");
   uint const region = r->hrm_index();
   assert(region < _g1h->max_num_regions(), "Tried to access TAMS for region %u out of bounds", region);
   _top_at_mark_starts[region].store_relaxed(r->top());

@@ -516,9 +516,9 @@ class G1PostEvacuateCollectionSetCleanupTask2::ProcessEvacuationFailedRegionsTas
       } else {
         // This evacuation failed region is going to be marked through. Update mark data.
         // Since we have some marked live data information, pass that too.
-        cm->assert_statistics_clear(hr);
+        cm->assert_statistics_clear(r);
         //cm->clear_statistics(hr); // ? Should not have accrued any statistics, so why?
-        cm->notify_new_region_to_mark_through(r, r->live_bytes());
+        cm->notify_new_region(r, r->live_bytes());
         assert(cm->mark_bitmap()->get_next_marked_addr(r->bottom(), cm->top_at_mark_start(r)) != cm->top_at_mark_start(r),
                "Marks must be on bitmap for region %u", r->hrm_index());
       }
