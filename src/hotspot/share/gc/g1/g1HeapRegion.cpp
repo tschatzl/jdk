@@ -124,12 +124,13 @@ void G1HeapRegion::hr_clear(bool clear_space) {
   clear_index_in_opt_cset();
   uninstall_surv_rate_group();
   uninstall_cset_group();
+
+  G1CollectedHeap::heap()->concurrent_mark()->reset_marking_data(this);
+
   set_free();
   reset_pre_dummy_top();
 
   rem_set()->clear();
-
-  G1CollectedHeap::heap()->concurrent_mark()->reset_top_at_mark_start(this);
 
   _parsable_bottom.store_relaxed(bottom());
   _garbage_bytes.store_relaxed(0);

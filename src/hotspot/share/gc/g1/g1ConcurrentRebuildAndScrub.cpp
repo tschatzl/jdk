@@ -271,7 +271,7 @@ class G1RebuildRSAndScrubTask : public WorkerTask {
         // This is a region with potentially unparsable (dead) objects.
         scan_and_scrub_region(hr, pb);
       } else {
-        assert(hr->is_humongous(), "must be, but %u is %s", hr->hrm_index(), hr->get_short_type_str());
+        assert(hr->is_humongous(), "must be, but %u is %s (tars: " PTR_FORMAT ")", hr->hrm_index(), hr->get_short_type_str(), p2i(_cm->top_at_rebuild_start(hr)));
         // No need to scrub humongous, but we should scan it to rebuild remsets.
         scan_humongous_region(hr, pb);
       }

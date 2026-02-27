@@ -192,12 +192,14 @@ inline void G1CMTask::process_array_chunk(objArrayOop obj, size_t start, size_t 
 }
 
 inline void G1ConcurrentMark::update_top_at_mark_start(G1HeapRegion* r) {
+  assert(is_fully_initialized(), "must be");
   uint const region = r->hrm_index();
   assert(region < _g1h->max_num_regions(), "Tried to access TAMS for region %u out of bounds", region);
   _top_at_mark_starts[region].store_relaxed(r->top());
 }
 
 inline void G1ConcurrentMark::reset_top_at_mark_start(G1HeapRegion* r) {
+  assert(is_fully_initialized(), "must be");
   _top_at_mark_starts[r->hrm_index()].store_relaxed(r->bottom());
 }
 
@@ -206,8 +208,12 @@ inline HeapWord* G1ConcurrentMark::top_at_mark_start(const G1HeapRegion* r) cons
 }
 
 inline HeapWord* G1ConcurrentMark::top_at_mark_start(uint region) const {
-  assert(region < _g1h->max_num_regions(), "Tried to access TARS for region %u out of bounds", region);
-  return _top_at_mark_starts[region].load_relaxed();
+  assert(region < _g1h->max_num_regions(), "Tried to access TAMS for region %u out of bounds", region);
+  if (is_fully_initialized()) {
+    return _top_at_mark_starts[region].load_relaxed();
+  } else {
+    return _g1h->bottom_addr_for_region(region);
+  }
 }
 
 inline bool G1ConcurrentMark::obj_allocated_since_mark_start(oop obj) const {
@@ -217,10 +223,20 @@ inline bool G1ConcurrentMark::obj_allocated_since_mark_start(oop obj) const {
 }
 
 inline HeapWord* G1ConcurrentMark::top_at_rebuild_start(G1HeapRegion* r) const {
+  assert(is_fully_initialized(), "must be");
   return _top_at_rebuild_starts[r->hrm_index()].load_relaxed();
 }
 
+inline HeapWord* G1ConcurrentMark::top_at_rebuild_start_or_null(G1HeapRegion* r) const {
+  if (!is_fully_initialized()) {
+    return nullptr;
+  } else {
+    return top_at_rebuild_start(r);
+  }
+}
+
 inline void G1ConcurrentMark::update_top_at_rebuild_start(G1HeapRegion* r) {
+  assert(is_fully_initialized(), "must be");
   assert(r->is_old() || r->is_humongous(), "precondition");
 
   uint const region = r->hrm_index();
@@ -228,6 +244,7 @@ inline void G1ConcurrentMark::update_top_at_rebuild_start(G1HeapRegion* r) {
   assert(top_at_rebuild_start(r) == nullptr,
          "TARS for region %u has already been set to " PTR_FORMAT " should be null",
          region, p2i(top_at_rebuild_start(r)));
+         log_info(gc)("region %u update tars " PTR_FORMAT, r->hrm_index(), p2i(r->top()));
   _top_at_rebuild_starts[region].store_relaxed(r->top());
 }
 

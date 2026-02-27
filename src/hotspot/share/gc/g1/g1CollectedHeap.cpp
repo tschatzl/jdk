@@ -2568,6 +2568,7 @@ void G1CollectedHeap::start_concurrent_cycle(bool concurrent_operation_is_full_m
     _cm->post_concurrent_mark_start();
     _cm->cm_thread()->start_full_mark();
   } else {
+    collector_state()->set_clear_bitmap_in_progress(true);
     _cm->post_concurrent_undo_start();
     _cm->cm_thread()->start_undo_mark();
   }
@@ -2736,13 +2737,15 @@ void G1CollectedHeap::do_collection_pause_at_safepoint(size_t allocation_word_si
 
   _bytes_used_during_gc = 0;
 
-  _cm->fully_initialize();
-
   policy()->decide_on_concurrent_start_pause();
   // Record whether this pause may need to trigger a concurrent operation. Later,
   // when we signal the G1ConcurrentMarkThread, the collector state has already
   // been reset for the next pause.
   bool should_start_concurrent_mark_operation = collector_state()->in_concurrent_start_gc();
+
+  if (should_start_concurrent_mark_operation) {
+    _cm->fully_initialize();
+  }
 
   // Perform the collection.
   G1YoungCollector collector(gc_cause(), allocation_word_size);

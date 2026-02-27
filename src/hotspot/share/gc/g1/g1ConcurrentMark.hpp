@@ -352,6 +352,7 @@ class G1ConcurrentMark : public CHeapObj<mtGC> {
   friend class G1CMRemarkTask;
   friend class G1CMRootRegionScanTask;
   friend class G1CMTask;
+  friend class G1NoteStartOfMarkHRClosure;
   friend class G1ConcurrentMarkThread;
 
   G1ConcurrentMarkThread* _cm_thread;     // The thread doing the work
@@ -540,9 +541,13 @@ public:
 
   // Update the TAMS for the given region to the current top.
   inline void update_top_at_mark_start(G1HeapRegion* r);
+
+private:
   // Reset the TAMS for the given region to bottom of that region.
   inline void reset_top_at_mark_start(G1HeapRegion* r);
 
+  void reset_marking_data_work(G1HeapRegion* r);
+public:
   inline HeapWord* top_at_mark_start(const G1HeapRegion* r) const;
   inline HeapWord* top_at_mark_start(uint region) const;
   // Returns whether the given object been allocated since marking start (i.e. >= TAMS in that region).
@@ -552,6 +557,7 @@ public:
   inline void update_top_at_rebuild_start(G1HeapRegion* r);
   // TARS for the given region during remembered set rebuilding.
   inline HeapWord* top_at_rebuild_start(G1HeapRegion* r) const;
+  inline HeapWord* top_at_rebuild_start_or_null(G1HeapRegion* r) const;
 
   uint worker_id_offset() const { return _worker_id_offset; }
 
@@ -560,9 +566,8 @@ public:
   bool in_progress() const;
   uint max_num_tasks() const {return _max_num_tasks; }
 
-  // Clear statistics gathered during the concurrent cycle for the given region after
-  // it has been reclaimed.
-  void clear_statistics(G1HeapRegion* r);
+  // Reset all marking data for the given region.
+  void reset_marking_data(G1HeapRegion* r);
   // Notification for eagerly reclaimed regions to clean up.
   void humongous_object_eagerly_reclaimed(G1HeapRegion* r);
   // Manipulation of the global mark stack.

@@ -1056,15 +1056,21 @@ class G1MergeHeapRootsTask : public WorkerTask {
       } else {
         assert_refinement_table_clear(hr);
       }
+
+      G1ConcurrentMark* cm = _g1h->concurrent_mark();
       // Evacuation failure uses the bitmap to record evacuation failed objects,
       // so the bitmap for the regions in the collection set must be cleared if not already.
       if (should_clear_region(hr)) {
         _g1h->clear_bitmap_for_region(hr);
-        _g1h->concurrent_mark()->reset_top_at_mark_start(hr);
+        cm->reset_marking_data(hr);
       } else {
         assert_bitmap_clear(hr, _g1h->concurrent_mark()->mark_bitmap());
+        assert(cm->top_at_mark_start(hr) == hr->bottom(), "must be");
+        // Since we need to scan (old) regions in the collection sets during Scan&Scrub, the following would be wrong.
+        //assert(cm->top_at_rebuild_start_or_null(hr) == nullptr, "must be region");
+        // This should be true:
+        // assert_statistics_clear();
       }
-      _g1h->concurrent_mark()->clear_statistics(hr);
       _scan_state->add_all_dirty_region(hr->hrm_index());
       return false;
     }

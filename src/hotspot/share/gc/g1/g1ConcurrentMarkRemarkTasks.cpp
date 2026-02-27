@@ -61,7 +61,6 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
     _freed_bytes += hr->used();
     hr->set_containing_set(nullptr);
     hr->clear_both_card_tables();
-    _cm->clear_statistics(hr);
     G1HeapRegionPrinter::mark_reclaim(hr);
     _g1h->concurrent_refine()->notify_region_reclaimed(hr);
   }

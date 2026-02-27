@@ -581,7 +581,7 @@ void G1Policy::record_full_collection_end(size_t allocation_word_size) {
   collector_state()->set_in_concurrent_start_gc(false);
   collector_state()->set_mark_in_progress(false);
   collector_state()->set_mark_or_rebuild_in_progress(false);
-  collector_state()->set_clear_bitmap_in_progress(false);
+  collector_state()->set_clear_bitmap_in_progress(false);  log_info(gc)("clear-bitmap-in-progress-false");
 
   _eden_surv_rate_group->start_adding_regions();
   // also call this on any additional surv rate groups
