@@ -37,16 +37,17 @@ static bool region_occupancy_low_enough_for_evac(size_t live_bytes) {
 }
 
 void G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
+
+G1RemSetTrackingPolicy::RemSetState G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
   assert(r->is_young() || r->is_humongous() || r->is_old(),
         "Region %u with unexpected heap region type %s", r->hrm_index(), r->get_type_str());
   if (r->is_old()) {
     // By default, do not create remembered set for new old regions.
-    r->rem_set()->set_state_untracked();
-    return;
+    return Untracked;
   }
   // Always collect remembered set for young regions and for humongous regions.
   // Humongous regions need that for eager reclaim.
-  r->rem_set()->set_state_complete();
+  return Complete;
 }
 
 void G1RemSetTrackingPolicy::update_at_free(G1HeapRegion* r) {

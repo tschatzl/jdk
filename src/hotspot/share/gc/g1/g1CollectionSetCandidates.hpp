@@ -27,6 +27,7 @@
 
 #include "gc/g1/g1CardSetMemory.hpp"
 #include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1RemSetTrackingPolicy.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/globals.hpp"
@@ -73,7 +74,16 @@ class G1CSetCandidateGroup : public CHeapObj<mtGCCardSet>{
   size_t _reclaimable_bytes;
   double _gc_efficiency;
 
+  G1RemSetTrackingPolicy::RemSetState _state;
+
+  static const char* _state_strings[];
+  static const char* _short_state_strings[];
+
 public:
+    // FIXME: Move to G1RemSetTrackingPolicy
+  const char* get_state_str() const { return _state_strings[_state]; }
+  const char* get_short_state_str() const { return _short_state_strings[_state]; }
+
   // The _group_id uniquely identifies a candidate group when printing, making it
   // easier to associate regions with their assigned G1CSetCandidateGroup, if any.
   // Special values for the id:
@@ -90,10 +100,21 @@ private:
 
 public:
   G1CSetCandidateGroup();
-  G1CSetCandidateGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id);
+  G1CSetCandidateGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id, G1RemSetTrackingPolicy::RemSetState state);
   ~G1CSetCandidateGroup() {
     assert(length() == 0, "post condition!");
   }
+
+  static const char* get_state_str(const G1CSetCandidateGroup* gr);
+  static const char* get_short_state_str(const G1CSetCandidateGroup* gr);
+
+  bool is_tracked() { return _state != G1RemSetTrackingPolicy::Untracked; }
+  bool is_updating() { return _state == G1RemSetTrackingPolicy::Updating; }
+  bool is_complete() { return _state == G1RemSetTrackingPolicy::Complete; }
+
+  inline void set_state_untracked();
+  inline void set_state_updating();
+  inline void set_state_complete();
 
   void add(G1HeapRegion* hr);
 

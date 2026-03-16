@@ -124,25 +124,12 @@ public:
 
   inline uintptr_t to_card(OopOrNarrowOopStar from) const;
 
-private:
-  enum RemSetState {
-    Untracked,
-    Updating,
-    Complete
-  };
+  const char* get_state_str() const { return G1CSetCandidateGroup::get_state_str(cset_group()); }
+  const char* get_short_state_str() const { return G1CSetCandidateGroup::get_short_state_str(cset_group()); }
 
-  RemSetState _state;
-
-  static const char* _state_strings[];
-  static const char* _short_state_strings[];
-public:
-
-  const char* get_state_str() const { return _state_strings[_state]; }
-  const char* get_short_state_str() const { return _short_state_strings[_state]; }
-
-  bool is_tracked() { return _state != Untracked; }
-  bool is_updating() { return _state == Updating; }
-  bool is_complete() { return _state == Complete; }
+  bool is_tracked() { return has_cset_group() && cset_group()->is_tracked(); }
+  bool is_updating() { assert(has_cset_group(), "must be"); return cset_group()->is_updating(); }
+  bool is_complete() { assert(has_cset_group(), "must be"); return cset_group()->is_complete(); }
 
   inline void set_state_untracked();
   inline void set_state_updating();

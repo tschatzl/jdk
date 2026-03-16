@@ -28,12 +28,30 @@
 
 uint G1CSetCandidateGroup::_next_group_id = G1CSetCandidateGroup::InitialId;
 
-G1CSetCandidateGroup::G1CSetCandidateGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id) :
+const char* G1CSetCandidateGroup::_state_strings[] =  {"Untracked", "Updating", "Complete"};
+const char* G1CSetCandidateGroup::_short_state_strings[] =  {"UNTRA", "UPDAT", "CMPLT"};
+
+const char* G1CSetCandidateGroup::get_state_str(const G1CSetCandidateGroup* gr) {
+  if (gr == nullptr) {
+    return _state_strings[G1RemSetTrackingPolicy::Untracked];
+  }
+  return _state_strings[gr->_state];
+}
+
+const char* G1CSetCandidateGroup::get_short_state_str(const G1CSetCandidateGroup* gr) {
+  if (gr == nullptr) {
+    return _short_state_strings[G1RemSetTrackingPolicy::Untracked];
+  }
+  return _short_state_strings[gr->_state];
+}
+
+G1CSetCandidateGroup::G1CSetCandidateGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id, G1RemSetTrackingPolicy::RemSetState state) :
   _candidates(4, mtGCCardSet),
   _card_set_mm(config, card_set_freelist_pool),
   _card_set(config, &_card_set_mm),
   _reclaimable_bytes(size_t(0)),
   _gc_efficiency(0.0),
+  _state(state),
   _group_id(group_id)
 { }
 

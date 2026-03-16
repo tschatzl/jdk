@@ -27,7 +27,24 @@
 
 #include "gc/g1/g1CollectionSetCandidates.hpp"
 
+#include "runtime/safepoint.hpp"
 #include "utilities/growableArray.hpp"
+
+void G1CSetCandidateGroup::set_state_untracked() {
+  guarantee(SafepointSynchronize::is_at_safepoint() || !is_tracked(),
+            "Should only set to Untracked during safepoint but is %s.", get_state_str());
+  _state = G1RemSetTrackingPolicy::Untracked;
+}
+
+void G1CSetCandidateGroup::set_state_updating() {
+  guarantee(SafepointSynchronize::is_at_safepoint() && !is_tracked(),
+            "Should only set to Updating from Untracked during safepoint but is %s", get_state_str());
+  _state = G1RemSetTrackingPolicy::Updating;
+}
+
+void G1CSetCandidateGroup::set_state_complete() {
+  _state = G1RemSetTrackingPolicy::Complete;
+}
 
 template<typename Func>
 void G1CSetCandidateGroupList::iterate(Func&& f) const {

@@ -29,29 +29,31 @@
 
 #include "gc/g1/g1CardSet.inline.hpp"
 #include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "utilities/bitMap.inline.hpp"
 
 void G1HeapRegionRemSet::set_state_untracked() {
   guarantee(SafepointSynchronize::is_at_safepoint() || !is_tracked(),
             "Should only set to Untracked during safepoint but is %s.", get_state_str());
-  if (_state == Untracked) {
+  if (!is_tracked()) {
     return;
   }
   clear_fcc();
-  _state = Untracked;
+  cset_group()->set_state_untracked();
 }
 
 void G1HeapRegionRemSet::set_state_updating() {
-  guarantee(SafepointSynchronize::is_at_safepoint() && !is_tracked(),
+  guarantee(SafepointSynchronize::is_at_safepoint() && has_cset_group() && !is_tracked(),
             "Should only set to Updating from Untracked during safepoint but is %s", get_state_str());
   clear_fcc();
-  _state = Updating;
+  cset_group()->set_state_updating();
 }
 
 void G1HeapRegionRemSet::set_state_complete() {
+  assert(has_cset_group(), "must be");
   clear_fcc();
-  _state = Complete;
+  cset_group()->set_state_complete();
 }
 
 template <typename Closure>
@@ -126,7 +128,7 @@ uintptr_t G1HeapRegionRemSet::to_card(OopOrNarrowOopStar from) const {
 void G1HeapRegionRemSet::add_reference(OopOrNarrowOopStar from, uint tid) {
   assert(has_cset_group(), "pre-condition");
 
-  assert(_state != Untracked, "must be");
+  assert(!is_tracked(), "must be");
 
   uint cur_idx = _hr->hrm_index();
   uintptr_t from_card = uintptr_t(from) >> CardTable::card_shift();

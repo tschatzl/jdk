@@ -43,9 +43,6 @@
 
 HeapWord* G1HeapRegionRemSet::_heap_base_address = nullptr;
 
-const char* G1HeapRegionRemSet::_state_strings[] =  {"Untracked", "Updating", "Complete"};
-const char* G1HeapRegionRemSet::_short_state_strings[] =  {"UNTRA", "UPDAT", "CMPLT"};
-
 void G1HeapRegionRemSet::initialize(MemRegion reserved) {
   G1CardSet::initialize(reserved);
   _heap_base_address = reserved.start();
@@ -58,8 +55,7 @@ void G1HeapRegionRemSet::uninstall_cset_group() {
 G1HeapRegionRemSet::G1HeapRegionRemSet(G1HeapRegion* hr) :
   _code_roots(),
   _cset_group(nullptr),
-  _hr(hr),
-  _state(Untracked) { }
+  _hr(hr) { }
 
 G1HeapRegionRemSet::~G1HeapRegionRemSet() {
   assert(!has_cset_group(), "Still assigned to a CSet group");
