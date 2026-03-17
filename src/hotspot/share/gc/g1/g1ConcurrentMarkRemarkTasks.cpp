@@ -120,7 +120,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
       const bool is_live = hr->live_bytes() != 0
                         || hr->has_pinned_objects();
       if (is_live) {
-        const bool selected_for_rebuild = tracker->update_old_before_rebuild(hr);
+        const bool selected_for_rebuild = tracker->select_old_before_rebuild(hr);
         if (selected_for_rebuild) {
           _local_old_selected.push(hr);
         }

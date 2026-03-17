@@ -216,10 +216,9 @@ void G1CollectionSet::add_young_region_common(G1HeapRegion* hr) {
   assert(hr->is_young(), "invariant");
   assert(_inc_build_state == CSetBuildType::Active, "Precondition");
 
-  // Add to remembered set/cardset group.
+  // Add to young gen remembered set/cardset group.
   _g1h->policy()->remset_tracker()->update_at_allocate(hr);
-  _g1h->young_regions_cset_group()->add(hr);
-
+  
   // Synchronize with the region attribute table.
   _g1h->register_young_region_with_region_attr(hr);
 

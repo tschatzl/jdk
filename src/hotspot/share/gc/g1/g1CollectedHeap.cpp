@@ -264,8 +264,10 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
   first_hr->hr_clear(false /* clear_space */);
   first_hr->set_starts_humongous(obj_top, words_fillable);
 
+  G1CSetCandidateGroup* gr = nullptr;
   if (update_remsets) {
-    _policy->remset_tracker()->update_at_allocate(first_hr);
+    bool remset_added = _policy->remset_tracker()->update_at_allocate(first_hr);
+    assert(remset_added && first_hr->rem_set()->is_complete(), "must be, always get complete for new humongous");
   }
 
   // Indices of first and last regions in the series.
@@ -278,7 +280,7 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
     hr->hr_clear(false /* clear_space */);
     hr->set_continues_humongous(first_hr);
     if (update_remsets) {
-      _policy->remset_tracker()->update_at_allocate(hr);
+      first_hr->rem_set()->cset_group()->add(hr);
     }
   }
 
@@ -3192,7 +3194,8 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
     } else {
       new_alloc_region->set_old();
       // Update remembered set/cardset.
-      _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+      bool remset_added = _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+      assert(!remset_added, "must be, we do not add remset");
       // Synchronize with region attribute table.
       update_region_attr(new_alloc_region);
     }

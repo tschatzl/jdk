@@ -43,13 +43,14 @@ public:
   // Update remembered set tracking state at allocation of the region. May be
   // called at any time. The caller makes sure that the changes to the remembered
   // set state are visible to other threads.
-  RemSetState update_at_allocate(G1HeapRegion* r);
+  bool update_at_allocate(G1HeapRegion* r);
   // Update remembered set tracking state for humongous regions before we are going to
   // rebuild remembered sets. Called at safepoint in the remark pause.
   bool update_humongous_before_rebuild(G1HeapRegion* r);
-  // Update remembered set tracking state for old regions before we are going
-  // to rebuild remembered sets. Called at safepoint in the remark pause.
-  bool update_old_before_rebuild(G1HeapRegion* r);
+
+  // Determines whether the given old region's remembered set should be rebuilt.
+  // Called at safepoint in the remark pause.
+  bool select_old_before_rebuild(G1HeapRegion* r);
   // Update remembered set tracking state after rebuild is complete, i.e. the cleanup
   // pause. Called at safepoint.
   void update_after_rebuild(G1HeapRegion* r);

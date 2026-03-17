@@ -99,7 +99,7 @@ private:
   static uint _next_group_id;
 
 public:
-  G1CSetCandidateGroup();
+  G1CSetCandidateGroup(G1RemSetTrackingPolicy::RemSetState state);
   G1CSetCandidateGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id, G1RemSetTrackingPolicy::RemSetState state);
   ~G1CSetCandidateGroup() {
     assert(length() == 0, "post condition!");

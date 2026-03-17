@@ -288,7 +288,7 @@ void G1CollectionSetCandidates::set_candidates_from_marking(GrowableArrayCHeap<G
   G1CSetCandidateGroup::reset_next_group_id();
   G1CSetCandidateGroup* current = nullptr;
 
-  current = new G1CSetCandidateGroup();
+  current = new G1CSetCandidateGroup(G1RemSetTrackingPolicy::Updating);
 
   for (uint i = 0; i < num_candidates; i++) {
     G1HeapRegion* r = candidates->at(i);
@@ -302,7 +302,7 @@ void G1CollectionSetCandidates::set_candidates_from_marking(GrowableArrayCHeap<G
 
       _from_marking_groups.append(current);
 
-      current = new G1CSetCandidateGroup();
+      current = new G1CSetCandidateGroup(G1RemSetTrackingPolicy::Updating);
     }
     current->add(r);
   }
@@ -361,7 +361,7 @@ void G1CollectionSetCandidates::add_retained_region_unsorted(G1HeapRegion* r) {
   assert(!contains(r), "Must not already contain region %u", r->hrm_index());
   _contains_map[r->hrm_index()] = CandidateOrigin::Retained;
 
-  G1CSetCandidateGroup* gr = new G1CSetCandidateGroup();
+  G1CSetCandidateGroup* gr = new G1CSetCandidateGroup(G1RemSetTrackingPolicy::Complete);
   gr->add(r);
 
   _retained_groups.append(gr);

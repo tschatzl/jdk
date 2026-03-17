@@ -36,18 +36,23 @@ static bool region_occupancy_low_enough_for_evac(size_t live_bytes) {
   return live_bytes < mixed_gc_live_threshold_bytes();
 }
 
-void G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
-
-G1RemSetTrackingPolicy::RemSetState G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
+bool G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
   assert(r->is_young() || r->is_humongous() || r->is_old(),
         "Region %u with unexpected heap region type %s", r->hrm_index(), r->get_type_str());
   if (r->is_old()) {
     // By default, do not create remembered set for new old regions.
-    return Untracked;
+    return false;
+  } else if (r->is_humongous()) {
+    assert(r->is_starts_humongous(), "must be");
+    G1CSetCandidateGroup gr = new G1CSetCandidateGroup(Complete);
+    gr->add(first_hr);
+  } else {
+    assert(r->is_young(), "must be");
+    // Always collect remembered set for young regions and for humongous regions.
+    // Humongous regions need that for eager reclaim.
+    G1CollectedHeap::heap()->young_regions_cset_group()->add(r);
   }
-  // Always collect remembered set for young regions and for humongous regions.
-  // Humongous regions need that for eager reclaim.
-  return Complete;
+  return true;  
 }
 
 void G1RemSetTrackingPolicy::update_at_free(G1HeapRegion* r) {
@@ -65,8 +70,9 @@ bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(G1HeapRegion* r) {
   // remset state can be reset after Full-GC. Try to re-enable remset-tracking for
   // them if possible.
   if (!r->rem_set()->is_tracked()) {
-    auto on_humongous_region = [] (G1HeapRegion* r) {
-      r->rem_set()->set_state_updating();
+    G1CSetCandidateGroup gr = new G1CSetCandidateGroup(Updating);
+    auto on_humongous_region = [] (G1HeapRegion* humongous_r) {
+      gr->add(humongous_r);
     };
     G1CollectedHeap::heap()->humongous_obj_regions_iterate(r, on_humongous_region);
     selected_for_rebuild = true;
@@ -75,7 +81,7 @@ bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(G1HeapRegion* r) {
   return selected_for_rebuild;
 }
 
-bool G1RemSetTrackingPolicy::update_old_before_rebuild(G1HeapRegion* r) {
+bool G1RemSetTrackingPolicy::select_old_before_rebuild(G1HeapRegion* r) {
   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
   assert(r->is_old(), "Region %u should be Old", r->hrm_index());
 
@@ -86,7 +92,6 @@ bool G1RemSetTrackingPolicy::update_old_before_rebuild(G1HeapRegion* r) {
   if (region_occupancy_low_enough_for_evac(r->live_bytes()) &&
       !G1CollectedHeap::heap()->is_old_gc_alloc_region(r) &&
       !r->rem_set()->is_tracked()) {
-    r->rem_set()->set_state_updating();
     selected_for_rebuild = true;
   }
 
