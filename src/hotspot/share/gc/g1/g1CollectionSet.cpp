@@ -698,8 +698,8 @@ void G1CollectionSet::prepare_optional_group(G1CSetCandidateGroup* gr, uint cur_
 void G1CollectionSet::add_group_to_collection_set(G1CSetCandidateGroup* gr) {
   for (G1CollectionSetCandidateInfo ci : *gr) {
     G1HeapRegion* r = ci._r;
+    assert(r->rem_set()->is_complete(), "must be (group %u)", r->rem_set()->cset_group_id());
     r->uninstall_cset_group();
-    assert(r->rem_set()->is_complete(), "must be");
     add_region_to_collection_set(r);
   }
   _groups.append(gr);
@@ -707,7 +707,7 @@ void G1CollectionSet::add_group_to_collection_set(G1CSetCandidateGroup* gr) {
 
 void G1CollectionSet::add_region_to_collection_set(G1HeapRegion* r) {
   _g1h->clear_region_attr(r);
-  assert(r->rem_set()->is_complete(), "Remset for region %u complete", r->hrm_index());
+  assert(r->rem_set()->is_complete(), "Remset for region %u %s (id %u) complete is %s", r->hrm_index(), r->get_short_type_str(), r->rem_set()->cset_group_id(), r->rem_set()->get_state_str());
   add_old_region(r);
 }
 

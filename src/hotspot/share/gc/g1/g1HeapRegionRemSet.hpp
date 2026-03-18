@@ -93,8 +93,7 @@ public:
   }
 
   uint cset_group_id() const {
-    assert(has_cset_group(), "pre-condition");
-    return cset_group()->group_id();
+    return has_cset_group() ? cset_group()->group_id() : ~(uint)0;
   }
 
   bool is_empty() const {
@@ -128,8 +127,8 @@ public:
   const char* get_short_state_str() const { return G1CSetCandidateGroup::get_short_state_str(cset_group()); }
 
   bool is_tracked() { return has_cset_group() && cset_group()->is_tracked(); }
-  bool is_updating() { assert(has_cset_group(), "must be"); return cset_group()->is_updating(); }
-  bool is_complete() { assert(has_cset_group(), "must be"); return cset_group()->is_complete(); }
+  bool is_updating() { return has_cset_group() && cset_group()->is_updating(); }
+  bool is_complete() { return has_cset_group() && cset_group()->is_complete(); }
 
   inline void set_state_untracked();
   inline void set_state_updating();

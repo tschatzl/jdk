@@ -208,7 +208,10 @@ void G1UpdateRegionLivenessAndSelectForRebuildTask::prune(GrowableArrayCHeap<G1H
       wasted_bytes + reclaimable > allowed_waste) {
       break;
     }
-    r->rem_set()->clear(true /* cardset_only */);
+
+    // Must be empty and not tracked yet.
+    assert(r->rem_set()->cardset_is_empty(), "must be");
+    assert(!r->rem_set()->is_tracked(), "must be");
 
     wasted_bytes += reclaimable;
     num_pruned++;

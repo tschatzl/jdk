@@ -127,8 +127,7 @@ uintptr_t G1HeapRegionRemSet::to_card(OopOrNarrowOopStar from) const {
 
 void G1HeapRegionRemSet::add_reference(OopOrNarrowOopStar from, uint tid) {
   assert(has_cset_group(), "pre-condition");
-
-  assert(!is_tracked(), "must be");
+  assert(is_tracked(), "must be");
 
   uint cur_idx = _hr->hrm_index();
   uintptr_t from_card = uintptr_t(from) >> CardTable::card_shift();

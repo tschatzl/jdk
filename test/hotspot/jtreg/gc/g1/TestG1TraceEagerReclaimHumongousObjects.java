@@ -46,7 +46,7 @@ public class TestG1TraceEagerReclaimHumongousObjects {
                                                                 "-Xmx128M",
                                                                 "-Xmn16M",
                                                                 "-XX:G1HeapRegionSize=1M",
-                                                                "-Xlog:gc+phases=trace,gc+humongous=trace",
+                                                                "-Xlog:gc+phases=trace,gc,gc+start,gc+region=trace,gc+humongous=trace",
                                                                 "-XX:+UnlockExperimentalVMOptions",
                                                                 GCWithHumongousObjectTest.class.getName());
 

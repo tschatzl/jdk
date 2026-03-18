@@ -195,9 +195,6 @@ void G1HeapRegion::set_starts_humongous(HeapWord* obj_top, size_t fill_size) {
   _type.set_starts_humongous();
   _humongous_start_region = this;
 
-  G1CSetCandidateGroup* cset_group = new G1CSetCandidateGroup();
-  cset_group->add(this);
-
   _bot->update_for_block(bottom(), obj_top);
   if (fill_size > 0) {
     _bot->update_for_block(obj_top, obj_top + fill_size);
@@ -221,8 +218,7 @@ void G1HeapRegion::clear_humongous() {
   if (is_starts_humongous()) {
     G1CSetCandidateGroup* cset_group = _rem_set->cset_group();
     assert(cset_group != nullptr, "pre-condition %u missing cardset", hrm_index());
-    uninstall_cset_group();
-    cset_group->clear();
+    cset_group->clear(true /* uninstall_cset_group */);
     delete cset_group;
   }
   _humongous_start_region = nullptr;

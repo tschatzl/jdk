@@ -55,8 +55,8 @@ G1CSetCandidateGroup::G1CSetCandidateGroup(G1CardSetConfiguration* config, G1Mon
   _group_id(group_id)
 { }
 
-G1CSetCandidateGroup::G1CSetCandidateGroup() :
-  G1CSetCandidateGroup(G1CollectedHeap::heap()->card_set_config(), G1CollectedHeap::heap()->card_set_freelist_pool(), _next_group_id++)
+G1CSetCandidateGroup::G1CSetCandidateGroup(G1RemSetTrackingPolicy::RemSetState state) :
+  G1CSetCandidateGroup(G1CollectedHeap::heap()->card_set_config(), G1CollectedHeap::heap()->card_set_freelist_pool(), _next_group_id++, state)
 { }
 
 void G1CSetCandidateGroup::add(G1HeapRegion* hr) {
@@ -82,6 +82,7 @@ double G1CSetCandidateGroup::liveness_percent() const {
 }
 
 void G1CSetCandidateGroup::clear(bool uninstall_group_cardset) {
+    log_info(gc)("group-clear %u %d %u", group_id(), uninstall_group_cardset, _candidates.at(0)._r->hrm_index());
   if (uninstall_group_cardset) {
     for (G1CollectionSetCandidateInfo ci : _candidates) {
       G1HeapRegion* r = ci._r;

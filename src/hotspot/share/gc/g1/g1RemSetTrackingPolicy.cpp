@@ -44,8 +44,8 @@ bool G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
     return false;
   } else if (r->is_humongous()) {
     assert(r->is_starts_humongous(), "must be");
-    G1CSetCandidateGroup gr = new G1CSetCandidateGroup(Complete);
-    gr->add(first_hr);
+    G1CSetCandidateGroup* gr = new G1CSetCandidateGroup(Complete);
+    gr->add(r);
   } else {
     assert(r->is_young(), "must be");
     // Always collect remembered set for young regions and for humongous regions.
@@ -70,8 +70,8 @@ bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(G1HeapRegion* r) {
   // remset state can be reset after Full-GC. Try to re-enable remset-tracking for
   // them if possible.
   if (!r->rem_set()->is_tracked()) {
-    G1CSetCandidateGroup gr = new G1CSetCandidateGroup(Updating);
-    auto on_humongous_region = [] (G1HeapRegion* humongous_r) {
+    G1CSetCandidateGroup* gr = new G1CSetCandidateGroup(Updating);
+    auto on_humongous_region = [&] (G1HeapRegion* humongous_r) {
       gr->add(humongous_r);
     };
     G1CollectedHeap::heap()->humongous_obj_regions_iterate(r, on_humongous_region);
@@ -105,18 +105,17 @@ void G1RemSetTrackingPolicy::update_after_rebuild(G1HeapRegion* r) {
     if (r->rem_set()->is_updating()) {
       r->rem_set()->set_state_complete();
     }
+    log_debug(gc,humongous)("uar %u %s remset %s %u", r->hrm_index(), r->get_short_type_str(), r->rem_set()->get_short_state_str(), r->rem_set()->cset_group_id());
     G1CollectedHeap* g1h = G1CollectedHeap::heap();
     // We can drop remembered sets of humongous regions that have a too large remembered set:
     // We will never try to eagerly reclaim or move them anyway until the next concurrent
     // cycle as e.g. remembered set entries will always be added.
     if (r->is_starts_humongous() && !g1h->is_potential_eager_reclaim_candidate(r)) {
-      // Handle HC regions with the HS region.
-      g1h->humongous_obj_regions_iterate(r,
-                                         [&] (G1HeapRegion* r) {
-                                           assert(!r->is_continues_humongous() || r->rem_set()->is_empty(),
-                                                  "Continues humongous region %u remset should be empty", r->hrm_index());
-                                           r->rem_set()->clear(true /* only_cardset */);
-                                         });
+      // Remsets of humongous objects are not in a candidate set group.
+      log_debug(gc,humongous)("uar uninstall %u %s remset %s %u", r->hrm_index(), r->get_short_type_str(), r->rem_set()->get_short_state_str(), r->rem_set()->cset_group_id());
+      G1CSetCandidateGroup* gr = r->rem_set()->cset_group();
+      gr->clear(true /* uninstall_group_cardset */);
+      delete gr;
     }
 
     size_t remset_bytes = r->rem_set()->mem_size();
