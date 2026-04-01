@@ -70,7 +70,6 @@
 class G1YoungGCTraceTime {
   G1YoungCollector* _collector;
 
-  G1CollectorState::Pause _pause_type;
   GCCause::Cause _pause_cause;
 
   static const uint MaxYoungGCNameLength = 128;
@@ -90,10 +89,11 @@ class G1YoungGCTraceTime {
                            _collector->evacuation_alloc_failed() && _collector->evacuation_pinned() ? " / " : "",
                            _collector->evacuation_pinned() ? "Pinned" : "");
     }
+    G1CollectorState::Pause pause = _collector->collector_state()->gc_pause_type(_collector->concurrent_operation_is_full_mark());
     os::snprintf_checked(_young_gc_name_data,
                          MaxYoungGCNameLength,
                          "Pause Young (%s) (%s)%s",
-                         G1CollectorState::to_string(_pause_type),
+                         G1CollectorState::to_string(pause),
                          GCCause::to_string(_pause_cause),
                          evacuation_failed_string);
     return _young_gc_name_data;
@@ -102,10 +102,6 @@ class G1YoungGCTraceTime {
 public:
   G1YoungGCTraceTime(G1YoungCollector* collector, GCCause::Cause cause) :
     _collector(collector),
-    // Take snapshot of current pause type at start as it may be modified during gc.
-    // The strings for all Concurrent Start pauses are the same, so the parameter
-    // does not matter here.
-    _pause_type(_collector->collector_state()->gc_pause_type(false /* concurrent_operation_is_full_mark */)),
     _pause_cause(cause),
     // Fake a "no cause" and manually add the correct string in update_young_gc_name()
     // to make the string look more natural.
@@ -1109,6 +1105,7 @@ G1YoungCollector::G1YoungCollector(GCCause::Cause gc_cause,
   _g1h(G1CollectedHeap::heap()),
   _gc_cause(gc_cause),
   _allocation_word_size(allocation_word_size),
+  _next_state(),
   _concurrent_operation_is_full_mark(false),
   _evac_failure_regions()
 {
@@ -1176,6 +1173,6 @@ void G1YoungCollector::collect() {
     // modifies it to the next state.
     jtm.report_pause_type(collector_state()->gc_pause_type(_concurrent_operation_is_full_mark));
 
-    policy()->record_young_collection_end(_concurrent_operation_is_full_mark, evacuation_alloc_failed(), _allocation_word_size);
+    _next_state = policy()->record_young_collection_end(_concurrent_operation_is_full_mark, evacuation_alloc_failed(), _allocation_word_size);
   }
 }

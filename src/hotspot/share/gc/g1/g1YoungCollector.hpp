@@ -80,6 +80,7 @@ class G1YoungCollector {
   GCCause::Cause _gc_cause;
   size_t _allocation_word_size;
 
+  G1CollectorState _next_state;
   bool _concurrent_operation_is_full_mark;
 
   // Evacuation failure tracking.
@@ -141,6 +142,7 @@ public:
                    size_t allocation_word_size);
   void collect();
 
+  G1CollectorState next_state() const { return _next_state; }
   bool concurrent_operation_is_full_mark() const { return _concurrent_operation_is_full_mark; }
 };
 

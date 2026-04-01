@@ -258,8 +258,6 @@ public:
 
 private:
   void abandon_collection_set_candidates();
-  // Sets up marking if proper conditions are met.
-  void maybe_start_marking(size_t allocation_word_size);
   // Manage time-to-mixed tracking.
   void update_time_to_mixed_tracking(Pause gc_type, double start, double end);
   // Record the given STW pause with the given start and end times (in s).
@@ -305,9 +303,9 @@ public:
   // Record the start and end of the actual collection part of the evacuation pause.
   void record_pause_start_time();
   void record_young_collection_start();
-  void record_young_collection_end(bool concurrent_operation_is_full_mark,
-                                   bool allocation_failure,
-                                   size_t allocation_word_size);
+  G1CollectorState record_young_collection_end(bool concurrent_operation_is_full_mark,
+                                               bool allocation_failure,
+                                               size_t allocation_word_size);
 
   // Record the start and end of a full collection.
   void record_full_collection_start();
