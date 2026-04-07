@@ -1355,7 +1355,7 @@ public:
 
   virtual void do_thread(Thread* thread) {
     if (thread != nullptr) {
-      ResourceMark rm(thread);
+      ResourceMark rm;
       thread->print_on(_st);
       _st->cr();
     }
