@@ -173,6 +173,7 @@ void G1YoungGenSizer::adjust_max_new_size(uint number_of_heap_regions) {
 }
 
 void G1YoungGenSizer::heap_size_changed(uint new_number_of_heap_regions) {
-  recalculate_min_max_young_length(new_number_of_heap_regions, &_min_desired_young_length,
-          &_max_desired_young_length);
+  recalculate_min_max_young_length(new_number_of_heap_regions,
+                                   &_min_desired_young_length,
+                                   &_max_desired_young_length);
 }

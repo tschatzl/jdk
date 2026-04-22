@@ -1579,9 +1579,12 @@ jint G1CollectedHeap::initialize() {
   _cm = new G1ConcurrentMark(this, bitmap_storage);
 
   // Now expand into the initial heap size.
-  if (!expand(init_byte_size, _workers)) {
-    vm_shutdown_during_initialization("Failed to allocate initial heap.");
-    return JNI_ENOMEM;
+  {
+    MutexLocker x(G1ReviseYoungLength_lock, Mutex::_no_safepoint_check_flag);
+    if (!expand(init_byte_size, _workers)) {
+      vm_shutdown_during_initialization("Failed to allocate initial heap.");
+      return JNI_ENOMEM;
+    }
   }
 
   // Perform any initialization actions delegated to the policy.

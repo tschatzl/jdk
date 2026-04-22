@@ -343,7 +343,7 @@ void mutex_init() {
   if (UseG1GC) {
     MUTEX_DEFL(G1OldGCCount_lock            , PaddedMonitor, Threads_lock, true);
     MUTEX_DEFL(G1RareEvent_lock             , PaddedMutex  , Threads_lock, true);
-    MUTEX_DEFL(G1ReviseYoungLength_lock     , PaddedMutex  , Threads_lock, true);
+    MUTEX_DEFL(G1ReviseYoungLength_lock     , PaddedMutex  , Heap_lock, true);
   }
 #endif
 

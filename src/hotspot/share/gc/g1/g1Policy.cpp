@@ -162,7 +162,10 @@ void G1Policy::record_new_heap_size(uint new_number_of_regions) {
   // smaller than 1.0) we'll get 1.
   _reserve_regions = (uint) ceil(reserve_regions_d);
 
-  _young_gen_sizer.heap_size_changed(new_number_of_regions);
+  {
+    MutexLocker x(G1ReviseYoungLength_lock, Mutex::_no_safepoint_check_flag);
+    _young_gen_sizer.heap_size_changed(new_number_of_regions);
+  }
 
   _ihop_control->update_target_occupancy(new_number_of_regions * G1HeapRegion::GrainBytes);
 }
@@ -225,6 +228,8 @@ void G1Policy::update_young_length_bounds(size_t pending_cards, size_t card_rs_l
 uint G1Policy::calculate_young_desired_length(size_t pending_cards,
                                               size_t card_rs_length,
                                               size_t code_root_rs_length) const {
+  assert(SafepointSynchronize::is_at_safepoint() || G1ReviseYoungLength_lock->is_locked(), "must be");
+
   uint min_young_length_by_sizer = _young_gen_sizer.min_desired_young_length();
   uint max_young_length_by_sizer = _young_gen_sizer.max_desired_young_length();
 
@@ -303,6 +308,8 @@ uint G1Policy::calculate_young_desired_length(size_t pending_cards,
 // can be satisfied without using up reserve regions, do so, otherwise eat into
 // the reserve, giving away at most what the heap sizer allows.
 uint G1Policy::calculate_young_target_length(uint desired_young_length) const {
+  assert(SafepointSynchronize::is_at_safepoint() || G1ReviseYoungLength_lock->is_locked(), "must be");
+
   uint allocated_young_length = _g1h->young_regions_count();
 
   uint receiving_additional_eden;
@@ -553,8 +560,10 @@ G1GCPhaseTimes* G1Policy::phase_times() const {
 }
 
 void G1Policy::revise_young_list_target_length(size_t pending_cards, size_t card_rs_length, size_t code_root_rs_length) {
+  assert(!SafepointSynchronize::is_at_safepoint(), "must be");
   guarantee(use_adaptive_young_list_length(), "should not call this otherwise" );
 
+  MutexLocker x(G1ReviseYoungLength_lock, Mutex::_no_safepoint_check_flag);
   update_young_length_bounds(pending_cards, card_rs_length, code_root_rs_length);
 }
 
