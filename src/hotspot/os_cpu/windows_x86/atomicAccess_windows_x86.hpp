@@ -28,6 +28,42 @@
 #include <intrin.h>
 #include <windows.h>
 
+template<>
+template<typename T>
+inline T AtomicAccess::PlatformLoad<1>::operator()(T const volatile* src) const {
+  STATIC_ASSERT(1 == sizeof(T));
+  T dest;
+  dest = (T)__iso_volatile_load8((volatile __int8*)src);
+  return dest;
+}
+
+template<>
+template<typename T>
+inline T AtomicAccess::PlatformLoad<2>::operator()(T const volatile* src) const {
+  STATIC_ASSERT(2 == sizeof(T));
+  T dest;
+  dest = (T)__iso_volatile_load16((volatile __int16*)src);
+  return dest;
+}
+
+template<>
+template<typename T>
+inline T AtomicAccess::PlatformLoad<4>::operator()(T const volatile* src) const {
+  STATIC_ASSERT(4 == sizeof(T));
+  T dest;
+  dest = (T)__iso_volatile_load32((volatile __int32*)src);
+  return dest;
+}
+
+template<>
+template<typename T>
+inline T AtomicAccess::PlatformLoad<8>::operator()(T const volatile* src) const {
+  STATIC_ASSERT(8 == sizeof(T));
+  T dest;
+  dest = (T)__iso_volatile_load64((volatile __int64*)src);
+  return dest;
+}
+
 // Note that in MSVC, volatile memory accesses are explicitly
 // guaranteed to have acquire release semantics (w.r.t. compiler
 // reordering) and therefore does not even need a compiler barrier
