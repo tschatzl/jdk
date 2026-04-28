@@ -32,36 +32,60 @@ template<>
 template<typename T>
 inline T AtomicAccess::PlatformLoad<1>::operator()(T const volatile* src) const {
   STATIC_ASSERT(1 == sizeof(T));
-  T dest;
-  dest = (T)__iso_volatile_load8((volatile __int8*)src);
-  return dest;
+  return (T)__iso_volatile_load8((const volatile __int8*)src);
 }
 
 template<>
 template<typename T>
 inline T AtomicAccess::PlatformLoad<2>::operator()(T const volatile* src) const {
   STATIC_ASSERT(2 == sizeof(T));
-  T dest;
-  dest = (T)__iso_volatile_load16((volatile __int16*)src);
-  return dest;
+  return (T)__iso_volatile_load16((const volatile __int16*)src);
 }
 
 template<>
 template<typename T>
 inline T AtomicAccess::PlatformLoad<4>::operator()(T const volatile* src) const {
   STATIC_ASSERT(4 == sizeof(T));
-  T dest;
-  dest = (T)__iso_volatile_load32((volatile __int32*)src);
-  return dest;
+  return (T)__iso_volatile_load32((const volatile __int32*)src);
 }
 
 template<>
 template<typename T>
 inline T AtomicAccess::PlatformLoad<8>::operator()(T const volatile* src) const {
   STATIC_ASSERT(8 == sizeof(T));
-  T dest;
-  dest = (T)__iso_volatile_load64((volatile __int64*)src);
-  return dest;
+  return (T)__iso_volatile_load64((const volatile __int64*)src);
+}
+
+template<>
+template<typename T>
+inline void AtomicAccess::PlatformStore<1>::operator()(T volatile* dest,
+                                                       T store_value) const {
+  STATIC_ASSERT(1 == sizeof(T));
+  __iso_volatile_store8((volatile __int8*)dest, (__int8)store_value);
+}
+
+template<>
+template<typename T>
+inline void AtomicAccess::PlatformStore<2>::operator()(T volatile* dest,
+                                                       T store_value) const {
+  STATIC_ASSERT(2 == sizeof(T));
+  __iso_volatile_store16((volatile __int16*)dest, (__int16)store_value);
+}
+
+template<>
+template<typename T>
+inline void AtomicAccess::PlatformStore<4>::operator()(T volatile* dest,
+                                                       T store_value) const {
+  STATIC_ASSERT(4 == sizeof(T));
+  __iso_volatile_store32((volatile __int32*)dest, (__int32)store_value);
+}
+
+template<>
+template<typename T>
+inline void AtomicAccess::PlatformStore<8>::operator()(T volatile* dest,
+                                                       T store_value) const {
+  STATIC_ASSERT(8 == sizeof(T));
+  __iso_volatile_store64((volatile __int64*)dest, (__int64)store_value);
 }
 
 // Note that in MSVC, volatile memory accesses are explicitly
