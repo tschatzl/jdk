@@ -47,6 +47,8 @@
 #include "gc/shared/plab.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
 #include "gc/shared/tlab_globals.hpp"
+#include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1ConcurrentRefine.hpp"
 #include "logging/log.hpp"
 #include "logging/logStream.hpp"
 #include "memory/memoryReserver.hpp"
@@ -1362,6 +1364,35 @@ static void log_cpu_time() {
     cpuLog.print("     Total                        %30.4f  %6.2f  %8.1f", process_cpu_time, 100.0, process_cpu_time / elapsed_time);
     cpuLog.print("     Garbage Collection           %30.4f  %6.2f  %8.1f", gc_cpu_time, percent_of(gc_cpu_time, process_cpu_time), gc_cpu_time / elapsed_time);
     cpuLog.print("       GC Threads                 %30.4f  %6.2f  %8.1f", gc_threads_cpu_time, percent_of(gc_threads_cpu_time, process_cpu_time), gc_threads_cpu_time / elapsed_time);
+    if (UseG1GC) {
+      G1CollectedHeap* g1h = G1CollectedHeap::heap();
+      double marking_value = g1h->concurrent_mark()->total_mark_cpu_time_s();
+      cpuLog.print("         Marking                  %30.4f  %6.2f. %8.1f ", marking_value, percent_of(marking_value, process_cpu_time), marking_value / elapsed_time);
+        class CountCpuTimeThreadClosure : public ThreadClosure {
+        public:
+          jlong _total_cpu_time;
+
+          CountCpuTimeThreadClosure() : ThreadClosure(), _total_cpu_time(0) { }
+
+          void do_thread(Thread* t) {
+            _total_cpu_time += os::thread_cpu_time(t);
+          }
+        };
+      double refine_value = 0;
+      {
+         CountCpuTimeThreadClosure cl;
+         g1h->concurrent_refine()->threads_do(&cl);
+         refine_value = (double)cl._total_cpu_time / NANOSECS_PER_SEC;
+      }
+      cpuLog.print("         Refinement               %30.4f  %6.2f %8.1f ", refine_value, percent_of(refine_value, process_cpu_time), refine_value / elapsed_time);
+      double evac_value = 0;
+      {
+         CountCpuTimeThreadClosure cl;
+         g1h->gc_threads_do(&cl);
+         evac_value = ((double)cl._total_cpu_time / NANOSECS_PER_SEC) - (marking_value + refine_value);
+      }
+      cpuLog.print("         Evacuation               %30.4f  %6.2f %8.1f ", evac_value, percent_of(evac_value, process_cpu_time), evac_value / elapsed_time);
+    }
     cpuLog.print("       VM Thread                  %30.4f  %6.2f  %8.1f", gc_vm_thread_cpu_time, percent_of(gc_vm_thread_cpu_time, process_cpu_time), gc_vm_thread_cpu_time / elapsed_time);
 
     if (UseStringDeduplication) {

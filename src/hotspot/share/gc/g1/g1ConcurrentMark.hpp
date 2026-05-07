@@ -694,6 +694,8 @@ public:
 
   void print_summary_info();
 
+  double total_mark_cpu_time_s();
+
   void threads_do(ThreadClosure* tc) const;
 
   void print_on(outputStream* st) const;

@@ -2064,7 +2064,15 @@ void G1ConcurrentMark::print_summary_info() {
   log.trace("  Total stop_world time = %8.2f s.",
             (_remark_times.sum() + _cleanup_times.sum())/1000.0);
   log.trace("  Total concurrent time = %8.2f s (%8.2f s marking).",
-            cm_thread()->total_mark_cpu_time_s(), cm_thread()->worker_threads_cpu_time_s());
+            total_mark_cpu_time_s(), cm_thread()->worker_threads_cpu_time_s());
+}
+
+double G1ConcurrentMark::total_mark_cpu_time_s() {
+  if (is_fully_initialized()) {
+    return cm_thread()->total_mark_cpu_time_s();
+  } else {
+    return 0.0;
+  }
 }
 
 void G1ConcurrentMark::threads_do(ThreadClosure* tc) const {
