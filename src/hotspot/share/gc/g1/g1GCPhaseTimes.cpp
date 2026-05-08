@@ -146,7 +146,7 @@ G1GCPhaseTimes::G1GCPhaseTimes(STWGCTimer* gc_timer, uint max_gc_threads) :
   _gc_par_phases[EagerlyReclaimHumongousObjects]->create_thread_work_items("Humongous Total:", EagerlyReclaimNumTotal);
   _gc_par_phases[EagerlyReclaimHumongousObjects]->create_thread_work_items("Humongous Candidates:", EagerlyReclaimNumCandidates);
   _gc_par_phases[EagerlyReclaimHumongousObjects]->create_thread_work_items("Humongous Reclaimed:", EagerlyReclaimNumReclaimed);
-  _gc_par_phases[EagerlyReclaimNumRegionsReclaimed]->create_thread_work_items("Humongous Regions Reclaimed:", EagerlyReclaimNumRegionsReclaimed);
+  _gc_par_phases[EagerlyReclaimHumongousObjects]->create_thread_work_items("Humongous Regions Reclaimed:", EagerlyReclaimNumRegionsReclaimed);
 
   _gc_par_phases[SampleCollectionSetCandidates] = new WorkerDataArray<double>("SampleCandidates", "Sample CSet Candidates (ms):", max_gc_threads);
 

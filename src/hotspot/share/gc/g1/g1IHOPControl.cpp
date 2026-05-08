@@ -81,8 +81,8 @@ G1IHOPControl::G1IHOPControl(double ihop_percent,
     _predictor(predictor),
     _marking_start_to_mixed_time_s(10, 0.05),
     _old_gen_alloc_rate(10, 0.05),
-    _expected_young_gen_at_first_mixed_gc(0),
-    _eagerly_reclaimed_bytes(0) {
+    _eagerly_reclaimed_bytes(0),
+    _expected_young_gen_at_first_mixed_gc(0) {
   assert(_initial_ihop_percent >= 0.0 && _initial_ihop_percent <= 100.0,
          "IHOP percent out of range: %.3f", ihop_percent);
   assert(!_is_adaptive || _predictor != nullptr, "precondition");
@@ -142,7 +142,7 @@ size_t G1IHOPControl::old_gen_threshold_for_conc_mark_start(bool consider_eager_
   //                          (old_gen_growth + expected_young_gen_at_first_mixed_gc)
 
   size_t predicted_needed = old_gen_alloc_bytes + _expected_young_gen_at_first_mixed_gc;
-  size_t target_heap_occupancy = effective_target_occupancy() + (consider_eager_reclaim ? _eagerly_reclaimed_bytes : 0);
+  size_t target_heap_occupancy = effective_target_occupancy() + ((UseNewCode && consider_eager_reclaim) ? _eagerly_reclaimed_bytes : 0);
 
   return predicted_needed < target_heap_occupancy
          ? target_heap_occupancy - predicted_needed
@@ -197,8 +197,8 @@ void G1IHOPControl::send_trace_event(G1NewTracer* tracer, size_t non_young_occup
                                        last_marking_start_to_mixed_time_s());
 
   if (_is_adaptive) {
-    tracer->report_adaptive_ihop_statistics(old_gen_threshold_for_conc_mark_start(),
-                                            effective_target_occupancy(false),
+    tracer->report_adaptive_ihop_statistics(old_gen_threshold_for_conc_mark_start(false),
+                                            effective_target_occupancy(),
                                             non_young_occupancy,
                                             _expected_young_gen_at_first_mixed_gc,
                                             predict(&_old_gen_alloc_rate),

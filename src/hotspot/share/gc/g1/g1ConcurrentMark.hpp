@@ -693,6 +693,7 @@ public:
   bool has_aborted() { return _has_aborted.load_relaxed(); }
 
   void print_summary_info();
+  double total_mark_cpu_time_s();
 
   double total_mark_cpu_time_s();
 

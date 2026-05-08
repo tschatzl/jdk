@@ -565,7 +565,7 @@ void G1Policy::record_full_collection_start() {
   _collection_set->abandon_all_candidates();
 }
 
-void G1Policy::record_full_collection_end(GCCause cause, size_t allocation_word_size) {
+void G1Policy::record_full_collection_end(size_t allocation_word_size) {
   // Consider this like a collection pause for the purposes of allocation
   // since last pause.
   double end_sec = os::elapsedTime();
@@ -976,7 +976,7 @@ void G1Policy::record_young_collection_end(bool concurrent_operation_is_full_mar
   // that in this case we are not running in a "normal" operating mode.
   if (_g1h->gc_cause() != GCCause::_g1_periodic_collection) {
     update_young_length_bounds();
-    size_t num_regions_eagerly_reclaimed = phase_times()->sum_thread_work_times(G1GCPhaseTimes::EagerlyReclaimHumongousObjects, G1GCPhaseTimes::EagerlyReclaimNumRegionsReclaimed);
+    size_t num_regions_eagerly_reclaimed = phase_times()->sum_thread_work_items(G1GCPhaseTimes::EagerlyReclaimHumongousObjects, G1GCPhaseTimes::EagerlyReclaimNumRegionsReclaimed);
     if (update_ihop_prediction(app_time_ms / 1000.0, is_young_only_pause, num_regions_eagerly_reclaimed)) {
       _ihop_control->report_statistics(_g1h->gc_tracer_stw(), _g1h->non_young_occupancy_after_allocation(allocation_word_size));
     }
