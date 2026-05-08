@@ -63,7 +63,8 @@ class G1Policy: public CHeapObj<mtGC> {
   // Update the IHOP control with the necessary statistics. Returns true if there
   // has been a significant update to the prediction.
   bool update_ihop_prediction(double mutator_time_s,
-                              bool this_gc_was_young_only);
+                              bool this_gc_was_young_only,
+                              size_t num_regions_eagerly_reclaimed);
 
   G1Predictions _predictor;
   G1Analytics* _analytics;
@@ -297,6 +298,7 @@ public:
   void record_young_gc_pause_end(bool evacuation_failed);
 
   bool need_to_start_conc_mark(const char* source, size_t allocation_word_size) const;
+  bool need_to_start_conc_mark(const char* source, size_t allocation_word_size, bool humongous_allocation) const;
 
   bool concurrent_operation_is_full_mark(const char* msg, size_t allocation_word_size);
 

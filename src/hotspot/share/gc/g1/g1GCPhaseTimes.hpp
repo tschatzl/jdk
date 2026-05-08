@@ -159,9 +159,10 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
   };
 
   enum GCEagerlyReclaimHumongousObjectsItems {
-    EagerlyReclaimNumTotal,
-    EagerlyReclaimNumCandidates,
-    EagerlyReclaimNumReclaimed
+    EagerlyReclaimNumTotal,          // Total number of humongous objects.
+    EagerlyReclaimNumCandidates,     // Number of humongous object candidates.
+    EagerlyReclaimNumReclaimed,      // Number of reclaimed humongous objects.
+    EagerlyReclaimNumRegionsReclaimed         // Number of reclaimed humongous regions.
   };
 
  private:

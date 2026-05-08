@@ -565,7 +565,7 @@ void G1Policy::record_full_collection_start() {
   _collection_set->abandon_all_candidates();
 }
 
-void G1Policy::record_full_collection_end(size_t allocation_word_size) {
+void G1Policy::record_full_collection_end(GCCause cause, size_t allocation_word_size) {
   // Consider this like a collection pause for the purposes of allocation
   // since last pause.
   double end_sec = os::elapsedTime();
@@ -729,19 +729,28 @@ bool G1Policy::about_to_start_mixed_phase() const {
 }
 
 bool G1Policy::need_to_start_conc_mark(const char* source, size_t allocation_word_size) const {
+  return need_to_start_conc_mark(source, allocation_word_size, _g1h->gc_cause() == GCCause::_g1_humongous_allocation);
+}
+
+bool G1Policy::need_to_start_conc_mark(const char* source, size_t allocation_word_size, bool humongous_allocation) const {
   if (about_to_start_mixed_phase()) {
     return false;
   }
 
-  size_t marking_initiating_old_gen_threshold = _ihop_control->old_gen_threshold_for_conc_mark_start();
+  size_t marking_initiating_old_gen_threshold = _ihop_control->old_gen_threshold_for_conc_mark_start(humongous_allocation);
   size_t non_young_occupancy = _g1h->non_young_occupancy_after_allocation(allocation_word_size);
 
   bool result = false;
   if (non_young_occupancy > marking_initiating_old_gen_threshold) {
     result = collector_state()->is_in_young_only_phase();
-    log_debug(gc, ergo, ihop)("%s non-young occupancy: %zuB allocation request: %zuB threshold: %zuB (%1.2f) source: %s",
+    log_debug(gc, ergo, ihop)("%s non-young occupancy: %zuB allocation request: %zuB threshold: %zuB (%1.2f) consider humongous %s source: %s",
                               result ? "Request concurrent cycle initiation (occupancy higher than threshold)" : "Do not request concurrent cycle initiation (still doing mixed collections)",
-                              non_young_occupancy, allocation_word_size * HeapWordSize, marking_initiating_old_gen_threshold, (double) marking_initiating_old_gen_threshold / _g1h->capacity() * 100, source);
+                              non_young_occupancy,
+                              allocation_word_size * HeapWordSize,
+                              marking_initiating_old_gen_threshold,
+                              (double) marking_initiating_old_gen_threshold / _g1h->capacity() * 100,
+                              BOOL_TO_STR(humongous_allocation),
+                              source);
   }
   return result;
 }
@@ -967,8 +976,8 @@ void G1Policy::record_young_collection_end(bool concurrent_operation_is_full_mar
   // that in this case we are not running in a "normal" operating mode.
   if (_g1h->gc_cause() != GCCause::_g1_periodic_collection) {
     update_young_length_bounds();
-
-    if (update_ihop_prediction(app_time_ms / 1000.0, is_young_only_pause)) {
+    size_t num_regions_eagerly_reclaimed = phase_times()->sum_thread_work_times(G1GCPhaseTimes::EagerlyReclaimHumongousObjects, G1GCPhaseTimes::EagerlyReclaimNumRegionsReclaimed);
+    if (update_ihop_prediction(app_time_ms / 1000.0, is_young_only_pause, num_regions_eagerly_reclaimed)) {
       _ihop_control->report_statistics(_g1h->gc_tracer_stw(), _g1h->non_young_occupancy_after_allocation(allocation_word_size));
     }
   } else {
@@ -1015,7 +1024,8 @@ G1IHOPControl* G1Policy::create_ihop_control(const G1OldGenAllocationTracker* ol
 }
 
 bool G1Policy::update_ihop_prediction(double mutator_time_s,
-                                      bool this_gc_was_young_only) {
+                                      bool this_gc_was_young_only,
+                                      size_t num_regions_eagerly_reclaimed) {
   // Always try to update IHOP prediction. Even evacuation failures give information
   // about e.g. whether to start IHOP earlier next time.
 
@@ -1046,7 +1056,8 @@ bool G1Policy::update_ihop_prediction(double mutator_time_s,
     // prediction too small and the limit the young gen every time we get to the
     // predicted target occupancy.
     size_t young_gen_size = young_list_desired_length() * G1HeapRegion::GrainBytes;
-    _ihop_control->update_allocation_info(mutator_time_s, young_gen_size);
+    size_t eagerly_reclaimed_bytes = num_regions_eagerly_reclaimed * G1HeapRegion::GrainBytes;
+    _ihop_control->update_allocation_info(mutator_time_s, young_gen_size, eagerly_reclaimed_bytes);
     report = true;
   }
 
@@ -1347,6 +1358,7 @@ void G1Policy::abandon_collection_set_candidates() {
 }
 
 void G1Policy::maybe_start_marking(size_t allocation_word_size) {
+  assert(_g1h->is_stw_gc_active(), "must be");
   if (need_to_start_conc_mark("end of GC", allocation_word_size)) {
     // Note: this might have already been set, if during the last
     // pause we decided to start a cycle but at the beginning of

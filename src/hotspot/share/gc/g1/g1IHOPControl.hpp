@@ -64,6 +64,8 @@ class G1IHOPControl : public CHeapObj<mtGC> {
   // Old generation allocation rate in bytes per second.
   TruncatedSeq _old_gen_alloc_rate;
 
+  size_t _eagerly_reclaimed_bytes;
+
   // The most recent unrestrained size of the young gen. This is used as an additional
   // factor in the calculation of the threshold, as the threshold is based on
   // non-young gen occupancy at the end of GC. For the IHOP threshold, we need to
@@ -108,14 +110,14 @@ class G1IHOPControl : public CHeapObj<mtGC> {
   // Contents include young gen at that point, and the memory required for evacuating
   // the collection set in that first mixed gc (including waste caused by PLAB
   // allocation etc.).
-  void update_allocation_info(double allocation_time_s, size_t expected_young_gen_size);
+  void update_allocation_info(double allocation_time_s, size_t expected_young_gen_size, size_t eagerly_reclaimed_bytes = 0 /* check: testing */);
 
   // Update the time spent in the mutator beginning from the end of concurrent start to
   // the first mixed gc.
   void add_marking_start_to_mixed_length(double length_s);
 
   // Get the current non-young occupancy at which concurrent marking should start.
-  size_t old_gen_threshold_for_conc_mark_start() const;
+  size_t old_gen_threshold_for_conc_mark_start(bool consider_eager_reclaim) const;
 
   void report_statistics(G1NewTracer* tracer, size_t non_young_occupancy);
 };

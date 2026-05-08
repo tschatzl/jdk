@@ -706,7 +706,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_humongous(size_t word_size) {
   // allocated memory while we do a GC.
   // Only try that if we can actually perform a GC.
   if (is_init_completed() &&
-      policy()->need_to_start_conc_mark("concurrent humongous allocation", word_size)) {
+      policy()->need_to_start_conc_mark("concurrent humongous allocation", word_size, true)) {
     try_collect(word_size, GCCause::_g1_humongous_allocation, collection_counters(this));
   }
 
@@ -791,7 +791,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_at_safepoint(size_t word_size,
     HeapWord* result = humongous_obj_allocate(word_size);
     if (result != nullptr &&
         // We just allocated the humongous object, so the given allocation size is 0.
-        policy()->need_to_start_conc_mark("STW humongous allocation", 0 /* allocation_word_size */)) {
+        policy()->need_to_start_conc_mark("STW humongous allocation", 0 /* allocation_word_size */, true)) {
       collector_state()->set_initiate_conc_mark_if_possible(true);
     }
     return result;
