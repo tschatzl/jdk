@@ -297,8 +297,8 @@ public:
   void record_young_gc_pause_start();
   void record_young_gc_pause_end(bool evacuation_failed);
 
-  bool need_to_start_conc_mark(const char* source, size_t allocation_word_size) const;
-  bool need_to_start_conc_mark(const char* source, size_t allocation_word_size, bool humongous_allocation) const;
+  bool need_to_start_conc_mark(const char* source, size_t allocation_word_size);
+  bool need_to_start_conc_mark(const char* source, size_t allocation_word_size, bool humongous_allocation);
 
   bool concurrent_operation_is_full_mark(const char* msg, size_t allocation_word_size);
 
@@ -310,6 +310,7 @@ public:
   void record_young_collection_end(bool concurrent_operation_is_full_mark,
                                    bool allocation_failure,
                                    size_t allocation_word_size);
+  size_t eager_reclaim_bonus;
 
   // Record the start and end of a full collection.
   void record_full_collection_start();

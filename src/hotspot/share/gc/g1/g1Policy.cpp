@@ -728,13 +728,21 @@ bool G1Policy::about_to_start_mixed_phase() const {
   return collector_state()->is_in_concurrent_cycle() || collector_state()->is_in_prepare_mixed_gc();
 }
 
-bool G1Policy::need_to_start_conc_mark(const char* source, size_t allocation_word_size) const {
-  return need_to_start_conc_mark(source, allocation_word_size, _g1h->gc_cause() == GCCause::_g1_humongous_allocation);
+bool G1Policy::need_to_start_conc_mark(const char* source, size_t allocation_word_size) {
+  return need_to_start_conc_mark(source, allocation_word_size, false);
 }
 
-bool G1Policy::need_to_start_conc_mark(const char* source, size_t allocation_word_size, bool humongous_allocation) const {
+bool G1Policy::need_to_start_conc_mark(const char* source, size_t allocation_word_size, bool humongous_allocation) {
   if (about_to_start_mixed_phase()) {
     return false;
+  }
+
+  if (G1CollectedHeap::is_humongous(allocation_word_size)) {
+  size_t regions = G1CollectedHeap::humongous_obj_size_in_regions(allocation_word_size);
+  if (UseNewCode && regions <= eager_reclaim_bonus) {
+    eager_reclaim_bonus -= regions;
+    return false;
+  }
   }
 
   size_t marking_initiating_old_gen_threshold = _ihop_control->old_gen_threshold_for_conc_mark_start(humongous_allocation);
@@ -977,6 +985,7 @@ void G1Policy::record_young_collection_end(bool concurrent_operation_is_full_mar
   if (_g1h->gc_cause() != GCCause::_g1_periodic_collection) {
     update_young_length_bounds();
     size_t num_regions_eagerly_reclaimed = phase_times()->sum_thread_work_items(G1GCPhaseTimes::EagerlyReclaimHumongousObjects, G1GCPhaseTimes::EagerlyReclaimNumRegionsReclaimed);
+    eager_reclaim_bonus = num_regions_eagerly_reclaimed;
     if (update_ihop_prediction(app_time_ms / 1000.0, is_young_only_pause, num_regions_eagerly_reclaimed)) {
       _ihop_control->report_statistics(_g1h->gc_tracer_stw(), _g1h->non_young_occupancy_after_allocation(allocation_word_size));
     }
