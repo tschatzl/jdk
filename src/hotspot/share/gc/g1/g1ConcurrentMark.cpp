@@ -300,6 +300,7 @@ void G1CMMarkStack::add_chunk_to_chunk_list(TaskQueueEntryChunk* elem) {
   MutexLocker x(G1MarkStackChunkList_lock, Mutex::_no_safepoint_check_flag);
   add_chunk_to_list(&_chunk_list, elem);
   _chunks_in_chunk_list++;
+  _max_chunks_in_chunk_list = MAX2(_max_chunks_in_chunk_list, _chunks_in_chunk_list);
 }
 
 void G1CMMarkStack::add_chunk_to_free_list(TaskQueueEntryChunk* elem) {
@@ -364,6 +365,7 @@ bool G1CMMarkStack::par_pop_chunk(G1TaskQueueEntry* ptr_arr) {
 
 void G1CMMarkStack::set_empty() {
   _chunks_in_chunk_list = 0;
+  _max_chunks_in_chunk_list = 0;
   _chunk_list.store_relaxed(nullptr);
   _free_list.store_relaxed(nullptr);
   _chunk_allocator.reset();
@@ -1382,6 +1384,7 @@ void G1ConcurrentMark::remark() {
     verify_during_pause(G1HeapVerifier::G1VerifyRemark, VerifyLocation::RemarkAfter);
 
     assert(!restart_for_overflow(), "sanity");
+    log_debug(gc, marking)("Current Mark Stack Usage: %zu entries, max %zu entries", _global_mark_stack.size(), _global_mark_stack.max_size());
     // Completely reset the marking state (except bitmaps) since marking completed.
     reset_at_marking_complete();
 
@@ -1401,6 +1404,7 @@ void G1ConcurrentMark::remark() {
 
     verify_during_pause(G1HeapVerifier::G1VerifyRemark, VerifyLocation::RemarkOverflow);
 
+    log_debug(gc, marking)("Current Mark Stack Usage: %zu entries, max %zu entries", _global_mark_stack.size(), _global_mark_stack.max_size());
     // Clear the marking state because we will be restarting
     // marking due to overflowing the global mark stack.
     reset_marking_for_restart();
@@ -2670,6 +2674,7 @@ void G1CMTask::handle_abort(bool is_serial, double elapsed_time_ms) {
     // see assertion failures from any subsequent set_concurrency_and_phase()
     // calls.
     if (_cm->concurrent() && _worker_id == 0) {
+      log_debug(gc, marking)("Current Mark Stack Usage: %zu entries, max %zu entries", _cm->mark_stack_size(), _cm->max_mark_stack_size());
       // Worker 0 is responsible for clearing the global data structures because
       // of an overflow. During STW we should not clear the overflow flag (in
       // G1ConcurrentMark::reset_marking_state()) since we rely on it being true when we exit

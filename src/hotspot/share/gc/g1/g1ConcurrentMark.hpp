@@ -214,7 +214,8 @@ private:
   char _pad1[DEFAULT_PADDING_SIZE - sizeof(TaskQueueEntryChunk*)];
   Atomic<TaskQueueEntryChunk*> _chunk_list; // List of chunks currently containing data.
   volatile size_t _chunks_in_chunk_list;
-  char _pad2[DEFAULT_PADDING_SIZE - sizeof(TaskQueueEntryChunk*) - sizeof(size_t)];
+  volatile size_t _max_chunks_in_chunk_list;
+  char _pad2[DEFAULT_PADDING_SIZE - sizeof(TaskQueueEntryChunk*) - 2 * sizeof(size_t)];
 
   // Atomically add the given chunk to the list.
   void add_chunk_to_list(Atomic<TaskQueueEntryChunk*>* list, TaskQueueEntryChunk* elem);
@@ -266,6 +267,7 @@ private:
   // Return the approximate number of oops on this mark stack. Racy due to
   // unsynchronized access to _chunks_in_chunk_list.
   size_t size() const { return _chunks_in_chunk_list * EntriesPerChunk; }
+  size_t max_size() const { return _max_chunks_in_chunk_list * EntriesPerChunk; }
 
   void set_empty();
 
@@ -570,6 +572,7 @@ public:
     return _global_mark_stack.par_pop_chunk(arr);
   }
   size_t mark_stack_size() const                { return _global_mark_stack.size(); }
+  size_t max_mark_stack_size() const                { return _global_mark_stack.max_size(); }
   size_t partial_mark_stack_size_target() const { return _global_mark_stack.capacity() / 3; }
   bool mark_stack_empty() const                 { return _global_mark_stack.is_empty(); }
 
