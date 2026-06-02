@@ -61,7 +61,7 @@ public:
                                        size_t peak_extra_humongous_occupancy,
                                        double predicted_old_gen_non_humongous_allocation_rate,
                                        size_t predicted_peak_extra_humongous_occupancy,
-                                       double predicted_marking_length,
+                                       double predicted_concurrent_cycle_duration,
                                        bool prediction_active);
 private:
   void send_g1_young_gc_event();
@@ -83,7 +83,7 @@ private:
                                      size_t peak_extra_humongous_occupancy,
                                      double predicted_old_gen_non_humongous_allocation_rate,
                                      size_t predicted_peak_extra_humongous_occupancy,
-                                     double predicted_marking_length,
+                                     double predicted_concurrent_cycle_duration,
                                      bool prediction_active);
 };
 

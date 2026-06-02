@@ -53,9 +53,9 @@ class G1IHOPControl : public CHeapObj<mtGC> {
   const size_t _heap_waste_percent;
 
   const G1Predictions* _predictor;
-  // Wall-clock time in seconds from marking start to the first mixed GC,
-  // excluding GC Pause time.
-  TruncatedSeq _marking_start_to_mixed_time_s;
+  // Predictor for the concurrent cycle duration from the end of the last
+  // Concurrent Start GC to the first Mixed GC.
+  TruncatedSeq _concurrent_cycle_duration_s;
   // Track old-generation allocations during a concurrent cycle: end of the
   // Concurrent Start to the first Mixed GC.
   // These values are used only when G1UseAdaptiveIHOP is enabled.
@@ -106,7 +106,7 @@ class G1IHOPControl : public CHeapObj<mtGC> {
   // allocation etc.).
   void record_expected_young_gen_size(size_t expected_young_gen_size);
 
-  void record_concurrent_cycle(double marking_start_to_mixed_time_s,
+  void record_concurrent_cycle(double concurrent_cycle_duration_s,
                                size_t non_humongous_bytes,
                                size_t peak_extra_humongous_occupancy);
 

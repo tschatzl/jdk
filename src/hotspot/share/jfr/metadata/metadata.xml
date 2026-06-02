@@ -518,8 +518,8 @@
       description="Predicted allocation rate of non-humongous objects into the old generation, in bytes per second" />
     <Field type="ulong" contentType="bytes" name="predictedPeakExtraHumongousOccupancy" label="Predicted Peak Extra Humongous Occupancy"
       description="Predicted peak increase in humongous occupancy during a concurrent cycle relative to the occupancy at concurrent cycle start" experimental="true" />
-    <Field type="long" contentType="millis" name="predictedMarkingDuration" label="Predicted Marking Duration"
-      description="Current predicted time from the end of the last concurrent start to the first mixed GC" />
+    <Field type="long" contentType="millis" name="predictedConcurrentCycleDuration" label="Predicted Concurrent Cycle Duration"
+      description="Current predicted time from the end of the last Concurrent Start GC to the first Mixed GC" />
     <Field type="boolean" name="predictionActive" label="Prediction Active" description="Indicates whether the adaptive IHOP prediction is active" />
   </Event>
 

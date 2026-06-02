@@ -112,7 +112,7 @@ void G1NewTracer::report_adaptive_ihop_statistics(size_t threshold,
                                                   size_t peak_extra_humongous_occupancy,
                                                   double predicted_old_non_hum_alloc_rate,
                                                   size_t predicted_peak_extra_humongous_occupancy,
-                                                  double predicted_marking_length,
+                                                  double predicted_concurrent_cycle_duration,
                                                   bool prediction_active) {
   send_adaptive_ihop_statistics(threshold,
                                 internal_target_occupancy,
@@ -122,7 +122,7 @@ void G1NewTracer::report_adaptive_ihop_statistics(size_t threshold,
                                 peak_extra_humongous_occupancy,
                                 predicted_old_non_hum_alloc_rate,
                                 predicted_peak_extra_humongous_occupancy,
-                                predicted_marking_length,
+                                predicted_concurrent_cycle_duration,
                                 prediction_active);
 }
 
@@ -226,7 +226,7 @@ void G1NewTracer::send_adaptive_ihop_statistics(size_t threshold,
                                                 size_t peak_extra_humongous_occupancy,
                                                 double predicted_old_non_hum_alloc_rate,
                                                 size_t predicted_peak_extra_humongous_occupancy,
-                                                double predicted_marking_length,
+                                                double predicted_concurrent_cycle_duration,
                                                 bool prediction_active) {
   EventG1AdaptiveIHOP evt;
   if (evt.should_commit()) {
@@ -240,7 +240,7 @@ void G1NewTracer::send_adaptive_ihop_statistics(size_t threshold,
     evt.set_peakExtraHumongousOccupancy(peak_extra_humongous_occupancy);
     evt.set_predictedNonHumongousAllocation(predicted_old_non_hum_alloc_rate);
     evt.set_predictedPeakExtraHumongousOccupancy(predicted_peak_extra_humongous_occupancy);
-    evt.set_predictedMarkingDuration(predicted_marking_length * MILLIUNITS);
+    evt.set_predictedConcurrentCycleDuration(predicted_concurrent_cycle_duration * MILLIUNITS);
     evt.set_predictionActive(prediction_active);
     evt.commit();
   }
