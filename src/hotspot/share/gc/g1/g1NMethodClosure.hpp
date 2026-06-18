@@ -27,6 +27,7 @@
 
 #include "gc/g1/g1CollectedHeap.hpp"
 #include "memory/iterator.hpp"
+#include "utilities/growableArray.hpp"
 
 class G1ConcurrentMark;
 class nmethod;
@@ -38,18 +39,24 @@ class G1NMethodClosure : public NMethodClosure {
     OopClosure* _work;
     nmethod* _nm;
 
+    GrowableArrayCHeap<G1HeapRegion*, mtGC> _affected_regions;
+
     template <typename T>
     void do_oop_work(T* p);
 
   public:
-    HeapRegionGatheringOopClosure(OopClosure* oc) : _g1h(G1CollectedHeap::heap()), _work(oc), _nm(nullptr) {}
+    HeapRegionGatheringOopClosure(OopClosure* oc);
+    ~HeapRegionGatheringOopClosure() = default;
 
     void do_oop(oop* o);
     void do_oop(narrowOop* o);
 
-    void set_nm(nmethod* nm) {
+    void set_nmethod(nmethod* nm) {
+      assert(_affected_regions.is_empty(), "must be");
       _nm = nm;
     }
+  
+    void add_to_remsets();
   };
 
   // Mark all oops below TAMS.

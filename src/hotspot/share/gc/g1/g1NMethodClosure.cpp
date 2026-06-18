@@ -49,7 +49,8 @@ void G1NMethodClosure::HeapRegionGatheringOopClosure::do_oop_work(T* p) {
     assert(!_g1h->is_in_cset(o), "must be");
 
     G1HeapRegion* hr = _g1h->heap_region_containing(o);
-    hr->rem_set()->add_code_root(_nm);
+
+    _affected_regions.append_if_missing(hr);
   } else {
 #ifdef ASSERT
     // Either the oop did not move or was not in the collection set in the first place. Must still be
@@ -57,6 +58,20 @@ void G1NMethodClosure::HeapRegionGatheringOopClosure::do_oop_work(T* p) {
     oop o = CompressedOops::decode(oop_or_narrowoop);
     assert(o == nullptr || _g1h->heap_region_containing(o)->rem_set()->code_roots_list_contains(_nm), "must be");
 #endif
+  }
+}
+
+G1NMethodClosure::HeapRegionGatheringOopClosure::HeapRegionGatheringOopClosure(OopClosure* oc) :
+  _g1h(G1CollectedHeap::heap()),
+  _work(oc),
+  _nm(nullptr),
+  _affected_regions(5) {
+}
+
+void G1NMethodClosure::HeapRegionGatheringOopClosure::add_to_remsets() {
+  //log_info(gc)("affected size: %d", _affected_regions.length());
+  while (!_affected_regions.is_empty()) {
+    _affected_regions.pop()->rem_set()->add_code_root(_nm);
   }
 }
 
@@ -89,10 +104,12 @@ void G1NMethodClosure::MarkingOopClosure::do_oop(narrowOop* o) {
 }
 
 void G1NMethodClosure::do_evacuation_and_fixup(nmethod* nm) {
-  _oc.set_nm(nm);
+  _oc.set_nmethod(nm);
 
   // Evacuate objects pointed to by the nmethod
   nm->oops_do(&_oc);
+
+  _oc.add_to_remsets();
 
   if (_strong) {
     // CodeCache unloading support

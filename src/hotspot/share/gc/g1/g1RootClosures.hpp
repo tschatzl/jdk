@@ -42,6 +42,8 @@ public:
 
   // Applied to nmethods reachable as strong roots.
   virtual NMethodClosure* strong_nmethods() = 0;
+
+  virtual ~G1RootClosures() = default;
 };
 
 class G1EvacuationRootClosures : public G1RootClosures {
