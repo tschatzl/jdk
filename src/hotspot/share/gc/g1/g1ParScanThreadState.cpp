@@ -56,11 +56,13 @@
 #define MAYBE_INLINE_EVACUATION NOT_DEBUG(inline) DEBUG_ONLY(NOINLINE)
 
 G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h,
+                                           G1ParScanThreadStateSet* per_thread_states,
                                            uint worker_id,
                                            uint num_workers,
                                            G1CollectionSet* collection_set,
                                            G1EvacFailureRegions* evac_failure_regions)
   : _g1h(g1h),
+    _per_thread_states(per_thread_states),
     _task_queue(g1h->task_queue(worker_id)),
     _ct(g1h->refinement_table()),
     _closures(nullptr),
@@ -83,6 +85,7 @@ G1ParScanThreadState::G1ParScanThreadState(G1CollectedHeap* g1h,
     _max_num_optional_regions(collection_set->num_optional_regions()),
     _numa(g1h->numa()),
     _obj_alloc_stat(nullptr),
+    _nmethods(collection_set->cur_length(), _g1h->max_num_regions() / 2),
     ALLOCATION_FAILURE_INJECTOR_ONLY(_allocation_failure_inject_counter(0) COMMA)
     _evacuation_failed_info(),
     _evac_failure_regions(evac_failure_regions),
@@ -129,6 +132,12 @@ size_t G1ParScanThreadState::flush_stats(size_t* surviving_young_words, uint num
 }
 
 G1ParScanThreadState::~G1ParScanThreadState() {
+  auto delete_all = [&] (uint region, NmethodSet* nmethods) -> bool {
+    delete nmethods;
+    return true;
+  };
+  _nmethods.iterate(delete_all);
+
   delete _plab_allocator;
   delete _closures;
   FREE_C_HEAP_ARRAY(_surviving_young_words_base);
@@ -575,6 +584,7 @@ G1ParScanThreadState* G1ParScanThreadStateSet::state_for_worker(uint worker_id) 
   if (_states[worker_id] == nullptr) {
     _states[worker_id] =
       new G1ParScanThreadState(_g1h,
+                               this,
                                worker_id,
                                _num_workers,
                                _collection_set,
@@ -606,19 +616,53 @@ void G1ParScanThreadStateSet::flush_stats() {
     size_t evac_failure_cards = pss->num_cards_from_evac_failure();
     size_t marked_cards = pss->num_cards_marked();
 
-    p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, copied_bytes, G1GCPhaseTimes::MergePSSCopiedBytes);
-    p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, lab_waste_bytes, G1GCPhaseTimes::MergePSSLABWasteBytes);
-    p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, lab_undo_waste_bytes, G1GCPhaseTimes::MergePSSLABUndoWasteBytes);
-    p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, pending_cards, G1GCPhaseTimes::MergePSSPendingCards);
-    p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, to_young_gen_cards, G1GCPhaseTimes::MergePSSToYoungGenCards);
-    p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, evac_failure_cards, G1GCPhaseTimes::MergePSSEvacFail);
-    p->record_or_add_thread_work_item(G1GCPhaseTimes::MergePSS, worker_id, marked_cards, G1GCPhaseTimes::MergePSSMarked);
-
-    delete pss;
-    _states[worker_id] = nullptr;
+    p->record_or_add_thread_work_item(G1GCPhaseTimes::FlushPss, worker_id, copied_bytes, G1GCPhaseTimes::MergePSSCopiedBytes);
+    p->record_or_add_thread_work_item(G1GCPhaseTimes::FlushPss, worker_id, lab_waste_bytes, G1GCPhaseTimes::MergePSSLABWasteBytes);
+    p->record_or_add_thread_work_item(G1GCPhaseTimes::FlushPss, worker_id, lab_undo_waste_bytes, G1GCPhaseTimes::MergePSSLABUndoWasteBytes);
+    p->record_or_add_thread_work_item(G1GCPhaseTimes::FlushPss, worker_id, pending_cards, G1GCPhaseTimes::MergePSSPendingCards);
+    p->record_or_add_thread_work_item(G1GCPhaseTimes::FlushPss, worker_id, to_young_gen_cards, G1GCPhaseTimes::MergePSSToYoungGenCards);
+    p->record_or_add_thread_work_item(G1GCPhaseTimes::FlushPss, worker_id, evac_failure_cards, G1GCPhaseTimes::MergePSSEvacFail);
+    p->record_or_add_thread_work_item(G1GCPhaseTimes::FlushPss, worker_id, marked_cards, G1GCPhaseTimes::MergePSSMarked);
   }
 
   _flushed = true;
+}
+
+void G1ParScanThreadStateSet::destroy_stats() {
+  for (uint worker_id = 0; worker_id < _num_workers; ++worker_id) {
+    delete _states[worker_id];
+    _states[worker_id] = nullptr;
+  }
+}
+
+void G1ParScanThreadStateSet::determine_nmethod_add_regions(AddedNMethods* nmethods) {
+  if (nmethods->number_of_entries() == 0) {
+    return;
+  }
+
+  ResourceMark rm;
+  GrowableArray<uint> regions_to_add = GrowableArray<uint>(nmethods->table_size());
+
+  nmethods->iterate_all([&] (uint& region, void*) {
+    if (_has_nmethods_to_add.par_set_bit(region, memory_order_relaxed)) {
+      regions_to_add.push(region);
+    }
+  });
+
+  uint num_regions_to_add = (uint)regions_to_add.length();
+
+  if (num_regions_to_add == 0) {
+    return;
+  }
+
+  uint first_index = _num_regions_to_add_nmethods_to.fetch_then_add(num_regions_to_add, memory_order_relaxed);
+  guarantee(first_index + num_regions_to_add <= _g1h->max_num_regions(), "must be");
+
+  memcpy(&_regions_to_add_nmethods_to[first_index], regions_to_add.adr_at(0), num_regions_to_add * sizeof(uint));
+}
+
+void G1ParScanThreadStateSet::iterate_nmethods_to_add_regions(G1HeapRegionClosure* cl, G1HeapRegionClaimer* claimer, uint worker_id) {
+  _g1h->par_iterate_regions_array(cl, claimer, _regions_to_add_nmethods_to, _num_regions_to_add_nmethods_to.load_relaxed(), worker_id);
 }
 
 void G1ParScanThreadStateSet::record_unused_optional_region(G1HeapRegion* hr) {
@@ -676,6 +720,10 @@ oop G1ParScanThreadState::handle_evacuation_failure_par(oop old, markWord m, Kla
   }
 }
 
+void G1ParScanThreadState::determine_nmethod_updates() {
+  _per_thread_states->determine_nmethod_add_regions(&_nmethods);
+}
+
 void G1ParScanThreadState::initialize_numa_stats() {
   if (_numa->is_enabled()) {
     LogTarget(Info, gc, heap, numa) lt;
@@ -720,7 +768,10 @@ G1ParScanThreadStateSet::G1ParScanThreadStateSet(G1CollectedHeap* g1h,
     _surviving_young_words_total(NEW_C_HEAP_ARRAY(size_t, collection_set->young_region_length() + 1, mtGC)),
     _num_workers(num_workers),
     _flushed(false),
-    _evac_failure_regions(evac_failure_regions)
+    _evac_failure_regions(evac_failure_regions),
+    _has_nmethods_to_add(g1h->max_num_regions(), mtGC),
+    _num_regions_to_add_nmethods_to(0),
+    _regions_to_add_nmethods_to(NEW_C_HEAP_ARRAY(uint, g1h->max_num_regions(), mtGC)) // Conserative length estimation.
 {
   for (uint i = 0; i < num_workers; ++i) {
     _states[i] = nullptr;
@@ -730,6 +781,7 @@ G1ParScanThreadStateSet::G1ParScanThreadStateSet(G1CollectedHeap* g1h,
 
 G1ParScanThreadStateSet::~G1ParScanThreadStateSet() {
   assert(_flushed, "thread local state from the per thread states should have been flushed");
+  FREE_C_HEAP_ARRAY(_regions_to_add_nmethods_to);
   FREE_C_HEAP_ARRAY(_states);
   FREE_C_HEAP_ARRAY(_surviving_young_words_total);
 }

@@ -76,7 +76,7 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
     ResizeThreadLABs,
     RebuildFreeList,
     SampleCollectionSetCandidates,
-    MergePSS,
+    FlushPss,
     RestoreEvacuationFailedRegions,
     RemoveSelfForwards,
     ClearCardTable,
@@ -85,7 +85,8 @@ class G1GCPhaseTimes : public CHeapObj<mtGC> {
     UpdateDerivedPointers,
 #endif // COMPILER2
     EagerlyReclaimHumongousObjects,
-    ResetPartialArrayStateManager,
+    UpdateCodeRoots,
+    DestroyPss,
     ProcessEvacuationFailedRegions,
     ResetMarkingState,
     NoteStartOfMark,

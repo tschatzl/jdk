@@ -630,6 +630,8 @@ void G1RemSet::scan_collection_set_code_roots(G1ParScanThreadState* pss,
     // set regions for all threads.
     _g1h->collection_set_iterate_increment_from(&cl, worker_id);
 
+    pss->determine_nmethod_updates();
+
     p->record_or_add_thread_work_item(coderoots_phase, worker_id, cl.code_roots_scanned(), G1GCPhaseTimes::CodeRootsScannedNMethods);
   }
 

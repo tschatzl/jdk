@@ -37,6 +37,8 @@
 #include "gc/shared/taskqueue.hpp"
 #include "memory/allocation.hpp"
 #include "oops/oop.hpp"
+#include "runtime/atomic.hpp"
+#include "utilities/growableArray.hpp"
 #include "utilities/ticks.hpp"
 
 class G1CardTable;
@@ -44,12 +46,18 @@ class G1CollectionSet;
 class G1EvacFailureRegions;
 class G1EvacuationRootClosures;
 class G1OopStarChunkedList;
+class G1ParScanThreadStateSet;
 class G1PLABAllocator;
 class G1HeapRegion;
 class outputStream;
 
+// FIXME: move somehwere else
+typedef GrowableArrayCHeap<nmethod*, mtGC> NmethodSet;
+typedef ResizeableHashTable<uint, NmethodSet*, AnyObj::C_HEAP, mtGC> AddedNMethods;
+
 class G1ParScanThreadState : public CHeapObj<mtGC> {
   G1CollectedHeap* _g1h;
+  G1ParScanThreadStateSet* _per_thread_states;
   G1ScannerTasksQueue* _task_queue;
   G1CardTable* _ct;
   G1EvacuationRootClosures* _closures;
@@ -96,6 +104,8 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
   // transferred when flushed.
   size_t* _obj_alloc_stat;
 
+  AddedNMethods _nmethods;
+
   // Per-thread evacuation failure data structures.
   ALLOCATION_FAILURE_INJECTOR_ONLY(size_t _allocation_failure_inject_counter;)
 
@@ -114,6 +124,7 @@ class G1ParScanThreadState : public CHeapObj<mtGC> {
 
 public:
   G1ParScanThreadState(G1CollectedHeap* g1h,
+                       G1ParScanThreadStateSet* per_thread_states,
                        uint worker_id,
                        uint num_workers,
                        G1CollectionSet* collection_set,
@@ -243,6 +254,12 @@ public:
   // An attempt to evacuate "obj" has failed; take necessary steps.
   oop handle_evacuation_failure_par(oop obj, markWord m, Klass* klass, G1HeapRegionAttr attr, size_t word_sz, bool cause_pinned);
 
+  inline void remember_nmethod(G1HeapRegion* r, nmethod* nm);
+  void determine_nmethod_updates();
+  inline size_t num_nmethods(uint index) const;
+  template <typename Function>
+  inline void iterate_nmethods(uint index, Function fn);
+
   template <typename T>
   inline void remember_root_into_optional_region(T* p);
   template <typename T>
@@ -260,6 +277,10 @@ class G1ParScanThreadStateSet : public StackObj {
   bool _flushed;
   G1EvacFailureRegions* _evac_failure_regions;
 
+  CHeapBitMap _has_nmethods_to_add;
+  Atomic<uint> _num_regions_to_add_nmethods_to;
+  uint* _regions_to_add_nmethods_to;
+
  public:
   G1ParScanThreadStateSet(G1CollectedHeap* g1h,
                           uint num_workers,
@@ -268,6 +289,11 @@ class G1ParScanThreadStateSet : public StackObj {
   ~G1ParScanThreadStateSet();
 
   void flush_stats();
+  void destroy_stats();
+
+  void determine_nmethod_add_regions(AddedNMethods* nmethods);
+  void iterate_nmethods_to_add_regions(G1HeapRegionClosure* cl, G1HeapRegionClaimer* claimer, uint worker_id);
+
   void record_unused_optional_region(G1HeapRegion* hr);
 #if TASKQUEUE_STATS
   void print_partial_array_task_stats();

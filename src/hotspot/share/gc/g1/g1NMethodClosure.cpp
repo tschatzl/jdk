@@ -61,9 +61,10 @@ void G1NMethodClosure::HeapRegionGatheringOopClosure::do_oop_work(T* p) {
   }
 }
 
-G1NMethodClosure::HeapRegionGatheringOopClosure::HeapRegionGatheringOopClosure(OopClosure* oc) :
+G1NMethodClosure::HeapRegionGatheringOopClosure::HeapRegionGatheringOopClosure(OopClosure* oc, G1ParScanThreadState* pss) :
   _g1h(G1CollectedHeap::heap()),
   _work(oc),
+  _pss(pss),
   _nm(nullptr),
   _affected_regions(5) {
 }
@@ -71,7 +72,7 @@ G1NMethodClosure::HeapRegionGatheringOopClosure::HeapRegionGatheringOopClosure(O
 void G1NMethodClosure::HeapRegionGatheringOopClosure::add_to_remsets() {
   //log_info(gc)("affected size: %d", _affected_regions.length());
   while (!_affected_regions.is_empty()) {
-    _affected_regions.pop()->rem_set()->add_code_root(_nm);
+    _pss->remember_nmethod(_affected_regions.pop(), _nm);
   }
 }
 

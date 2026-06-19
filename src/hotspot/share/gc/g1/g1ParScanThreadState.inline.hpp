@@ -70,6 +70,37 @@ inline void G1ParScanThreadState::reset_trim_ticks() {
   _trim_ticks = Tickspan();
 }
 
+inline void G1ParScanThreadState::remember_nmethod(G1HeapRegion* r, nmethod* nm) {
+  uint index = r->hrm_index();
+
+  NmethodSet** nmethods = _nmethods.get(index);
+  if (nmethods != nullptr) {
+    (*nmethods)->push(nm);
+  } else {
+    NmethodSet* new_set = new NmethodSet(3);
+    new_set->push(nm);
+    if (_nmethods.put(index, new_set)) {
+      _nmethods.maybe_grow(3 /* load_factor */);
+    }
+  }
+}
+
+inline size_t G1ParScanThreadState::num_nmethods(uint region) const {
+  NmethodSet** nmethods = _nmethods.get(region);
+  return nmethods != nullptr ? (size_t)(*nmethods)->length() : 0;
+}
+
+template <typename Function>
+inline void G1ParScanThreadState::iterate_nmethods(uint index, Function fn) {
+  NmethodSet** nmethods = _nmethods.get(index);
+  if (nmethods == nullptr) {
+    return;
+  }
+  for (nmethod* nm : **nmethods) {
+    fn(nm);
+  }
+}
+
 template <typename T>
 inline void G1ParScanThreadState::remember_root_into_optional_region(T* p) {
   oop o = RawAccess<IS_NOT_NULL>::oop_load(p);
