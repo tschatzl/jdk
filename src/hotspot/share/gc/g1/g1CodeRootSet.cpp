@@ -223,12 +223,18 @@ public:
   void grow_to_match(size_t new_size) {
     size_t prev_log2size = _table.get_size_log2(Thread::current());
     size_t new_log2_table_size = log2_target_shrink_size(new_size);
-    while (new_log2_table_size > prev_log2size) {
-      if (!_table.grow(Thread::current(), new_log2_table_size)) {
-        // Should not happen.
-        break;
+    // If there is nothing in the table, we can reset directly.
+    if ((prev_log2size != new_log2_table_size) && (number_of_entries() == 0)) {
+      _table.unsafe_reset(new_log2_table_size);
+    } else {
+      // Otherwise we need to do the resize step-by-step.
+      while (new_log2_table_size > prev_log2size) {
+        if (!_table.grow(Thread::current(), new_log2_table_size)) {
+          // Should not happen.
+          break;
+        }
+        prev_log2size = _table.get_size_log2(Thread::current());
       }
-      prev_log2size = _table.get_size_log2(Thread::current());
     }
   }
 
