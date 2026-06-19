@@ -182,6 +182,8 @@ public:
   void remove_code_root(nmethod* nm);
   void bulk_remove_code_roots();
 
+  void prepare_for_code_root_add(size_t num_code_roots);
+
   // Applies blk->do_nmethod() to each of the entries in _code_roots
   void code_roots_do(NMethodClosure* blk) const;
   // Clean out code roots not having an oop pointing into this region any more.

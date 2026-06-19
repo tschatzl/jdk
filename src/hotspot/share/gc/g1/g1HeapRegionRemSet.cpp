@@ -128,6 +128,10 @@ void G1HeapRegionRemSet::bulk_remove_code_roots() {
   _code_roots.bulk_remove();
 }
 
+void G1HeapRegionRemSet::prepare_for_code_root_add(size_t num_code_roots) {
+  _code_roots.prepare_for_code_root_add(num_code_roots);
+}
+
 void G1HeapRegionRemSet::code_roots_do(NMethodClosure* blk) const {
   _code_roots.nmethods_do(blk);
 }

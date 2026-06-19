@@ -45,6 +45,7 @@ class G1CodeRootSet {
   void add(nmethod* method);
   bool remove(nmethod* method);
   void bulk_remove();
+  void prepare_for_code_root_add(size_t num_code_roots);
   bool contains(nmethod* method);
   void clear();
 

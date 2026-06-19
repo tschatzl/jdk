@@ -137,7 +137,7 @@ class G1PostEvacuateCollectionSetCleanupTask1::UpdateCodeRootsTask
         num_nmethods += pss->num_nmethods(index); // Maybe fixme create sum on the fly?
       }
       // Tell the remset that we add X nmethods before adding.
-      //r->rem_set()->prepare_for_add(num_nmethods);
+      r->rem_set()->prepare_for_code_root_add(num_nmethods);
       if (num_nmethods != 0) {
         for (uint i = 0; i < _psss->num_workers(); i++) {
           G1ParScanThreadState* pss = _psss->state_for_worker(i);

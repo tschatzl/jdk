@@ -220,6 +220,18 @@ public:
     }
   }
 
+  void grow_to_match(size_t new_size) {
+    size_t prev_log2size = _table.get_size_log2(Thread::current());
+    size_t new_log2_table_size = log2_target_shrink_size(new_size);
+    while (new_log2_table_size > prev_log2size) {
+      if (!_table.grow(Thread::current(), new_log2_table_size)) {
+        // Should not happen.
+        break;
+      }
+      prev_log2size = _table.get_size_log2(Thread::current());
+    }
+  }
+
   void reset_table_scanner() {
     _table_scanner.set(&_table, BucketClaimSize);
   }
@@ -267,6 +279,10 @@ bool G1CodeRootSet::remove(nmethod* method) {
 void G1CodeRootSet::bulk_remove() {
   assert(!_is_iterating, "should not mutate while iterating the table");
   _table->bulk_remove();
+}
+
+void G1CodeRootSet::prepare_for_code_root_add(size_t num_new_code_roots) {
+  _table->grow_to_match(_table->number_of_entries() + num_new_code_roots);
 }
 
 bool G1CodeRootSet::contains(nmethod* method) {
