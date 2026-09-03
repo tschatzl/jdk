@@ -1418,8 +1418,8 @@ void G1ConcurrentMark::remark() {
 
       if (_needs_remembered_set_rebuild) {
         GrowableArrayCHeap<G1HeapRegion*, mtGC>* selected_old = cl.sort_and_prune_selected();
-        _g1h->collection_set_candidates()->set_from_marking_groups(selected_old);
-        _g1h->humongous_candidates()->set_updating_groups(cl.humongous_selected());
+        _g1h->collection_set_candidates()->set_candidates_from_marking(selected_old);
+        _g1h->humongous_card_set_groups()->set_updating_groups(cl.humongous_selected());
       }
     }
 
@@ -1515,7 +1515,7 @@ void G1ConcurrentMark::cleanup() {
     // as fully parsable.
     GCTraceTime(Debug, gc, phases) debug("Update Remembered Set Tracking After Rebuild", _gc_timer_cm);
     _g1h->collection_set_candidates()->after_rebuild();
-    _g1h->humongous_candidates()->after_rebuild();
+    _g1h->humongous_card_set_groups()->after_rebuild();
   } else {
     log_debug(gc, phases)("No Remembered Sets to update after rebuild");
   }

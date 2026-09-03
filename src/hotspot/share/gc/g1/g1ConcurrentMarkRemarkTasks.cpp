@@ -76,7 +76,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
 
     if (hr->rem_set()->has_card_set_group()) {
       // FIXME: needs to be made MT-safe
-      _g1h->humongous_candidates()->remove_group(hr->rem_set()->card_set_group());
+      _g1h->humongous_card_set_groups()->remove_group(hr->rem_set()->card_set_group());
     }
 
     auto on_humongous_region = [&] (G1HeapRegion* hr) {

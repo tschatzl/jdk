@@ -152,6 +152,9 @@ class G1CollectionSet {
 
   Atomic<uint> _num_regions;
 
+  // Group card set for the young generation regions.
+  G1CardSetGroup _young_regions_card_set_group;
+
   // Card set groups selected for evacuation.
   G1CardSetGroupList _selected_groups;
 
@@ -195,7 +198,7 @@ class G1CollectionSet {
 
   void prepare_optional_group(G1CardSetGroup* gr, uint cur_index);
 
-  void add_from_marking_group(G1CardSetGroup* gr);
+  void add_group_to_collection_set(G1CardSetGroup* gr);
 
   void add_region_to_collection_set(G1HeapRegion* r);
 

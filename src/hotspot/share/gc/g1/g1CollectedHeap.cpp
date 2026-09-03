@@ -268,7 +268,7 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
     bool is_complete = _policy->remset_tracker()->is_complete_at_allocate(first_hr);
     guarantee(is_complete, "newly allocated humongous should get a complete remembered set");
 
-    G1CollectedHeap::heap()->humongous_candidates()->add_complete_group(first_hr);
+    G1CollectedHeap::heap()->humongous_card_set_groups()->add_complete_group(first_hr);
   }
   // Up to this point no concurrent thread would have been able to
   // do any scanning on any region in this series. All the top
@@ -2572,7 +2572,7 @@ void G1CollectedHeap::verify_region_attr_is_remset_tracked() {
       G1CollectedHeap* g1h = G1CollectedHeap::heap();
       G1HeapRegionAttr attr = g1h->region_attr(r->bottom());
       bool const is_remset_tracked = attr.is_remset_tracked();
-      // This is wrong, we track remset tracking 
+      // This is wrong, we track remset tracking
       /*
       assert((r->rem_set()->is_tracked() == is_remset_tracked) ||
              (attr.is_new_survivor() && is_remset_tracked),

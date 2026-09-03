@@ -22,12 +22,12 @@
  *
  */
 
-#ifndef SHARE_GC_G1_HUMONGOUSCSETCANDIDATES_HPP
-#define SHARE_GC_G1_HUMONGOUSCSETCANDIDATES_HPP
+#ifndef SHARE_GC_G1_HUMONGOUSCARDSETGROUPS_HPP
+#define SHARE_GC_G1_HUMONGOUSCARDSETGROUPS_HPP
 
 #include "gc/g1/g1CollectionSetCandidates.hpp"
 
-class G1HumongousCSetCandidates { // should be something like CardSetCandidates - but right now we are using CSetCandidate or similar for everything.
+class G1HumongousCardSetGroups {
   G1CardSetGroupList _updating;
   G1CardSetGroupList _complete;
 
@@ -36,7 +36,7 @@ public:
   G1CardSetGroupList* updating() { return &_updating; }
   G1CardSetGroupList* complete() { return &_complete; }
 
-  G1HumongousCSetCandidates() : _updating(), _complete() {
+  G1HumongousCardSetGroups() : _updating(), _complete() {
   }
 
   void clear();
@@ -49,4 +49,4 @@ public:
   void after_rebuild();
 };
 
-#endif // SHARE_GC_G1_HUMONGOUSCSETCANDIDATES_HPP
+#endif // SHARE_GC_G1_HUMONGOUSCARDSETGROUPS_HPP

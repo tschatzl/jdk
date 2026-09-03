@@ -209,7 +209,7 @@ void G1CollectionSet::add_young_region_common(G1HeapRegion* hr) {
   assert(hr->is_young(), "invariant");
   assert(_inc_build_state == CSetBuildType::Active, "Precondition");
 
-  // Add to remembered set/cardset group.
+  // Add to young generation card set group.
   bool is_complete = _g1h->policy()->remset_tracker()->is_complete_at_allocate(hr);
   guarantee(is_complete, "Young regions should get a complete remembered set at allocation time");
 
@@ -465,7 +465,7 @@ double G1CollectionSet::select_candidates_from_marking(double time_remaining_ms)
 
       num_initial_groups++;
 
-      add_from_marking_group(group);
+      add_group_to_collection_set(group);
       selected_groups.append(group);
 
       num_initial_regions += group->length();
@@ -579,7 +579,7 @@ void G1CollectionSet::select_candidates_from_retained(double time_remaining_ms) 
         num_expensive_regions += group->length();
       }
 
-      add_from_marking_group(group);
+      add_group_to_collection_set(group);
       remove_from_retained.append(group);
 
       num_initial_regions += group->length();
@@ -643,7 +643,7 @@ double G1CollectionSet::select_candidates_from_optional_groups(double time_remai
 
     num_regions_selected += group->length();
 
-    add_from_marking_group(group);
+    add_group_to_collection_set(group);
     selected.append(group);
   }
 
@@ -684,14 +684,14 @@ void G1CollectionSet::prepare_optional_group(G1CardSetGroup* gr, uint cur_index)
   }
 }
 
-void G1CollectionSet::add_from_marking_group(G1CardSetGroup* gr) {
+void G1CollectionSet::add_group_to_collection_set(G1CardSetGroup* gr) {
   for (G1CardSetGroupItem ci : *gr) {
     G1HeapRegion* r = ci._r;
     assert(r->rem_set()->is_complete(), "must be");
     add_region_to_collection_set(r);
     r->uninstall_card_set_group();
   }
-  _selected_old_groups.append(gr);
+  _groups.append(gr);
 }
 
 void G1CollectionSet::add_region_to_collection_set(G1HeapRegion* r) {

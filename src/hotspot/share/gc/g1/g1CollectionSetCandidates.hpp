@@ -273,15 +273,9 @@ public:
 
   void clear();
 
-<<<<<<< HEAD
   // Merge collection set candidate regions from marking into the current from_marking candidate
   // group list (which needs to be empty).
   void set_candidates_from_marking(GrowableArrayCHeap<G1HeapRegion*, mtGC>* selected);
-=======
-  // Merge collection set candidates from marking into the current marking candidates
-  // (which needs to be empty).
-  void set_from_marking_groups(GrowableArrayCHeap<G1HeapRegion*, mtGC>* selected);
->>>>>>> d83b03e6e9e (* re-merge card set list rename)
   // The most recent length of the list that had been merged last via
   // set_candidates_from_marking(). Used for calculating minimum collection set
   // regions.

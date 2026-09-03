@@ -23,14 +23,14 @@
  */
 
 #include "gc/g1/g1CollectedHeap.inline.hpp"
-#include "gc/g1/g1HumongousCSetCandidates.hpp"
+#include "gc/g1/g1HumongousCardSetGroups.hpp"
 
-void G1HumongousCSetCandidates::clear() {
-  _updating.clear(true /* uninstall_group_cardset */);
-  _complete.clear(true /* uninstall_group_cardset */);
+void G1HumongousCardSetGroups::clear() {
+  _updating.clear(true /* uninstall_card_set_group */);
+  _complete.clear(true /* uninstall_card_set_group */);
 }
 
-G1CardSetGroup* G1HumongousCSetCandidates::new_group(G1HeapRegion* starts_humongous, G1CardSetGroup::State state) {
+G1CardSetGroup* G1HumongousCardSetGroups::new_group(G1HeapRegion* starts_humongous, G1CardSetGroup::State state) {
   precond(starts_humongous->is_starts_humongous());
 
   G1CardSetGroup* gr = new G1CardSetGroup(state);
@@ -38,13 +38,13 @@ G1CardSetGroup* G1HumongousCSetCandidates::new_group(G1HeapRegion* starts_humong
   return gr;
 }
 
-void G1HumongousCSetCandidates::add_complete_group(G1HeapRegion* starts_humongous) {
+void G1HumongousCardSetGroups::add_complete_group(G1HeapRegion* starts_humongous) {
   G1CardSetGroup* gr = new_group(starts_humongous, G1CardSetGroup::State::Complete);
   _complete.append(gr);
   log_debug(gc)("new complete group %u", gr->group_id());
 }
 
-void G1HumongousCSetCandidates::set_updating_groups(GrowableArrayCHeap<G1HeapRegion*, mtGC>* regions) {
+void G1HumongousCardSetGroups::set_updating_groups(GrowableArrayCHeap<G1HeapRegion*, mtGC>* regions) {
   assert_at_safepoint_on_vm_thread();
   assert(_updating.num_regions() == 0, "should be empty");
 
@@ -55,7 +55,7 @@ void G1HumongousCSetCandidates::set_updating_groups(GrowableArrayCHeap<G1HeapReg
   }
 }
 
-void G1HumongousCSetCandidates::remove_group(G1CardSetGroup* gr) {
+void G1HumongousCardSetGroups::remove_group(G1CardSetGroup* gr) {
   assert_at_safepoint();
   precond(gr != nullptr);
 
@@ -67,7 +67,7 @@ void G1HumongousCSetCandidates::remove_group(G1CardSetGroup* gr) {
   delete gr;
 }
 
-void G1HumongousCSetCandidates::after_rebuild() {
+void G1HumongousCardSetGroups::after_rebuild() {
   assert_at_safepoint_on_vm_thread();
 
   for (G1CardSetGroup* gr : _updating) {

@@ -303,7 +303,7 @@ void G1CollectionSetCandidates::sort_marking_by_efficiency() {
   _from_marking_groups.verify();
 }
 
-void G1CollectionSetCandidates::set_from_marking_groups(GrowableArrayCHeap<G1HeapRegion*, mtGC>* candidates) {
+void G1CollectionSetCandidates::set_candidates_from_marking(GrowableArrayCHeap<G1HeapRegion*, mtGC>* candidates) {
   uint num_candidates = candidates->length();
 
   if (num_candidates == 0) {

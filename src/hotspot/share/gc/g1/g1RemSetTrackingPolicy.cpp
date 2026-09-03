@@ -74,7 +74,7 @@ bool G1RemSetTrackingPolicy::update_old_before_rebuild(G1HeapRegion* r) {
 
 bool G1RemSetTrackingPolicy::update_after_rebuild(G1CardSetGroup* gr) {
   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
-  assert(gr->region_at(0)->is_old_or_humongous(), "only handles cset groups with old or humongous regions");
+  assert(gr->region_at(0)->is_old_or_humongous(), "only handles card set groups with old or humongous regions");
 
   bool is_humongous_group = gr->region_at(0)->is_humongous();
 
@@ -87,7 +87,7 @@ bool G1RemSetTrackingPolicy::update_after_rebuild(G1CardSetGroup* gr) {
   }
 
   size_t live_bytes = 0;
-  // Per region cardset details only valid if group contains a single region.
+  // Per region card set details only valid if group contains a single region.
   for (G1CardSetGroupItem ci : *gr) {
     live_bytes += g1h->concurrent_mark()->live_bytes(ci._r->hrm_index());
   }

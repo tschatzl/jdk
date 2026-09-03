@@ -38,7 +38,7 @@
 #include "gc/g1/g1HeapRegionSet.hpp"
 #include "gc/g1/g1HeapTransition.hpp"
 #include "gc/g1/g1HeapVerifier.hpp"
-#include "gc/g1/g1HumongousCSetCandidates.hpp"
+#include "gc/g1/g1HumongousCardSetGroups.hpp"
 #include "gc/g1/g1MonitoringSupport.hpp"
 #include "gc/g1/g1MonotonicArenaFreeMemoryTask.hpp"
 #include "gc/g1/g1MonotonicArenaFreePool.hpp"
@@ -794,7 +794,7 @@ private:
   // All old gen collection set candidate regions.
   G1CollectionSetCandidates _collection_set_candidates;
 
-  G1HumongousCSetCandidates _humongous_candidates;
+  G1HumongousCardSetGroups _humongous_card_set_groups;
 
 public:
   G1CardSetConfiguration* card_set_config() { return &_card_set_config; }
@@ -802,8 +802,8 @@ public:
   G1CollectionSetCandidates* collection_set_candidates() { return &_collection_set_candidates; }
   const G1CollectionSetCandidates* collection_set_candidates() const { return &_collection_set_candidates; }
 
-  G1HumongousCSetCandidates* humongous_candidates() { return &_humongous_candidates; }
-  const G1HumongousCSetCandidates* humongous_candidates() const { return &_humongous_candidates; }
+  G1HumongousCardSetGroups* humongous_card_set_groups() { return &_humongous_card_set_groups; }
+  const G1HumongousCardSetGroups* humongous_card_set_groups() const { return &_humongous_card_set_groups; }
 
   // After a collection pause, reset eden and the collection set.
   void clear_eden();
