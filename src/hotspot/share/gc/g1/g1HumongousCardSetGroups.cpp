@@ -81,7 +81,5 @@ void G1HumongousCardSetGroups::after_rebuild() {
       delete gr;
     }
   }
-  // Empty the updating list. Ownership has transferred or the element deleted.
-  // FIXME: add detach_all() or something
-  _updating.remove_selected(_updating.length(), _updating.num_regions());
+  _updating.remove_all();
 }

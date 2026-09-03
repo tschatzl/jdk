@@ -733,8 +733,7 @@ void G1CollectionSet::abandon_optional_collection_set(G1ParScanThreadStateSet* p
     };
 
     _optional_groups.iterate(reset);
-    // Remove all card set groups from the list without deleting the groups or clearing the associated card sets.
-    _optional_groups.remove_selected(_optional_groups.length(), _optional_groups.num_regions());
+    _optional_groups.remove_all();
   }
 
   _g1h->verify_region_attr_is_remset_tracked();

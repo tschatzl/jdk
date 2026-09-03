@@ -196,7 +196,9 @@ public:
 
   uint num_regions() const { return _num_regions.load_relaxed(); }
 
-  void remove_selected(uint count, uint num_regions);
+  // Remove all card set groups from this list without deleting the groups or clearing
+  // the associated card sets.
+  void remove_all();
 
   // Removes any card set groups stored in this and in the other list. The other
   // list may only contain card set groups in this list, sorted by gc efficiency. The

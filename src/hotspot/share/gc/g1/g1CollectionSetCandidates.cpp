@@ -201,9 +201,9 @@ void G1CardSetGroupList::prepare_for_scan() {
   }
 }
 
-void G1CardSetGroupList::remove_selected(uint count, uint num_regions_to_remove) {
-  _groups.remove_till(count);
-  _num_regions.store_relaxed(num_regions() - num_regions_to_remove);
+void G1CardSetGroupList::remove_all() {
+  _groups.clear();
+  _num_regions.store_relaxed(0);
 }
 
 void G1CardSetGroupList::remove(G1CardSetGroupList* other) {
