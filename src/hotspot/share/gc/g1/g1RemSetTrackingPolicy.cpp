@@ -23,6 +23,7 @@
  */
 
 #include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1CollectionSetCandidates.inline.hpp"
 #include "gc/g1/g1HeapRegion.inline.hpp"
 #include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "gc/g1/g1RemSetTrackingPolicy.hpp"
@@ -33,21 +34,18 @@ static bool region_occupancy_low_enough_for_evac(size_t live_bytes) {
   return live_bytes < mixed_gc_live_threshold_bytes;
 }
 
-void G1RemSetTrackingPolicy::update_at_allocate(G1HeapRegion* r) {
+bool G1RemSetTrackingPolicy::is_complete_at_allocate(G1HeapRegion* r) {
   assert(r->is_young() || r->is_humongous() || r->is_old(),
         "Region %u with unexpected heap region type %s", r->hrm_index(), r->get_type_str());
-  if (r->is_old()) {
-    // By default, do not create remembered set for new old regions.
-    r->rem_set()->set_state_untracked();
-    return;
-  }
-  // Always collect remembered set for young regions and for humongous regions.
+  // By default, do not create remembered set for new old regions, but always collect card
+  // sets for young regions and for humongous regions.
   // Humongous regions need that for eager reclaim.
-  r->rem_set()->set_state_complete();
+  return (!r->is_old());
 }
 
 void G1RemSetTrackingPolicy::update_at_free(G1HeapRegion* r) {
   /* nothing to do */
+  // FIXME: maybe unassign?
 }
 
 bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(G1HeapRegion* r) {
@@ -56,19 +54,10 @@ bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(G1HeapRegion* r) {
 
   assert(!r->rem_set()->is_updating(), "Remembered set of region %u is updating before rebuild", r->hrm_index());
 
-  bool selected_for_rebuild = false;
   // Humongous regions are remset-tracked to support eager-reclaim. However, their
   // remset state can be reset after Full-GC. Try to re-enable remset-tracking for
   // them if possible.
-  if (!r->rem_set()->is_tracked()) {
-    auto on_humongous_region = [] (G1HeapRegion* r) {
-      r->rem_set()->set_state_updating();
-    };
-    G1CollectedHeap::heap()->humongous_obj_regions_iterate(r, on_humongous_region);
-    selected_for_rebuild = true;
-  }
-
-  return selected_for_rebuild;
+  return !r->rem_set()->is_tracked();
 }
 
 bool G1RemSetTrackingPolicy::update_old_before_rebuild(G1HeapRegion* r) {
@@ -77,65 +66,40 @@ bool G1RemSetTrackingPolicy::update_old_before_rebuild(G1HeapRegion* r) {
 
   assert(!r->rem_set()->is_updating(), "Remembered set of region %u is updating before rebuild", r->hrm_index());
 
-  bool selected_for_rebuild = false;
-
-  if (region_occupancy_low_enough_for_evac(r->live_bytes()) &&
-      !G1CollectedHeap::heap()->is_old_gc_alloc_region(r) &&
-      !r->rem_set()->is_tracked()) {
-    r->rem_set()->set_state_updating();
-    selected_for_rebuild = true;
-  }
-
-  return selected_for_rebuild;
+  return
+    (region_occupancy_low_enough_for_evac(r->live_bytes()) &&
+    !G1CollectedHeap::heap()->is_old_gc_alloc_region(r) &&
+    !r->rem_set()->is_tracked());
 }
 
-void G1RemSetTrackingPolicy::update_after_rebuild(G1HeapRegion* r) {
+bool G1RemSetTrackingPolicy::update_after_rebuild(G1CardSetGroup* gr) {
   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
+  assert(gr->region_at(0)->is_old_or_humongous(), "only handles cset groups with old or humongous regions");
 
-  if (r->is_old_or_humongous()) {
-    if (r->rem_set()->is_updating()) {
-      r->rem_set()->set_state_complete();
-    }
-    G1CollectedHeap* g1h = G1CollectedHeap::heap();
-    // We can drop remembered sets of humongous regions that have a too large remembered set:
-    // We will never try to eagerly reclaim or move them anyway until the next concurrent
-    // cycle as e.g. remembered set entries will always be added.
-    if (r->is_starts_humongous() && !g1h->is_potential_eager_reclaim_candidate(r)) {
-      // Handle HC regions with the HS region.
-      G1CardSetGroup* group = r->rem_set()->card_set_group();
+  bool is_humongous_group = gr->region_at(0)->is_humongous();
 
-      assert(group != nullptr, "humongous start must have a card set group");
-      assert(group->length() == 1, "humongous group must have only one region");
-
-      group->clear_card_set();
-      g1h->humongous_obj_regions_iterate(r,
-                                         [&] (G1HeapRegion* r) {
-                                           assert(!r->is_continues_humongous() || r->rem_set()->is_empty(),
-                                                  "Continues humongous region %u remset should be empty", r->hrm_index());
-                                           r->rem_set()->set_state_untracked();
-                                         });
-    }
-
-    size_t remset_bytes = r->rem_set()->mem_size();
-    size_t occupied = 0;
-    // Per-region card set group statistics are only valid if group contains a single region.
-    if (r->rem_set()->has_card_set_group() &&
-        r->rem_set()->card_set_group()->length() == 1 ) {
-        G1CardSet *card_set = r->rem_set()->card_set_group()->card_set();
-        remset_bytes += card_set->mem_size();
-        occupied = card_set->occupied();
-    }
-
-    G1ConcurrentMark* cm = G1CollectedHeap::heap()->concurrent_mark();
-    log_trace(gc, remset, tracking)("After rebuild region %u "
-                                    "(tams " PTR_FORMAT " "
-                                    "liveness %zu "
-                                    "remset occ %zu "
-                                    "size %zu)",
-                                    r->hrm_index(),
-                                    p2i(cm->top_at_mark_start(r)),
-                                    cm->live_bytes(r->hrm_index()),
-                                    occupied,
-                                    remset_bytes);
+  G1CollectedHeap* g1h = G1CollectedHeap::heap();
+  // We can drop remembered sets of humongous regions that have a too large remembered set:
+  // We will never try to eagerly reclaim or move them anyway until the next concurrent
+  // cycle as e.g. remembered set entries will always be added.
+  if (is_humongous_group && !g1h->is_potential_eager_reclaim_candidate(gr->region_at(0))) {
+    return false;
   }
+
+  size_t live_bytes = 0;
+  // Per region cardset details only valid if group contains a single region.
+  for (G1CardSetGroupItem ci : *gr) {
+    live_bytes += g1h->concurrent_mark()->live_bytes(ci._r->hrm_index());
+  }
+
+  G1ConcurrentMark* cm = G1CollectedHeap::heap()->concurrent_mark();
+  log_trace(gc, remset, tracking)("After rebuild group %u "
+                                  "(liveness %zu "
+                                  "remset occ %zu "
+                                  "size %zu)",
+                                  gr->group_id(),
+                                  live_bytes,
+                                  gr->cards_occupied(),
+                                  gr->mem_size());
+  return true;
 }

@@ -43,7 +43,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
   uint _num_humongous_regions_removed;
 
   GrowableArrayCHeap<G1HeapRegion*, mtGC> _old_selected_for_rebuild;
-  uint _num_humongous_selected_for_rebuild;
+  GrowableArrayCHeap<G1HeapRegion*, mtGC> _humongous_selected_for_rebuild;
 
   G1FreeRegionList* _cleanup_list;
 
@@ -56,7 +56,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
     _num_old_regions_removed(0),
     _num_humongous_regions_removed(0),
     _old_selected_for_rebuild(16),
-    _num_humongous_selected_for_rebuild(0),
+    _humongous_selected_for_rebuild(16),
     _cleanup_list(local_cleanup_list) {}
 
   void reclaim_empty_region_common(G1HeapRegion* hr) {
@@ -74,6 +74,11 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
   void reclaim_empty_humongous_region(G1HeapRegion* hr) {
     assert(hr->is_starts_humongous(), "precondition");
 
+    if (hr->rem_set()->has_card_set_group()) {
+      // FIXME: needs to be made MT-safe
+      _g1h->humongous_candidates()->remove_group(hr->rem_set()->card_set_group());
+    }
+
     auto on_humongous_region = [&] (G1HeapRegion* hr) {
       assert(hr->is_humongous(), "precondition");
 
@@ -87,8 +92,8 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
 
   void reclaim_empty_old_region(G1HeapRegion* hr) {
     assert(hr->is_old(), "precondition");
-
     _num_old_regions_removed++;
+    assert(!hr->rem_set()->has_card_set_group(), "must be?");
     reclaim_empty_region_common(hr);
     _g1h->free_region(hr, _cleanup_list);
   }
@@ -104,10 +109,11 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
       if (is_live) {
         const bool selected_for_rebuild = tracker->update_humongous_before_rebuild(hr);
 
+        if (selected_for_rebuild) {
+          _humongous_selected_for_rebuild.push(hr); // Only push humongous starts region.
+        }
+
         auto on_humongous_region = [&] (G1HeapRegion* hr) {
-          if (selected_for_rebuild) {
-            _num_humongous_selected_for_rebuild++;
-          }
           _cm->update_top_at_rebuild_start(hr);
         };
         _g1h->humongous_obj_regions_iterate(hr, on_humongous_region);
@@ -143,7 +149,7 @@ G1UpdateRegionLivenessAndSelectForRebuildTask::G1UpdateRegionLivenessAndSelectFo
   _cm(cm),
   _hrclaimer(num_workers),
   _old_selected_for_rebuild(128),
-  _num_humongous_selected_for_rebuild(0),
+  _humongous_selected_for_rebuild(128),
   _cleanup_list("Empty Regions After Mark List") {}
 
 G1UpdateRegionLivenessAndSelectForRebuildTask::~G1UpdateRegionLivenessAndSelectForRebuildTask() {
@@ -168,7 +174,7 @@ void G1UpdateRegionLivenessAndSelectForRebuildTask::work(uint worker_id) {
     _g1h->decrement_summary_bytes(on_region_cl._freed_bytes);
 
     _old_selected_for_rebuild.appendAll(&on_region_cl._old_selected_for_rebuild);
-    _num_humongous_selected_for_rebuild += on_region_cl._num_humongous_selected_for_rebuild;
+    _humongous_selected_for_rebuild.appendAll(&on_region_cl._humongous_selected_for_rebuild);
 
     _cleanup_list.add_ordered(&local_cleanup_list);
     assert(local_cleanup_list.is_empty(), "post-condition");
@@ -204,13 +210,14 @@ void G1UpdateRegionLivenessAndSelectForRebuildTask::prune(GrowableArrayCHeap<G1H
 
   while (true) {
     G1HeapRegion* r = old_regions->at(num_candidates - num_pruned - 1);
+    precond(!r->rem_set()->is_tracked());
+
     size_t const reclaimable = r->reclaimable_bytes();
     if (num_pruned >= max_to_prune ||
       wasted_bytes + reclaimable > allowed_waste) {
       break;
     }
     assert(!r->rem_set()->has_card_set_group(), "must not have a card set group");
-    r->rem_set()->set_state_untracked();
 
     wasted_bytes += reclaimable;
     num_pruned++;
@@ -245,10 +252,10 @@ static int compare_region_gc_efficiency(G1HeapRegion** rr1, G1HeapRegion** rr2) 
   }
 }
 
-GrowableArrayCHeap<G1HeapRegion*, mtGC>* G1UpdateRegionLivenessAndSelectForRebuildTask::sort_and_prune_old_selected() {
+GrowableArrayCHeap<G1HeapRegion*, mtGC>* G1UpdateRegionLivenessAndSelectForRebuildTask::sort_and_prune_selected() {
   // Nothing to do for the humongous candidates here. Old selected need to be pruned.
 
-  if (_old_selected_for_rebuild.length() != 0) {
+  if (!_old_selected_for_rebuild.is_empty()) {
     _old_selected_for_rebuild.sort(compare_region_gc_efficiency);
     prune(&_old_selected_for_rebuild);
   }

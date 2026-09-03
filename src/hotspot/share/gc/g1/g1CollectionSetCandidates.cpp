@@ -27,17 +27,39 @@
 #include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "utilities/growableArray.hpp"
 
-G1CardSetGroup::G1CardSetGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id) :
+const char* G1CardSetGroup::_state_strings[] =  {"Untracked", "Updating", "Complete"};
+const char* G1CardSetGroup::_short_state_strings[] =  {"UNTRA", "UPDAT", "CMPLT"};
+
+const char* G1CardSetGroup::get_state_str(const G1CardSetGroup* gr) {
+  if (gr != nullptr) {
+    return gr->get_state_str();
+  } else {
+    return _state_strings[0];
+  }
+}
+
+const char* G1CardSetGroup::get_short_state_str(const G1CardSetGroup* gr) {
+  if (gr != nullptr) {
+    return gr->get_short_state_str();
+  } else {
+    return _short_state_strings[0];
+  }
+}
+
+G1CardSetGroup::G1CardSetGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id, State state) :
   _items(4, mtGCCardSet),
   _card_set_mm(config, card_set_freelist_pool),
   _card_set(config, &_card_set_mm),
   _reclaimable_bytes(size_t(0)),
   _gc_efficiency(0.0),
-  _group_id(group_id)
-{ }
+  _group_id(group_id),
+  _state(state)
+{
+  precond(state != State::Untracked);
+}
 
-G1CardSetGroup::G1CardSetGroup() :
-  G1CardSetGroup(G1CollectedHeap::heap()->card_set_config(), G1CollectedHeap::heap()->card_set_freelist_pool(), InvalidId)
+G1CardSetGroup::G1CardSetGroup(State state) :
+  G1CardSetGroup(G1CollectedHeap::heap()->card_set_config(), G1CollectedHeap::heap()->card_set_freelist_pool(), InvalidId, state)
 { }
 
 void G1CardSetGroup::add(G1HeapRegion* hr) {
@@ -74,7 +96,6 @@ void G1CardSetGroup::clear(bool uninstall_card_set_group) {
     for (G1CardSetGroupItem ci : _items) {
       G1HeapRegion* r = ci._r;
       r->uninstall_card_set_group();
-      r->rem_set()->set_state_untracked();
     }
   }
   _items.clear();
@@ -125,6 +146,10 @@ double G1CardSetGroup::predict_group_total_time_ms() const {
                              predict_bytes_to_copy);
 
   return total_time_ms;
+}
+
+size_t G1CardSetGroup::mem_size() const {
+  return sizeof(*this) - sizeof(G1CardSetMemoryManager) + _card_set_mm.mem_size();
 }
 
 int G1CardSetGroup::compare_gc_efficiency(G1CardSetGroup** gr1, G1CardSetGroup** gr2) {
@@ -209,6 +234,16 @@ void G1CardSetGroupList::remove(G1CardSetGroupList* other) {
   assert(_groups.length() == new_length, "Must be");
 }
 
+void G1CardSetGroupList::remove(G1CardSetGroup* other) {
+  precond(other != nullptr);
+
+  if (_groups.remove_if_existing(other)) {
+    _num_regions.store_relaxed(num_regions() - other->length());
+  }
+
+  verify();
+}
+
 void G1CardSetGroupList::sort_by_efficiency() {
   _groups.sort(G1CardSetGroup::compare_gc_efficiency);
 }
@@ -234,9 +269,8 @@ G1CollectionSetCandidates::G1CollectionSetCandidates() :
 { }
 
 G1CollectionSetCandidates::~G1CollectionSetCandidates() {
+  clear();
   FREE_C_HEAP_ARRAY(_contains_map);
-  _from_marking_groups.clear();
-  _retained_groups.clear();
 }
 
 bool G1CollectionSetCandidates::is_from_marking(G1HeapRegion* r) const {
@@ -269,7 +303,7 @@ void G1CollectionSetCandidates::sort_marking_by_efficiency() {
   _from_marking_groups.verify();
 }
 
-void G1CollectionSetCandidates::set_candidates_from_marking(GrowableArrayCHeap<G1HeapRegion*, mtGC>* candidates) {
+void G1CollectionSetCandidates::set_from_marking_groups(GrowableArrayCHeap<G1HeapRegion*, mtGC>* candidates) {
   uint num_candidates = candidates->length();
 
   if (num_candidates == 0) {
@@ -289,7 +323,7 @@ void G1CollectionSetCandidates::set_candidates_from_marking(GrowableArrayCHeap<G
 
   G1CardSetGroup* current = nullptr;
 
-  current = new G1CardSetGroup();
+  current = new G1CardSetGroup(G1CardSetGroup::State::Updating);
 
   for (uint i = 0; i < num_candidates; i++) {
     G1HeapRegion* r = candidates->at(i);
@@ -303,7 +337,7 @@ void G1CollectionSetCandidates::set_candidates_from_marking(GrowableArrayCHeap<G
 
       _from_marking_groups.append(current);
 
-      current = new G1CardSetGroup();
+      current = new G1CardSetGroup(G1CardSetGroup::State::Updating);
     }
     current->add(r);
   }
@@ -362,7 +396,7 @@ void G1CollectionSetCandidates::add_retained_region_unsorted(G1HeapRegion* r) {
   assert(!contains(r), "Must not already contain region %u", r->hrm_index());
   _contains_map[r->hrm_index()] = CandidateOrigin::Retained;
 
-  G1CardSetGroup* gr = new G1CardSetGroup();
+  G1CardSetGroup* gr = new G1CardSetGroup(G1CardSetGroup::State::Complete);
   gr->add(r);
   gr->calculate_efficiency();
 
@@ -383,6 +417,16 @@ uint G1CollectionSetCandidates::marking_regions_length() const {
 
 uint G1CollectionSetCandidates::retained_regions_length() const {
   return _retained_groups.num_regions();
+}
+
+void G1CollectionSetCandidates::after_rebuild() {
+  assert_at_safepoint_on_vm_thread();
+
+  for (G1CardSetGroup* gr : _from_marking_groups) {
+    bool keep = G1CollectedHeap::heap()->policy()->remset_tracker()->update_after_rebuild(gr);
+    guarantee(keep, "old gen regions are always kept");
+    gr->set_complete();
+  }
 }
 
 #ifndef PRODUCT

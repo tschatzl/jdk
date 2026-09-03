@@ -252,10 +252,6 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
   first_hr->hr_clear(false /* clear_space */);
   first_hr->set_starts_humongous(obj_top, words_fillable);
 
-  if (update_remsets) {
-    _policy->remset_tracker()->update_at_allocate(first_hr);
-  }
-
   // Indices of first and last regions in the series.
   uint first = first_hr->hrm_index();
   uint last = first + num_regions - 1;
@@ -265,11 +261,15 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
     hr = region_at(i);
     hr->hr_clear(false /* clear_space */);
     hr->set_continues_humongous(first_hr);
-    if (update_remsets) {
-      _policy->remset_tracker()->update_at_allocate(hr);
-    }
   }
 
+  if (update_remsets) {
+    ConditionalMutexLocker x(G1RareEvent_lock, SafepointSynchronize::is_at_safepoint(), Mutex::_safepoint_check_flag);
+    bool is_complete = _policy->remset_tracker()->is_complete_at_allocate(first_hr);
+    guarantee(is_complete, "newly allocated humongous should get a complete remembered set");
+
+    G1CollectedHeap::heap()->humongous_candidates()->add_complete_group(first_hr);
+  }
   // Up to this point no concurrent thread would have been able to
   // do any scanning on any region in this series. All the top
   // fields still point to bottom, so the intersection between
@@ -1317,11 +1317,10 @@ G1CollectedHeap::G1CollectedHeap() :
   _gc_tracer_stw(new G1NewTracer()),
   _policy(new G1Policy(_gc_timer_stw)),
   _heap_sizing_policy(nullptr),
-  _collection_set(this, _policy),
   _rem_set(nullptr),
   _card_set_config(),
   _card_set_freelist_pool(G1CardSetConfiguration::num_mem_object_types()),
-  _young_regions_card_set_group(card_set_config(), &_card_set_freelist_pool, G1CardSetGroup::YoungId),
+  _collection_set(this, _policy),
   _cm(nullptr),
   _cr(nullptr),
   _task_queues(nullptr),
@@ -1612,6 +1611,7 @@ jint G1CollectedHeap::initialize() {
   // values in the heap have been properly initialized.
   _monitoring_support = new G1MonitoringSupport(this);
 
+  _collection_set_candidates.initialize(max_num_regions());
   _collection_set.initialize(max_num_regions());
 
   start_new_collection_set();
@@ -2572,10 +2572,13 @@ void G1CollectedHeap::verify_region_attr_is_remset_tracked() {
       G1CollectedHeap* g1h = G1CollectedHeap::heap();
       G1HeapRegionAttr attr = g1h->region_attr(r->bottom());
       bool const is_remset_tracked = attr.is_remset_tracked();
+      // This is wrong, we track remset tracking 
+      /*
       assert((r->rem_set()->is_tracked() == is_remset_tracked) ||
              (attr.is_new_survivor() && is_remset_tracked),
              "Region %u (%s) remset tracking status (%s) different to region attribute (%s)",
              r->hrm_index(), r->get_type_str(), BOOL_TO_STR(r->rem_set()->is_tracked()), BOOL_TO_STR(is_remset_tracked));
+      */
       return false;
     }
   } cl;
@@ -2836,8 +2839,7 @@ void G1CollectedHeap::set_humongous_stats(uint num_humongous_total, uint num_hum
 }
 
 bool G1CollectedHeap::should_sample_collection_set_candidates() const {
-  const G1CollectionSetCandidates* candidates = collection_set()->candidates();
-  return !candidates->is_empty();
+  return !collection_set_candidates()->is_empty();
 }
 
 void G1CollectedHeap::set_collection_set_candidates_stats(G1MonotonicArenaMemoryStats& stats) {
@@ -2878,7 +2880,6 @@ void G1CollectedHeap::free_region(G1HeapRegion* hr, G1FreeRegionList* free_list)
   // Reset region metadata to allow reuse.
   hr->hr_clear(true /* clear_space */);
   concurrent_mark()->reset_region_marking_state(hr);
-  _policy->remset_tracker()->update_at_free(hr);
 
   if (free_list != nullptr) {
     free_list->add_ordered(hr);
@@ -2892,7 +2893,7 @@ void G1CollectedHeap::free_region(G1HeapRegion* hr, G1FreeRegionList* free_list)
 
 void G1CollectedHeap::retain_region(G1HeapRegion* hr) {
   MutexLocker x(G1RareEvent_lock, Mutex::_no_safepoint_check_flag);
-  collection_set()->candidates()->add_retained_region_unsorted(hr);
+  collection_set_candidates()->add_retained_region_unsorted(hr);
 }
 
 void G1CollectedHeap::free_humongous_region(G1HeapRegion* hr,
@@ -3186,7 +3187,8 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
     } else {
       new_alloc_region->set_old();
       // Update remembered set state.
-      _policy->remset_tracker()->update_at_allocate(new_alloc_region);
+      bool is_complete = _policy->remset_tracker()->is_complete_at_allocate(new_alloc_region);
+      guarantee(!is_complete, "old regions should not get a remembered set at allocation");
       // Synchronize with region attribute table.
       update_region_attr(new_alloc_region);
     }

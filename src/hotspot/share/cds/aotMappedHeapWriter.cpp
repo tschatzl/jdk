@@ -48,8 +48,8 @@
 #include "runtime/mutexLocker.hpp"
 #include "utilities/bitMap.inline.hpp"
 #if INCLUDE_G1GC
-#include "gc/g1/g1CollectedHeap.hpp"
-#include "gc/g1/g1HeapRegion.hpp"
+#include "gc/g1/g1CollectedHeap.inline.hpp"
+#include "gc/g1/g1HeapRegion.inline.hpp"
 #endif
 
 #if INCLUDE_CDS_JAVA_HEAP

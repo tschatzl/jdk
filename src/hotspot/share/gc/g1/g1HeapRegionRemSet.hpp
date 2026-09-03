@@ -28,8 +28,8 @@
 #include "gc/g1/g1CardSet.hpp"
 #include "gc/g1/g1CardSetMemory.hpp"
 #include "gc/g1/g1CodeRootSet.hpp"
-#include "gc/g1/g1CollectionSetCandidates.hpp"
 
+class G1CardSetGroup;
 class G1FromCardCache;
 class outputStream;
 
@@ -43,19 +43,11 @@ class G1HeapRegionRemSet : public CHeapObj<mtGC> {
   // Cached value of heap base address.
   static HeapWord* _heap_base_address;
 
-  G1CardSet* card_set() {
-    assert(has_card_set_group(), "pre-condition");
-    return card_set_group()->card_set();
-  }
+  inline G1CardSet* card_set();
 
-  const G1CardSet* card_set() const {
-    assert(has_card_set_group(), "pre-condition");
-    return card_set_group()->card_set();
-  }
+  inline const G1CardSet* card_set() const;
 
-  bool card_set_is_empty() const {
-    return !has_card_set_group() || card_set()->is_empty();
-  }
+  inline bool card_set_is_empty() const;
 
 public:
   G1HeapRegionRemSet();
@@ -82,18 +74,11 @@ public:
     return _card_set_group;
   }
 
-  uint card_set_group_id() const {
-    assert(has_card_set_group(), "pre-condition");
-    return card_set_group()->group_id();
-  }
+  inline uint card_set_group_id() const;
 
-  bool is_empty() const {
-    return (code_roots_length() == 0) && card_set_is_empty();
-  }
+  inline bool is_empty() const;
 
-  bool occupancy_less_or_equal_than(size_t occ) const {
-    return (code_roots_length() == 0) && card_set()->occupancy_less_or_equal_to(occ);
-  }
+  inline bool occupancy_less_or_equal_than(size_t occ) const;
 
   // Iterate the cards in this remembered set for merging them into the card table.
   // The passed closure must be a CardOrRangeVisitor; we use a template parameter
@@ -104,43 +89,23 @@ public:
   template <class CardOrRangeVisitor>
   inline static void iterate_for_merge(G1CardSet* card_set, CardOrRangeVisitor& cl);
 
-  size_t occupied() {
-    assert(has_card_set_group(), "pre-condition");
-    return card_set()->occupied();
-  }
+  inline size_t occupied() const;
 
   static void initialize(MemRegion reserved);
 
   inline uintptr_t to_card(OopOrNarrowOopStar from) const;
 
-private:
-  enum RemSetState {
-    Untracked,
-    Updating,
-    Complete
-  };
+  inline bool is_tracked() const;
+  inline bool is_updating() const;
+  inline bool is_complete() const;
 
-  RemSetState _state;
-
-  static const char* _state_strings[];
-  static const char* _short_state_strings[];
-public:
-
-  const char* get_state_str() const { return _state_strings[_state]; }
-  const char* get_short_state_str() const { return _short_state_strings[_state]; }
-
-  bool is_tracked() { return _state != Untracked; }
-  bool is_updating() { return _state == Updating; }
-  bool is_complete() { return _state == Complete; }
-
-  inline void set_state_untracked();
-  inline void set_state_updating();
-  inline void set_state_complete();
+  inline const char* get_short_state_str() const;
+  inline const char* get_state_str() const;
 
   inline void add_reference(OopOrNarrowOopStar from, G1FromCardCache& from_card_cache);
 
-  // Clear the region-specific remset state.
-  void clear();
+  // Clear the code roots.
+  void clear_code_roots();
 
   void reset_code_root_table_scanner();
   void reset_table_scanner();

@@ -107,7 +107,7 @@ public:
     G1CollectedHeap* g1h = G1CollectedHeap::heap();
 
     G1MonotonicArenaMemoryStats _total;
-    G1CollectionSetCandidates* candidates = g1h->collection_set()->candidates();
+    G1CollectionSetCandidates* candidates = g1h->collection_set_candidates();
     for (G1CardSetGroup* gr : candidates->from_marking_groups()) {
       _total.add(gr->card_set_memory_stats());
     }
@@ -471,6 +471,8 @@ public:
            BOOL_TO_STR(cm->is_marked_in_bitmap(obj)));
     _humongous_objects_reclaimed++;
 
+    _g1h->humongous_candidates()->remove_group(r->rem_set()->card_set_group());
+
     auto free_humongous_region = [&] (G1HeapRegion* r) {
       _freed_bytes += r->used();
       r->set_containing_set(nullptr);
@@ -481,7 +483,6 @@ public:
       r->clear_both_card_tables();
       _g1h->free_humongous_region(r, nullptr);
     };
-
     _g1h->humongous_obj_regions_iterate(r, free_humongous_region);
 
     return false;
@@ -737,7 +738,7 @@ class FreeCSetClosure : public G1HeapRegionClosure {
 
     bool retain_region = _g1h->policy()->should_retain_evac_failed_region(r);
     // Update the region state due to the failed evacuation.
-    r->handle_evacuation_failure(retain_region);
+    r->handle_evacuation_failure();
     assert(r->is_old(), "must already be relabelled as old");
 
     if (retain_region) {
@@ -852,7 +853,7 @@ public:
 
     bool has_new_retained_regions = _num_retained_regions.load_relaxed() != 0;
     if (has_new_retained_regions) {
-      G1CollectionSetCandidates* candidates = _g1h->collection_set()->candidates();
+      G1CollectionSetCandidates* candidates = _g1h->collection_set_candidates();
       candidates->sort_by_efficiency();
     }
 

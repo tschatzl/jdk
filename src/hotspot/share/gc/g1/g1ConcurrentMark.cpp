@@ -1417,8 +1417,9 @@ void G1ConcurrentMark::remark() {
       _needs_remembered_set_rebuild = (cl.total_selected_for_rebuild() > 0);
 
       if (_needs_remembered_set_rebuild) {
-        GrowableArrayCHeap<G1HeapRegion*, mtGC>* selected = cl.sort_and_prune_old_selected();
-        _g1h->policy()->candidates()->set_candidates_from_marking(selected);
+        GrowableArrayCHeap<G1HeapRegion*, mtGC>* selected_old = cl.sort_and_prune_selected();
+        _g1h->collection_set_candidates()->set_from_marking_groups(selected_old);
+        _g1h->humongous_candidates()->set_updating_groups(cl.humongous_selected());
       }
     }
 
@@ -1494,20 +1495,6 @@ void G1ConcurrentMark::compute_new_sizes() {
   _g1h->monitoring_support()->update_sizes();
 }
 
-class G1UpdateRegionsAfterRebuild : public G1HeapRegionClosure {
-  G1CollectedHeap* _g1h;
-
-public:
-  G1UpdateRegionsAfterRebuild(G1CollectedHeap* g1h) : _g1h(g1h) { }
-
-  bool do_heap_region(G1HeapRegion* r) override {
-    // Update the remset tracking state from updating to complete
-    // if remembered sets have been rebuilt.
-    _g1h->policy()->remset_tracker()->update_after_rebuild(r);
-    return false;
-  }
-};
-
 void G1ConcurrentMark::cleanup() {
   assert_at_safepoint_on_vm_thread();
 
@@ -1527,8 +1514,8 @@ void G1ConcurrentMark::cleanup() {
     // Update the remset tracking information as well as marking all regions
     // as fully parsable.
     GCTraceTime(Debug, gc, phases) debug("Update Remembered Set Tracking After Rebuild", _gc_timer_cm);
-    G1UpdateRegionsAfterRebuild cl(_g1h);
-    _g1h->heap_region_iterate(&cl);
+    _g1h->collection_set_candidates()->after_rebuild();
+    _g1h->humongous_candidates()->after_rebuild();
   } else {
     log_debug(gc, phases)("No Remembered Sets to update after rebuild");
   }
@@ -3265,7 +3252,7 @@ void G1PrintRegionLivenessInfoClosure::log_card_set_groups() {
 
   G1CollectedHeap* g1h = G1CollectedHeap::heap();
 
-  log_card_set_group_add_total(g1h->young_regions_card_set_group(), "Y");
+  log_card_set_group_add_total(g1h->collection_set()->young_regions_card_set_group(), "Y");
 
   G1CollectionSetCandidates* candidates = g1h->policy()->candidates();
   log_card_set_group_list(candidates->from_marking_groups(), "M");

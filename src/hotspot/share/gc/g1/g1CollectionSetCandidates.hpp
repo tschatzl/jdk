@@ -27,6 +27,7 @@
 
 #include "gc/g1/g1CardSetMemory.hpp"
 #include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1HeapRegionRemSet.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/atomic.hpp"
@@ -84,8 +85,38 @@ public:
   static constexpr uint FirstNonYoungId = YoungId + 1;
   static constexpr uint InvalidId = UINT_MAX;
 
-  G1CardSetGroup();
-  G1CardSetGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id);
+  enum State {
+    Untracked,
+    Updating,
+    Complete
+  };
+
+private:
+  State _state;
+
+  static const char* _state_strings[];
+  static const char* _short_state_strings[];
+
+public:
+  const char* get_state_str() const { return _state_strings[_state]; }
+  const char* get_short_state_str() const { return _short_state_strings[_state]; }
+
+  static const char* get_state_str(const G1CardSetGroup* gr);
+  static const char* get_short_state_str(const G1CardSetGroup* gr);
+
+  State state() const { return _state; }
+
+  bool is_tracked() const { return state() != Untracked; }
+  bool is_updating() const { return state() == Updating; }
+  bool is_complete() const { return state() == Complete; }
+
+  void set_complete() {
+    precond(_state == State::Updating);
+    _state = State::Complete;
+  }
+
+  G1CardSetGroup(State state);
+  G1CardSetGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id, State state);
   ~G1CardSetGroup() {
     assert(length() == 0, "post condition!");
   }
@@ -116,6 +147,8 @@ public:
   G1MonotonicArenaMemoryStats card_set_memory_stats() const {
     return _card_set_mm.memory_stats();
   }
+
+  size_t mem_size() const;
 
   size_t cards_occupied() const {
     return _card_set.occupied();
@@ -171,6 +204,7 @@ public:
   // E.g. if this list is "A B G H", the other list may be "A G H", but not "F" (not in
   // this list) or "A H G" (wrong order).
   void remove(G1CardSetGroupList* other);
+  void remove(G1CardSetGroup* other);
 
   void prepare_for_scan();
 
@@ -239,9 +273,15 @@ public:
 
   void clear();
 
+<<<<<<< HEAD
   // Merge collection set candidate regions from marking into the current from_marking candidate
   // group list (which needs to be empty).
   void set_candidates_from_marking(GrowableArrayCHeap<G1HeapRegion*, mtGC>* selected);
+=======
+  // Merge collection set candidates from marking into the current marking candidates
+  // (which needs to be empty).
+  void set_from_marking_groups(GrowableArrayCHeap<G1HeapRegion*, mtGC>* selected);
+>>>>>>> d83b03e6e9e (* re-merge card set list rename)
   // The most recent length of the list that had been merged last via
   // set_candidates_from_marking(). Used for calculating minimum collection set
   // regions.
@@ -267,6 +307,8 @@ public:
   bool has_more_marking_candidates() const;
   uint marking_regions_length() const;
   uint retained_regions_length() const;
+
+  void after_rebuild();
 
 private:
   void verify_helper(G1CardSetGroupList* list, uint& from_marking, CandidateOrigin* verify_map) PRODUCT_RETURN;

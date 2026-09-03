@@ -38,6 +38,7 @@
 #include "gc/g1/g1HeapRegionSet.hpp"
 #include "gc/g1/g1HeapTransition.hpp"
 #include "gc/g1/g1HeapVerifier.hpp"
+#include "gc/g1/g1HumongousCSetCandidates.hpp"
 #include "gc/g1/g1MonitoringSupport.hpp"
 #include "gc/g1/g1MonotonicArenaFreeMemoryTask.hpp"
 #include "gc/g1/g1MonotonicArenaFreePool.hpp"
@@ -393,8 +394,6 @@ private:
   // The current policy object for the collector.
   G1Policy* _policy;
   G1HeapSizingPolicy* _heap_sizing_policy;
-
-  G1CollectionSet _collection_set;
 
   // Try to allocate a single non-humongous G1HeapRegion sufficient for
   // an allocation of the given word_size. If do_expand is true,
@@ -790,13 +789,21 @@ private:
 
   G1MonotonicArenaFreePool _card_set_freelist_pool;
 
-  // Young-region card set group
-  G1CardSetGroup _young_regions_card_set_group;
+  G1CollectionSet _collection_set;
+
+  // All old gen collection set candidate regions.
+  G1CollectionSetCandidates _collection_set_candidates;
+
+  G1HumongousCSetCandidates _humongous_candidates;
 
 public:
   G1CardSetConfiguration* card_set_config() { return &_card_set_config; }
 
-  G1CardSetGroup* young_regions_card_set_group() { return &_young_regions_card_set_group; }
+  G1CollectionSetCandidates* collection_set_candidates() { return &_collection_set_candidates; }
+  const G1CollectionSetCandidates* collection_set_candidates() const { return &_collection_set_candidates; }
+
+  G1HumongousCSetCandidates* humongous_candidates() { return &_humongous_candidates; }
+  const G1HumongousCSetCandidates* humongous_candidates() const { return &_humongous_candidates; }
 
   // After a collection pause, reset eden and the collection set.
   void clear_eden();
