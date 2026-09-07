@@ -30,6 +30,7 @@
 #include "gc/g1/g1CardSet.hpp"
 #include "gc/g1/g1CardTable.hpp"
 #include "gc/g1/g1CollectionSet.hpp"
+#include "gc/g1/g1CollectionSetCandidates.hpp"
 #include "gc/g1/g1CollectorState.hpp"
 #include "gc/g1/g1ConcurrentMark.hpp"
 #include "gc/g1/g1EvacStats.hpp"

@@ -31,7 +31,6 @@
 #include "gc/g1/g1CollectionSetCandidates.hpp"
 #include "gc/g1/g1FromCardCache.inline.hpp"
 #include "gc/shared/cardTable.hpp"
-#include "runtime/safepoint.hpp"
 
 template <typename Closure>
 class G1ContainerCardsOrRanges {
@@ -99,11 +98,7 @@ void G1HeapRegionRemSet::iterate_for_merge(G1CardSet* card_set, CardOrRangeVisit
 }
 
 size_t G1HeapRegionRemSet::occupied() const {
-  if (has_card_set_group()) {
-    return card_set()->occupied();
-  } else {
-    return 0;
-  }
+  return has_card_set_group() ? card_set()->occupied() : 0;
 }
 
 uintptr_t G1HeapRegionRemSet::to_card(OopOrNarrowOopStar from) const {
@@ -138,12 +133,9 @@ bool G1HeapRegionRemSet::occupancy_less_or_equal_than(size_t occ) const {
 }
 
 bool G1HeapRegionRemSet::is_tracked() const {
-  if (has_card_set_group()) {
-    return card_set_group()->is_tracked();
-  } else {
-    return false;
-  }
+  return has_card_set_group();
 }
+
 bool G1HeapRegionRemSet::is_updating() const {
   if (has_card_set_group()) {
     return card_set_group()->is_updating();
@@ -161,16 +153,15 @@ bool G1HeapRegionRemSet::is_complete() const {
 }
 
 const char* G1HeapRegionRemSet::get_short_state_str() const {
-  return G1CardSetGroup::get_short_state_str(card_set_group());
+  return has_card_set_group() ? card_set_group()->get_short_state_str() : "UNTRA";
 }
 
 const char* G1HeapRegionRemSet::get_state_str() const {
-  return G1CardSetGroup::get_state_str(card_set_group());
+  return has_card_set_group() ? card_set_group()->get_state_str() : "Untracked";
 }
 
 void G1HeapRegionRemSet::add_reference(OopOrNarrowOopStar from, G1FromCardCache& from_card_cache) {
-  assert(has_card_set_group(), "pre-condition");
-  precond(card_set_group()->is_tracked());
+  precond(is_tracked());
 
   uintptr_t from_card = uintptr_t(from) >> CardTable::card_shift();
 

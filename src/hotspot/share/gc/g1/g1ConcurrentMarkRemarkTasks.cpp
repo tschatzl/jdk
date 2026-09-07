@@ -74,10 +74,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
   void reclaim_empty_humongous_region(G1HeapRegion* hr) {
     assert(hr->is_starts_humongous(), "precondition");
 
-    if (hr->rem_set()->has_card_set_group()) {
-      // FIXME: needs to be made MT-safe
-      _g1h->humongous_card_set_groups()->remove_group(hr->rem_set()->card_set_group());
-    }
+    _g1h->humongous_card_set_groups()->remove_card_set_group_from_region(hr);
 
     auto on_humongous_region = [&] (G1HeapRegion* hr) {
       assert(hr->is_humongous(), "precondition");
@@ -91,9 +88,9 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
   }
 
   void reclaim_empty_old_region(G1HeapRegion* hr) {
-    assert(hr->is_old(), "precondition");
+    precond(hr->is_old());
+    precond(!hr->rem_set()->is_tracked());
     _num_old_regions_removed++;
-    assert(!hr->rem_set()->has_card_set_group(), "must be?");
     reclaim_empty_region_common(hr);
     _g1h->free_region(hr, _cleanup_list);
   }
@@ -107,7 +104,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
                         || _cm->contains_live_object(hr->hrm_index())
                         || hr->has_pinned_objects();
       if (is_live) {
-        const bool selected_for_rebuild = tracker->update_humongous_before_rebuild(hr);
+        const bool selected_for_rebuild = tracker->should_rebuild_humongous(hr);
 
         if (selected_for_rebuild) {
           _humongous_selected_for_rebuild.push(hr); // Only push humongous starts region.
@@ -127,7 +124,7 @@ struct G1UpdateRegionLivenessAndSelectForRebuildTask::G1OnRegionClosure : public
       const bool is_live = hr->live_bytes() != 0
                         || hr->has_pinned_objects();
       if (is_live) {
-        const bool selected_for_rebuild = tracker->update_old_before_rebuild(hr);
+        const bool selected_for_rebuild = tracker->should_rebuild_old(hr);
         if (selected_for_rebuild) {
           _old_selected_for_rebuild.push(hr);
         }

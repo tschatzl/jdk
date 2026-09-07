@@ -152,7 +152,7 @@ class G1CollectionSet {
 
   Atomic<uint> _num_regions;
 
-  // Group card set for the young generation regions.
+  // Card set group for the young generation regions.
   G1CardSetGroup _young_regions_card_set_group;
 
   // Card set groups selected for evacuation.

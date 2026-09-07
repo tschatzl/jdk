@@ -155,8 +155,6 @@ template <class T> void G1ParScanThreadState::mark_card_if_tracked(G1HeapRegionA
 
 #ifdef ASSERT
   G1HeapRegion* const hr_obj = _g1h->heap_region_containing(o);
-  // Not true any more, only track region state in card set, which is detached at this point.
-  /*
   assert((region_attr.is_remset_tracked() == hr_obj->rem_set()->is_tracked()) ||
          (region_attr.is_new_survivor() && region_attr.is_remset_tracked()),
          "State flag indicating remset tracking disagrees (%s) with actual remembered set (%s) for region %u (%s)",
@@ -164,7 +162,6 @@ template <class T> void G1ParScanThreadState::mark_card_if_tracked(G1HeapRegionA
          BOOL_TO_STR(hr_obj->rem_set()->is_tracked()),
          hr_obj->hrm_index(),
          hr_obj->get_type_str());
-  */
 #endif
   if (!region_attr.is_remset_tracked()) {
     return;

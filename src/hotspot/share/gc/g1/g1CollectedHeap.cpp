@@ -265,10 +265,7 @@ void G1CollectedHeap::set_humongous_metadata(G1HeapRegion* first_hr,
 
   if (update_remsets) {
     ConditionalMutexLocker x(G1RareEvent_lock, SafepointSynchronize::is_at_safepoint(), Mutex::_safepoint_check_flag);
-    bool is_complete = _policy->remset_tracker()->is_complete_at_allocate(first_hr);
-    guarantee(is_complete, "newly allocated humongous should get a complete remembered set");
-
-    G1CollectedHeap::heap()->humongous_card_set_groups()->add_complete_group(first_hr);
+    G1CollectedHeap::heap()->humongous_card_set_groups()->add_to_complete_group(first_hr);
   }
   // Up to this point no concurrent thread would have been able to
   // do any scanning on any region in this series. All the top
@@ -2572,13 +2569,11 @@ void G1CollectedHeap::verify_region_attr_is_remset_tracked() {
       G1CollectedHeap* g1h = G1CollectedHeap::heap();
       G1HeapRegionAttr attr = g1h->region_attr(r->bottom());
       bool const is_remset_tracked = attr.is_remset_tracked();
-      // This is wrong, we track remset tracking
-      /*
-      assert((r->rem_set()->is_tracked() == is_remset_tracked) ||
+      assert((r->in_collection_set() && !r->rem_set()->has_card_set_group() && is_remset_tracked) || // Card set is tracked in the region attribute table, card set already removed for collection set regions.
+             (r->rem_set()->is_tracked() == is_remset_tracked) ||
              (attr.is_new_survivor() && is_remset_tracked),
              "Region %u (%s) remset tracking status (%s) different to region attribute (%s)",
              r->hrm_index(), r->get_type_str(), BOOL_TO_STR(r->rem_set()->is_tracked()), BOOL_TO_STR(is_remset_tracked));
-      */
       return false;
     }
   } cl;
@@ -2876,6 +2871,7 @@ void G1CollectedHeap::free_region(G1HeapRegion* hr, G1FreeRegionList* free_list)
   assert(_hrm.is_available(hr->hrm_index()), "region should be committed");
   assert(!hr->has_pinned_objects(),
          "must not free a region which contains pinned objects");
+  assert(!hr->rem_set()->is_tracked(), "the region should not have a card set group");
 
   // Reset region metadata to allow reuse.
   hr->hr_clear(true /* clear_space */);
@@ -3186,10 +3182,8 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
       register_new_survivor_region_with_region_attr(new_alloc_region);
     } else {
       new_alloc_region->set_old();
-      // Update remembered set state.
-      bool is_complete = _policy->remset_tracker()->is_complete_at_allocate(new_alloc_region);
-      guarantee(!is_complete, "old regions should not get a remembered set at allocation");
-      // Synchronize with region attribute table.
+      // Old regions do not get a card set group assigned by default. Synchronize with
+      // region attribute table.
       update_region_attr(new_alloc_region);
     }
 

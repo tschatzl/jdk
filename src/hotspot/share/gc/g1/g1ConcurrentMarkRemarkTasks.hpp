@@ -25,7 +25,6 @@
 #ifndef SHARE_GC_G1_G1CONCURRENTMARKREMARKTASKS_HPP
 #define SHARE_GC_G1_G1CONCURRENTMARKREMARKTASKS_HPP
 
-#include "gc/g1/g1HeapRegion.hpp"
 #include "gc/g1/g1HeapRegionManager.hpp"
 #include "gc/g1/g1HeapRegionSet.hpp"
 #include "gc/shared/workerThread.hpp"
@@ -33,6 +32,7 @@
 
 class G1CollectedHeap;
 class G1ConcurrentMark;
+class G1HeapRegion;
 
 // Update per-region liveness info based on CM stats. Then, reclaim empty
 // regions right away and select certain regions (e.g. sparse ones) for remset

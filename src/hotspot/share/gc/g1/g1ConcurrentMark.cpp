@@ -3254,6 +3254,7 @@ void G1PrintRegionLivenessInfoClosure::log_card_set_groups() {
 
   log_card_set_group_add_total(g1h->collection_set()->young_regions_card_set_group(), "Y");
 
-  G1CollectionSetCandidates* candidates = g1h->policy()->candidates();
+  G1CollectionSetCandidates* candidates = g1h->collection_set_candidates();
   log_card_set_group_list(candidates->from_marking_groups(), "M");
   log_card_set_group_list(candidates->retained_groups(), "R");
+}

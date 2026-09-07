@@ -27,24 +27,8 @@
 #include "gc/g1/g1HeapRegionRemSet.inline.hpp"
 #include "utilities/growableArray.hpp"
 
-const char* G1CardSetGroup::_state_strings[] =  {"Untracked", "Updating", "Complete"};
-const char* G1CardSetGroup::_short_state_strings[] =  {"UNTRA", "UPDAT", "CMPLT"};
-
-const char* G1CardSetGroup::get_state_str(const G1CardSetGroup* gr) {
-  if (gr != nullptr) {
-    return gr->get_state_str();
-  } else {
-    return _state_strings[0];
-  }
-}
-
-const char* G1CardSetGroup::get_short_state_str(const G1CardSetGroup* gr) {
-  if (gr != nullptr) {
-    return gr->get_short_state_str();
-  } else {
-    return _short_state_strings[0];
-  }
-}
+const char* G1CardSetGroup::_state_strings[] =  {"Updating", "Complete"};
+const char* G1CardSetGroup::_short_state_strings[] =  {"UPDAT", "CMPLT"};
 
 G1CardSetGroup::G1CardSetGroup(G1CardSetConfiguration* config, G1MonotonicArenaFreePool* card_set_freelist_pool, uint group_id, State state) :
   _items(4, mtGCCardSet),
@@ -54,9 +38,7 @@ G1CardSetGroup::G1CardSetGroup(G1CardSetConfiguration* config, G1MonotonicArenaF
   _gc_efficiency(0.0),
   _group_id(group_id),
   _state(state)
-{
-  precond(state != State::Untracked);
-}
+{ }
 
 G1CardSetGroup::G1CardSetGroup(State state) :
   G1CardSetGroup(G1CollectedHeap::heap()->card_set_config(), G1CollectedHeap::heap()->card_set_freelist_pool(), InvalidId, state)
@@ -148,10 +130,6 @@ double G1CardSetGroup::predict_group_total_time_ms() const {
   return total_time_ms;
 }
 
-size_t G1CardSetGroup::mem_size() const {
-  return sizeof(*this) - sizeof(G1CardSetMemoryManager) + _card_set_mm.mem_size();
-}
-
 int G1CardSetGroup::compare_gc_efficiency(G1CardSetGroup** gr1, G1CardSetGroup** gr2) {
   G1CardSetGroup* group_1 = *gr1;
   G1CardSetGroup* group_2 = *gr2;
@@ -236,10 +214,10 @@ void G1CardSetGroupList::remove(G1CardSetGroupList* other) {
 
 void G1CardSetGroupList::remove(G1CardSetGroup* other) {
   precond(other != nullptr);
+  precond(_groups.contains(other));
 
-  if (_groups.remove_if_existing(other)) {
-    _num_regions.store_relaxed(num_regions() - other->length());
-  }
+  _groups.remove(other);
+  _num_regions.store_relaxed(num_regions() - other->length());
 
   verify();
 }
@@ -425,7 +403,6 @@ void G1CollectionSetCandidates::after_rebuild() {
   for (G1CardSetGroup* gr : _from_marking_groups) {
     bool keep = G1CollectedHeap::heap()->policy()->remset_tracker()->update_after_rebuild(gr);
     guarantee(keep, "old gen regions are always kept");
-    gr->set_complete();
   }
 }
 
@@ -437,6 +414,7 @@ void G1CollectionSetCandidates::verify_helper(G1CardSetGroupList* list, uint& fr
     for (G1CardSetGroupItem ci : *gr) {
       G1HeapRegion* r = ci._r;
 
+      assert(r->rem_set()->card_set_group() == gr, "Region %u should be in card set group %u but is not", r->hrm_index(), gr->group_id());
       if (is_from_marking(r)) {
         from_marking++;
       }

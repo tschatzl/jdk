@@ -257,8 +257,8 @@ public:
     if (r->is_continues_humongous()) {
       // Verify that the continues humongous regions' remembered set state
       // matches the one from the starts humongous region.
-      if (r->rem_set()->get_state_str() != r->humongous_start_region()->rem_set()->get_state_str()) {
-         log_error(gc, verify)("Remset states differ: Region %u (%s) remset %s with starts region %u (%s) remset %s",
+      if (r->rem_set()->card_set_group() != r->humongous_start_region()->rem_set()->card_set_group()) {
+         log_error(gc, verify)("Card set groups differ: Region %u (%s) remset %s with starts region %u (%s) remset %s",
                                r->hrm_index(),
                                r->get_short_type_str(),
                                r->rem_set()->get_state_str(),

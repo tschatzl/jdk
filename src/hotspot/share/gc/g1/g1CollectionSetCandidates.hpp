@@ -26,12 +26,9 @@
 #define SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_HPP
 
 #include "gc/g1/g1CardSetMemory.hpp"
-#include "gc/g1/g1CollectionSetCandidates.hpp"
-#include "gc/g1/g1HeapRegionRemSet.hpp"
 #include "gc/shared/gc_globals.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/atomic.hpp"
-#include "runtime/globals.hpp"
 #include "utilities/growableArray.hpp"
 
 class G1CollectionSetCandidates;
@@ -86,7 +83,6 @@ public:
   static constexpr uint InvalidId = UINT_MAX;
 
   enum State {
-    Untracked,
     Updating,
     Complete
   };
@@ -101,12 +97,8 @@ public:
   const char* get_state_str() const { return _state_strings[_state]; }
   const char* get_short_state_str() const { return _short_state_strings[_state]; }
 
-  static const char* get_state_str(const G1CardSetGroup* gr);
-  static const char* get_short_state_str(const G1CardSetGroup* gr);
-
   State state() const { return _state; }
 
-  bool is_tracked() const { return state() != Untracked; }
   bool is_updating() const { return state() == Updating; }
   bool is_complete() const { return state() == Complete; }
 
@@ -147,8 +139,6 @@ public:
   G1MonotonicArenaMemoryStats card_set_memory_stats() const {
     return _card_set_mm.memory_stats();
   }
-
-  size_t mem_size() const;
 
   size_t cards_occupied() const {
     return _card_set.occupied();

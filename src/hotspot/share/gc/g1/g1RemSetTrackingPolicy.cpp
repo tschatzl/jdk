@@ -34,21 +34,7 @@ static bool region_occupancy_low_enough_for_evac(size_t live_bytes) {
   return live_bytes < mixed_gc_live_threshold_bytes;
 }
 
-bool G1RemSetTrackingPolicy::is_complete_at_allocate(G1HeapRegion* r) {
-  assert(r->is_young() || r->is_humongous() || r->is_old(),
-        "Region %u with unexpected heap region type %s", r->hrm_index(), r->get_type_str());
-  // By default, do not create remembered set for new old regions, but always collect card
-  // sets for young regions and for humongous regions.
-  // Humongous regions need that for eager reclaim.
-  return (!r->is_old());
-}
-
-void G1RemSetTrackingPolicy::update_at_free(G1HeapRegion* r) {
-  /* nothing to do */
-  // FIXME: maybe unassign?
-}
-
-bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(G1HeapRegion* r) {
+bool G1RemSetTrackingPolicy::should_rebuild_humongous(G1HeapRegion* r) {
   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
   assert(r->is_starts_humongous(), "Region %u should be Humongous", r->hrm_index());
 
@@ -60,7 +46,7 @@ bool G1RemSetTrackingPolicy::update_humongous_before_rebuild(G1HeapRegion* r) {
   return !r->rem_set()->is_tracked();
 }
 
-bool G1RemSetTrackingPolicy::update_old_before_rebuild(G1HeapRegion* r) {
+bool G1RemSetTrackingPolicy::should_rebuild_old(G1HeapRegion* r) {
   assert(SafepointSynchronize::is_at_safepoint(), "should be at safepoint");
   assert(r->is_old(), "Region %u should be Old", r->hrm_index());
 
@@ -86,13 +72,13 @@ bool G1RemSetTrackingPolicy::update_after_rebuild(G1CardSetGroup* gr) {
     return false;
   }
 
+  gr->set_complete();
+
   size_t live_bytes = 0;
-  // Per region card set details only valid if group contains a single region.
   for (G1CardSetGroupItem ci : *gr) {
     live_bytes += g1h->concurrent_mark()->live_bytes(ci._r->hrm_index());
   }
 
-  G1ConcurrentMark* cm = G1CollectedHeap::heap()->concurrent_mark();
   log_trace(gc, remset, tracking)("After rebuild group %u "
                                   "(liveness %zu "
                                   "remset occ %zu "
@@ -100,6 +86,6 @@ bool G1RemSetTrackingPolicy::update_after_rebuild(G1CardSetGroup* gr) {
                                   gr->group_id(),
                                   live_bytes,
                                   gr->cards_occupied(),
-                                  gr->mem_size());
+                                  gr->card_set()->mem_size());
   return true;
 }

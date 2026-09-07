@@ -210,9 +210,6 @@ void G1CollectionSet::add_young_region_common(G1HeapRegion* hr) {
   assert(_inc_build_state == CSetBuildType::Active, "Precondition");
 
   // Add to young generation card set group.
-  bool is_complete = _g1h->policy()->remset_tracker()->is_complete_at_allocate(hr);
-  guarantee(is_complete, "Young regions should get a complete remembered set at allocation time");
-
   young_regions_card_set_group()->add(hr);
 
   // Synchronize with the region attribute table.
@@ -691,7 +688,7 @@ void G1CollectionSet::add_group_to_collection_set(G1CardSetGroup* gr) {
     add_region_to_collection_set(r);
     r->uninstall_card_set_group();
   }
-  _groups.append(gr);
+  _selected_groups.append(gr);
 }
 
 void G1CollectionSet::add_region_to_collection_set(G1HeapRegion* r) {

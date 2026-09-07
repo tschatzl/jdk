@@ -22,8 +22,8 @@
  *
  */
 
-#ifndef SHARE_GC_G1_HUMONGOUSCARDSETGROUPS_HPP
-#define SHARE_GC_G1_HUMONGOUSCARDSETGROUPS_HPP
+#ifndef SHARE_GC_G1_G1HUMONGOUSCARDSETGROUPS_HPP
+#define SHARE_GC_G1_G1HUMONGOUSCARDSETGROUPS_HPP
 
 #include "gc/g1/g1CollectionSetCandidates.hpp"
 
@@ -32,21 +32,16 @@ class G1HumongousCardSetGroups {
   G1CardSetGroupList _complete;
 
   G1CardSetGroup* new_group(G1HeapRegion* starts_humongous, G1CardSetGroup::State state);
+
 public:
-  G1CardSetGroupList* updating() { return &_updating; }
-  G1CardSetGroupList* complete() { return &_complete; }
-
-  G1HumongousCardSetGroups() : _updating(), _complete() {
-  }
-
   void clear();
 
-  void remove_group(G1CardSetGroup* gr);
-
-  void add_complete_group(G1HeapRegion* starts_humongous);
+  void add_to_complete_group(G1HeapRegion* starts_humongous);
   void set_updating_groups(GrowableArrayCHeap<G1HeapRegion*, mtGC>* regions);
+
+  void remove_card_set_group_from_region(G1HeapRegion* starts_humongous);
 
   void after_rebuild();
 };
 
-#endif // SHARE_GC_G1_HUMONGOUSCARDSETGROUPS_HPP
+#endif // SHARE_GC_G1_G1HUMONGOUSCARDSETGROUPS_HPP

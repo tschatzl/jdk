@@ -31,11 +31,7 @@ G1FullGCResetMetadataTask::G1ResetMetadataClosure::G1ResetMetadataClosure(G1Full
   _collector(collector) { }
 
 void G1FullGCResetMetadataTask::G1ResetMetadataClosure::reset_region_metadata(G1HeapRegion* hr) {
-  if (hr->rem_set()->has_card_set_group()) { // FIXME: is this true?
-    assert(hr->is_humongous(), "Only humongous regions can have a card set group");
-    assert(hr->rem_set()->card_set_group()->is_updating(), "Should be updating");
-    assert(hr->rem_set()->card_set_group()->cards_occupied() == 0, "Should be empty");
-  }
+  precond(!hr->rem_set()->has_card_set_group());
 
   hr->rem_set()->clear_code_roots(); // Will be regenerated later.
   hr->clear_both_card_tables();

@@ -245,23 +245,30 @@ public:
 
   bool do_heap_region(G1HeapRegion* r) {
     G1HeapRegionRemSet* hrrs = r->rem_set();
-    size_t rs_mem_sz = 0;
+
+    size_t rs_mem_sz = hrrs->mem_size() ;
     size_t rs_unused_mem_sz = 0;
     size_t occupied_cards = 0;
 
-    // Accumulate card set details for regions that are assigned to single-region
-    // card set groups. G1HeapRegionRemSet::mem_size() includes the size of the code roots
-    if (hrrs->has_card_set_group() && hrrs->card_set_group()->length() == 1) {
+    // Accumulate card set details for regions. Avoid duplicate accounting by using the
+    // first element of the card set group as representative of that card set group.
+    // G1HeapRegionRemSet::mem_size() includes the size of the code roots
+    if (hrrs->has_card_set_group() && (r->hrm_index() == hrrs->card_set_group()->region_at(0)->hrm_index())) {
       G1CardSet* card_set = hrrs->card_set_group()->card_set();
+      size_t card_set_mem_size = card_set->mem_size();
 
-      rs_mem_sz = hrrs->mem_size() + card_set->mem_size();
       rs_unused_mem_sz = card_set->unused_mem_size();
-      occupied_cards = hrrs->occupied();
+      occupied_cards = card_set->occupied();
 
-      if (rs_mem_sz > _max_rs_mem_sz) {
-        _max_rs_mem_sz = rs_mem_sz;
-        _max_rs_mem_sz_region = r;
+      if (card_set_mem_size > _max_group_card_set_mem_sz) {
+        _max_group_card_set_mem_sz = card_set_mem_size;
+        _max_card_set_mem_sz_group = hrrs->card_set_group();
       }
+    }
+
+    if (rs_mem_sz > _max_rs_mem_sz) {
+      _max_rs_mem_sz = rs_mem_sz;
+      _max_rs_mem_sz_region = r;
     }
 
     size_t code_root_mem_sz = hrrs->code_roots_mem_size();
@@ -289,42 +296,6 @@ public:
              code_root_mem_sz, code_root_elems, r->rem_set()->is_tracked());
 
     return false;
-  }
-
-  void accumulate_stats_for_group(G1CardSetGroup* group, G1PerRegionTypeRemSetCounters* gen_counter) {
-    // If the group has only a single region, then stats were accumulated
-    // during region iteration. Skip these.
-    if (group->length() > 1) {
-      G1CardSet* card_set = group->card_set();
-
-      size_t rs_mem_sz = card_set->mem_size();
-      size_t rs_unused_mem_sz = card_set->unused_mem_size();
-      size_t occupied_cards = card_set->occupied();
-
-      if (rs_mem_sz > _max_group_card_set_mem_sz) {
-        _max_group_card_set_mem_sz = rs_mem_sz;
-        _max_card_set_mem_sz_group = group;
-      }
-
-      gen_counter->add(rs_unused_mem_sz, rs_mem_sz, occupied_cards, 0, 0, false);
-      _all.add(rs_unused_mem_sz, rs_mem_sz, occupied_cards, 0, 0, false);
-    }
-  }
-
-  void do_card_set_groups() {
-    G1CollectedHeap* g1h = G1CollectedHeap::heap();
-
-    accumulate_stats_for_group(g1h->collection_set()->young_regions_card_set_group(), &_young);
-
-    G1CollectionSetCandidates* candidates = g1h->collection_set_candidates();
-    for (G1CardSetGroup* group : candidates->from_marking_groups()) {
-      accumulate_stats_for_group(group, &_old);
-    }
-    // Skip gathering statistics for retained regions. Just verify that they have
-    // the expected amount of regions.
-    for (G1CardSetGroup* group : candidates->retained_groups()) {
-      assert(group->length() == 1, "must be");
-    }
   }
 
   void print_summary_on(outputStream* out) {
@@ -408,6 +379,5 @@ void G1RemSetSummary::print_on(outputStream* out, bool show_thread_times) {
   }
   G1HeapRegionStatsClosure blk;
   G1CollectedHeap::heap()->heap_region_iterate(&blk);
-  blk.do_card_set_groups();
   blk.print_summary_on(out);
 }

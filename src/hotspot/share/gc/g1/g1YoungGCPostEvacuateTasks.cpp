@@ -471,7 +471,7 @@ public:
            BOOL_TO_STR(cm->is_marked_in_bitmap(obj)));
     _humongous_objects_reclaimed++;
 
-    _g1h->humongous_card_set_groups()->remove_group(r->rem_set()->card_set_group());
+    _g1h->humongous_card_set_groups()->remove_card_set_group_from_region(r);
 
     auto free_humongous_region = [&] (G1HeapRegion* r) {
       _freed_bytes += r->used();

@@ -38,7 +38,7 @@ G1CardSetGroup* G1HumongousCardSetGroups::new_group(G1HeapRegion* starts_humongo
   return gr;
 }
 
-void G1HumongousCardSetGroups::add_complete_group(G1HeapRegion* starts_humongous) {
+void G1HumongousCardSetGroups::add_to_complete_group(G1HeapRegion* starts_humongous) {
   G1CardSetGroup* gr = new_group(starts_humongous, G1CardSetGroup::State::Complete);
   _complete.append(gr);
   log_debug(gc)("new complete group %u", gr->group_id());
@@ -55,14 +55,27 @@ void G1HumongousCardSetGroups::set_updating_groups(GrowableArrayCHeap<G1HeapRegi
   }
 }
 
-void G1HumongousCardSetGroups::remove_group(G1CardSetGroup* gr) {
+void G1HumongousCardSetGroups::remove_card_set_group_from_region(G1HeapRegion* starts_humongous) {
   assert_at_safepoint();
-  precond(gr != nullptr);
+  precond(starts_humongous != nullptr);
+  precond(starts_humongous->is_starts_humongous());
 
-  _updating.remove(gr);
-  _complete.remove(gr);
+  if (!starts_humongous->rem_set()->has_card_set_group()) {
+    return;
+  }
 
-  log_debug(gc)("removed group %u", gr->group_id());
+  G1CardSetGroup* gr = starts_humongous->rem_set()->card_set_group();
+
+  {
+    ConditionalMutexLocker mt(G1RareEvent_lock, !Thread::current()->is_VM_thread(), Mutex::_no_safepoint_check_flag);
+
+    if (gr->is_updating()) {
+      _updating.remove(gr);
+    } else {
+      _complete.remove(gr);
+    }
+  }
+
   gr->clear(true /* uninstall_card_set_group */);
   delete gr;
 }
@@ -74,7 +87,6 @@ void G1HumongousCardSetGroups::after_rebuild() {
     bool should_keep = G1CollectedHeap::heap()->policy()->remset_tracker()->update_after_rebuild(gr);
 
     if (should_keep) {
-      gr->set_complete();
       _complete.append(gr);
     } else {
       gr->clear(true /* uninstall_card_set_group */);
