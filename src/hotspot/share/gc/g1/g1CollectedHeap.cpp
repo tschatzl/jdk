@@ -428,7 +428,7 @@ HeapWord* G1CollectedHeap::allocate_new_tlab(size_t min_size,
   // limit would be exceeded, but it would likely free at least some space.
   // So the subsequent outside-TLAB allocation could be successful anyway and
   // the indication that the overhead limit had been exceeded swallowed.
-  return attempt_allocation(min_size, requested_size, actual_size, false /* allow_gc */);
+  return attempt_allocation(G1AllocationRequest(min_size, requested_size, numa()->index_of_current_thread()), actual_size, false /* allow_gc */);
 }
 
 HeapWord* G1CollectedHeap::mem_allocate(size_t word_size) {
@@ -438,11 +438,13 @@ HeapWord* G1CollectedHeap::mem_allocate(size_t word_size) {
     return attempt_allocation_humongous(word_size);
   }
   size_t dummy = 0;
-  return attempt_allocation(word_size, word_size, &dummy, true /* allow_gc */);
+  return attempt_allocation(G1AllocationRequest(word_size, numa()->index_of_current_thread()), &dummy, true /* allow_gc */);
 }
 
-HeapWord* G1CollectedHeap::attempt_allocation_slow(AllocationRequest request, bool allow_gc) {
-  size_t word_size = request.word_size();
+HeapWord* G1CollectedHeap::attempt_allocation_slow(G1AllocationRequest request, bool allow_gc) {
+  precond(request._min_word_size == request._desired_word_size);
+
+  size_t word_size = request._min_word_size;
   ResourceMark rm; // For retrieving the thread names in log messages.
 
   // Make sure you read the note in attempt_allocation_humongous().
@@ -478,8 +480,11 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(AllocationRequest request, bo
     }
 
     bool succeeded;
-    result = do_collection_pause(request, gc_count_before, &succeeded,
-                                 GCCause::_g1_inc_collection_pause);
+    result = do_collection_pause(AllocationRequest::for_numa_allocation(request._min_word_size, 
+                                                                        os::numa_get_group_id()), // FIXME: numa_id_to_os_id(request._node_idx)
+                                                                        gc_count_before,
+                                                                        &succeeded,
+                                                                        GCCause::_g1_inc_collection_pause);
     if (succeeded) {
       log_trace(gc, alloc)("%s: Successfully scheduled collection returning " PTR_FORMAT,
                            Thread::current()->name(), p2i(result));
@@ -503,7 +508,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_slow(AllocationRequest request, bo
     // here and the follow-on attempt will be at the start of the next loop
     // iteration (after taking the Heap_lock).
     size_t dummy = 0;
-    result = _allocator->attempt_allocation(request, word_size, &dummy);
+    result = _allocator->attempt_allocation(request, &dummy);
     if (result != nullptr) {
       return result;
     }
@@ -640,24 +645,20 @@ void G1CollectedHeap::dealloc_archive_regions(MemRegion range) {
   decrease_used(size_used);
 }
 
-inline HeapWord* G1CollectedHeap::attempt_allocation(size_t min_word_size,
-                                                     size_t desired_word_size,
+inline HeapWord* G1CollectedHeap::attempt_allocation(G1AllocationRequest request,
                                                      size_t* actual_word_size,
                                                      bool allow_gc) {
   assert_heap_not_locked_and_not_at_safepoint();
-  assert(!is_humongous(desired_word_size), "attempt_allocation() should not "
+  assert(!is_humongous(request._desired_word_size), "attempt_allocation() should not "
          "be called for humongous allocation requests");
 
   // Fix NUMA node association for the duration of this allocation
-  const AllocationRequest request = _numa->is_enabled()
-  ? AllocationRequest::for_numa_allocation(desired_word_size, os::numa_get_group_id())
-  : AllocationRequest::for_allocation(desired_word_size);
-
-  HeapWord* result = _allocator->attempt_allocation(request, min_word_size, actual_word_size);
+  HeapWord* result = _allocator->attempt_allocation(request, actual_word_size);
 
   if (result == nullptr) {
+    // Slow allocation always tries to get the desired size.
     *actual_word_size = desired_word_size;
-    result = attempt_allocation_slow(request, allow_gc);
+    result = attempt_allocation_slow(G1AllocationRequest(desired_word_size, request._node_index), allow_gc);
   }
 
   assert_heap_not_locked();
@@ -784,7 +785,7 @@ HeapWord* G1CollectedHeap::attempt_allocation_at_safepoint(AllocationRequest req
     assert(!_allocator->has_mutator_alloc_region(_numa->index_for_numa_id(request.numa_id())) ||
            !expect_null_mutator_alloc_region,
            "the requested alloc region was unexpectedly found to be non-null");
-    return _allocator->attempt_allocation_locked(request);
+    return _allocator->attempt_allocation_locked(G1AllocationRequest(request.word_size(), numa()->index_for_numa_id(request.numa_id())));
   } else {
     assert(!request.has_numa_id(), "Humongous allocation must not have a specific NUMA id");
     HeapWord* result = humongous_obj_allocate(word_size);
