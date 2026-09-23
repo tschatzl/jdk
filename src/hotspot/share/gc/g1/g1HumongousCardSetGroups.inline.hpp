@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, 2026, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,28 @@
  *
  */
 
-#ifndef SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP
-#define SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP
+#ifndef SHARE_GC_G1_G1HUMONGOUSCARDSETGROUPS_INLINE_HPP
+#define SHARE_GC_G1_G1HUMONGOUSCARDSETGROUPS_INLINE_HPP
 
-#include "gc/g1/g1CollectionSetCandidates.hpp"
+#include "gc/g1/g1HumongousCardSetGroups.hpp"
 
 #include "gc/g1/g1CardSetGroup.inline.hpp"
 
-template<typename Func>
-void G1CollectionSetCandidates::iterate_regions(Func&& f) const {
-  _from_marking_groups.iterate_regions(f);
-
-  _retained_groups.iterate_regions(f);
+template <typename FUNC>
+void G1HumongousCardSetGroups::iterate(FUNC&& fn) const {
+  _groups.iterate(fn);
 }
 
-#endif /* SHARE_GC_G1_G1COLLECTIONSETCANDIDATES_INLINE_HPP */
+template <typename EVAL>
+void G1HumongousCardSetGroups::clean(EVAL&& fn) {
+  G1CardSetGroupList to_remove;
+  for (G1CardSetGroup* gr : _groups) {
+    if (fn(gr)) {
+      to_remove.append(gr);
+    }
+  }
+  _groups.remove(&to_remove);
+  to_remove.clear(true /* clear_backlinks */);
+}
+
+#endif // SHARE_GC_G1_G1HUMONGOUSCARDSETGROUPS_INLINE_HPP
