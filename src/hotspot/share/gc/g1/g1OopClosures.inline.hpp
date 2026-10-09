@@ -127,8 +127,8 @@ inline static void check_obj_during_refinement(T* p, oop const obj) {
 
 template <class T>
 inline void G1ConcurrentRefineOopClosure::do_oop_work(T* p) {
-  // Early out if we already found a to-young reference.
-  if (_has_ref_to_cset) {
+  // Early out if we already found a to-young or unparsable reference.
+  if (_refine_result == HasRefToCSet || _refine_result == Defer) {
     return;
   }
 
@@ -152,12 +152,25 @@ inline void G1ConcurrentRefineOopClosure::do_oop_work(T* p) {
     return;
   }
 
-  G1HeapRegion* to_region = _g1h->heap_region_containing(obj);
-  if (to_region->is_young()) {
-    _has_ref_to_cset = true;
+  uint to_region_index = _g1h->addr_to_region(obj);
+  G1HeapRegion* to = _g1h->region_at_or_null_unsafe(to_region_index);
+  // Cautiously inspect the referenced region. Defer card refinement into regions
+  // which metadata may not be fully visible yet.
+  // Young regions can always be handled as they use the card mark, and old regions
+  // can never be allocated in this allocation epoch as they are only allocated during
+  // gc pauses.
+  if (to == nullptr) {
+    _refine_result = Defer;
+    return;
+  } else if (to->is_young()) {
+    _refine_result = HasRefToCSet;
+    return;
+  } else if (!to->is_old() && !_g1h->is_region_metadata_valid(to_region_index, _seen_heap_region_alloc_epoch)) {
+    _refine_result = Defer;
     return;
   }
-  G1HeapRegionRemSet* to_rem_set = to_region->rem_set();
+
+  G1HeapRegionRemSet* to_rem_set = to->rem_set();
 
   assert(to_rem_set != nullptr, "Need per-region 'into' remsets.");
   if (to_rem_set->is_tracked()) {
@@ -165,7 +178,7 @@ inline void G1ConcurrentRefineOopClosure::do_oop_work(T* p) {
 
     if (from->rem_set()->card_set_group() != to_rem_set->card_set_group()) {
       to_rem_set->add_reference(p, _from_card_cache);
-      _has_ref_to_old = true;
+      _refine_result = HasRefToOld;
     }
   }
 }
@@ -271,6 +284,16 @@ void G1ParCopyClosure<barrier, should_mark>::do_oop_work(T* p) {
   trim_queue_partially();
 }
 
+G1RebuildRemSetClosure::G1RebuildRemSetClosure(G1CollectedHeap* g1h)
+  : _g1h(g1h),
+    _from_card_cache(),
+    _seen_heap_region_alloc_epoch(g1h->heap_region_alloc_epoch_acquire()) { }
+
+void G1RebuildRemSetClosure::resume_after_yield() {
+  _from_card_cache.reset();
+  _seen_heap_region_alloc_epoch = _g1h->heap_region_alloc_epoch_acquire();
+}
+
 template <class T> void G1RebuildRemSetClosure::do_oop_work(T* p) {
   oop const obj = RawAccess<MO_RELAXED>::oop_load(p);
   if (obj == nullptr) {
@@ -281,18 +304,30 @@ template <class T> void G1RebuildRemSetClosure::do_oop_work(T* p) {
     return;
   }
 
-  G1HeapRegion* to = _g1h->heap_region_containing(obj);
-  G1HeapRegionRemSet* rem_set = to->rem_set();
-  if (rem_set->is_tracked()) {
+  uint to_region_index = _g1h->addr_to_region(obj);
+  G1HeapRegion* to = _g1h->region_at_or_null_unsafe(to_region_index);
+  // Cautiously inspect the referenced region.
+  if (to == nullptr) {
+    // It is not safe to access the region metadata. We have not even seen the G1HeapRegion yet. Conservatively dirty this card.
+    *_g1h->card_table()->byte_for(p) = G1CardTable::dirty_card_val();
+    return;
+  } else if (to->is_young()) {
     // References into young regions are only indicated by the card mark, which
     // has been dirtied when installing the reference already, so no further
     // remembering needs to happen.
-    if (!to->is_young()) {
-      G1HeapRegion* from = _g1h->heap_region_containing(p);
+    return;
+  } else if (!to->is_old() && !_g1h->is_region_metadata_valid(to_region_index, _seen_heap_region_alloc_epoch)) {
+    // It is not safe to access the region metadata. Conservatively dirty this card.
+    *_g1h->card_table()->byte_for(p) = G1CardTable::dirty_card_val();
+    return;
+  }
 
-      if (from->rem_set()->card_set_group() != rem_set->card_set_group()) {
-        rem_set->add_reference(p, _from_card_cache);
-      }
+  G1HeapRegionRemSet* rem_set = to->rem_set();
+  if (rem_set->is_tracked()) {
+    G1HeapRegion* from = _g1h->heap_region_containing(p);
+
+    if (from->rem_set()->card_set_group() != rem_set->card_set_group()) {
+      rem_set->add_reference(p, _from_card_cache);
     }
   }
 }

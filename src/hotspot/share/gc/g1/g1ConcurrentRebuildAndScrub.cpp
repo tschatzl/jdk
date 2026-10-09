@@ -64,7 +64,6 @@ class G1RebuildRSAndScrubTask : public WorkerTask {
   G1HeapRegionClaimer _hr_claimer;
 
   const bool _should_rebuild_remset;
-
   class G1RebuildRSAndScrubRegionClosure : public G1HeapRegionClosure {
     G1ConcurrentMark* _cm;
     const G1CMBitMap* _bitmap;
@@ -94,7 +93,7 @@ class G1RebuildRSAndScrubTask : public WorkerTask {
         // If a yield occurs (potential young-gc pause), must recheck for
         // potential regions reclamation.
         if (_cm->do_yield_check()) {
-          _rebuild_closure.reset_from_card_cache();
+          _rebuild_closure.resume_after_yield();
           if (!should_rebuild_or_scrub(hr)) {
             return true;
           }
@@ -258,7 +257,7 @@ class G1RebuildRSAndScrubTask : public WorkerTask {
     bool do_heap_region(G1HeapRegion* hr) {
       // Avoid stalling safepoints and stop iteration if mark cycle has been aborted.
       if (_cm->do_yield_check()) {
-        _rebuild_closure.reset_from_card_cache();
+        _rebuild_closure.resume_after_yield();
       }
       if (_cm->has_aborted()) {
         return true;

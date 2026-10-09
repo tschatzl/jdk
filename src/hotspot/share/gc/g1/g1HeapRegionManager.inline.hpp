@@ -61,6 +61,10 @@ inline G1HeapRegion* G1HeapRegionManager::at_or_null(uint index) const {
   return hr;
 }
 
+inline G1HeapRegion* G1HeapRegionManager::at_or_null_unsafe(uint index) const {
+  return _regions.get_by_index(index);
+}
+
 inline G1HeapRegion* G1HeapRegionManager::next_region_in_humongous(G1HeapRegion* hr) const {
   uint index = hr->hrm_index();
   assert(is_available(index), "pre-condition");

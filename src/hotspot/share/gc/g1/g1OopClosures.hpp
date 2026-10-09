@@ -207,18 +207,24 @@ public:
 class G1ConcurrentRefineOopClosure: public BasicOopIterateClosure {
   G1CollectedHeap* _g1h;
   G1FromCardCache _from_card_cache;
-  bool _has_ref_to_cset;
-  bool _has_ref_to_old;
+
+  uint64_t _seen_heap_region_alloc_epoch;
 
 public:
-  G1ConcurrentRefineOopClosure(G1CollectedHeap* g1h) :
+  enum RefineResult {
+    HasNoInterestingRef,
+    HasRefToCSet,
+    HasRefToOld,
+    Defer
+  } _refine_result;
+
+  G1ConcurrentRefineOopClosure(G1CollectedHeap* g1h, uint64_t seen_heap_region_alloc_epoch) :
     _g1h(g1h),
     _from_card_cache(),
-    _has_ref_to_cset(false),
-    _has_ref_to_old(false) {}
+    _seen_heap_region_alloc_epoch(seen_heap_region_alloc_epoch),
+    _refine_result(HasNoInterestingRef) {}
 
-  bool has_ref_to_cset() const { return _has_ref_to_cset; }
-  bool has_ref_to_old() const { return _has_ref_to_old; }
+  RefineResult refine_result() const { return _refine_result; }
 
   virtual ReferenceIterationMode reference_iteration_mode() { return DO_FIELDS; }
 
@@ -231,12 +237,12 @@ class G1RebuildRemSetClosure : public BasicOopIterateClosure {
   G1CollectedHeap* _g1h;
   G1FromCardCache _from_card_cache;
 
-public:
-  G1RebuildRemSetClosure(G1CollectedHeap* g1h)
-    : _g1h(g1h),
-      _from_card_cache() {}
+  uint64_t _seen_heap_region_alloc_epoch;
 
-  void reset_from_card_cache() { _from_card_cache.reset(); }
+public:
+  inline G1RebuildRemSetClosure(G1CollectedHeap* g1h);
+
+  inline void resume_after_yield();
 
   template <class T> void do_oop_work(T* p);
   virtual void do_oop(oop* p)       { do_oop_work(p); }

@@ -107,11 +107,40 @@ inline size_t G1CollectedHeap::clamp_plab_size(size_t value) const {
 
 // Inline functions for G1CollectedHeap
 
+inline void G1CollectedHeap::reset_heap_region_alloc_epoch(uint region) {
+  precond(region < max_num_regions());
+  _heap_region_alloc_epochs[region].store_relaxed(UnsynchronizedRegionEpoch);
+}
+
+inline void G1CollectedHeap::set_next_heap_region_alloc_epoch(uint region) {
+  precond(region < max_num_regions());
+  const uint64_t alloc_epoch = _heap_region_alloc_epoch.load_relaxed() + 1;
+  _heap_region_alloc_epochs[region].store_relaxed(alloc_epoch);
+}
+
+inline uint64_t G1CollectedHeap::heap_region_alloc_epoch_acquire() {
+  return _heap_region_alloc_epoch.load_acquire();
+}
+
+inline void G1CollectedHeap::publish_next_heap_region_alloc_epoch() {
+  _heap_region_alloc_epoch.release_store(_heap_region_alloc_epoch.load_relaxed() + 1);
+}
+
+inline bool G1CollectedHeap::is_region_metadata_valid(uint region, uint64_t acquired_epoch) {
+  precond(region < max_num_regions());
+
+  uint64_t heap_region_alloc_epoch = _heap_region_alloc_epochs[region].load_relaxed();
+  return heap_region_alloc_epoch <= acquired_epoch;
+}
+
 // Return the region with the given index. It assumes the index is valid.
 inline G1HeapRegion* G1CollectedHeap::region_at(uint index) const { return _hrm.at(index); }
 
 // Return the region with the given index, or null if unmapped. It assumes the index is valid.
 inline G1HeapRegion* G1CollectedHeap::region_at_or_null(uint index) const { return _hrm.at_or_null(index); }
+// Return the region with the given index. This is the raw value without checking for whether the region is
+// actually mapped.
+inline G1HeapRegion* G1CollectedHeap::region_at_or_null_unsafe(uint index) const { return _hrm.at_or_null_unsafe(index); }
 
 template <typename Func>
 inline void G1CollectedHeap::humongous_obj_regions_iterate(G1HeapRegion* start, const Func& f) {
@@ -134,7 +163,6 @@ inline uint G1CollectedHeap::addr_to_region(const void* addr) const {
 inline HeapWord* G1CollectedHeap::bottom_addr_for_region(uint index) const {
   return _hrm.reserved().start() + index * G1HeapRegion::GrainWords;
 }
-
 
 inline G1HeapRegion* G1CollectedHeap::heap_region_containing(const void* addr) const {
   uint const region_idx = addr_to_region(addr);

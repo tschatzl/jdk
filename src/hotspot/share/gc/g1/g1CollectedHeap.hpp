@@ -248,6 +248,18 @@ public:
   size_t bytes_used_during_gc() const { return _bytes_used_during_gc; }
 
 private:
+  static constexpr uint64_t UnsynchronizedRegionEpoch = UINT64_MAX;
+  Atomic<uint64_t>* _heap_region_alloc_epochs;
+  Atomic<uint64_t> _heap_region_alloc_epoch;
+
+public:
+  inline void reset_heap_region_alloc_epoch(uint region);
+  inline void set_next_heap_region_alloc_epoch(uint region);
+  inline uint64_t heap_region_alloc_epoch_acquire();
+  inline void publish_next_heap_region_alloc_epoch();
+  inline bool is_region_metadata_valid(uint region, uint64_t acquired_epoch);
+
+private:
   // GC allocation statistics policy for survivors.
   G1EvacStats _survivor_evac_stats;
 
@@ -1107,6 +1119,7 @@ public:
   // Return the region with the given index. It assumes the index is valid.
   inline G1HeapRegion* region_at(uint index) const;
   inline G1HeapRegion* region_at_or_null(uint index) const;
+  inline G1HeapRegion* region_at_or_null_unsafe(uint index) const;
 
   // Iterate over the regions that the humongous object starting at the given
   // region and apply the given method with the signature f(G1HeapRegion*) on them.

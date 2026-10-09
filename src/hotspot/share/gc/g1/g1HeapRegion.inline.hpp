@@ -312,7 +312,7 @@ inline bool G1HeapRegion::in_collection_set() const {
 
 template <class Closure, bool in_gc_pause>
 HeapWord* G1HeapRegion::do_oops_on_memregion_in_humongous(MemRegion mr,
-                                                        Closure* cl) {
+                                                          Closure* cl) {
   assert(is_humongous(), "precondition");
   G1HeapRegion* sr = humongous_start_region();
   oop obj = cast_to_oop(sr->bottom());
@@ -463,7 +463,7 @@ inline HeapWord* G1HeapRegion::oops_on_memregion_iterate(MemRegion mr, Closure* 
 
 template <bool in_gc_pause, class Closure>
 HeapWord* G1HeapRegion::oops_on_memregion_seq_iterate_careful(MemRegion mr,
-                                                            Closure* cl) {
+                                                              Closure* cl) {
   assert(MemRegion(bottom(), top()).contains(mr), "Card region not in heap region");
 
   // Special handling for humongous regions.

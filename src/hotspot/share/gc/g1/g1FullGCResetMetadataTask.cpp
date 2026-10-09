@@ -39,6 +39,13 @@ void G1FullGCResetMetadataTask::G1ResetMetadataClosure::reset_region_metadata(G1
     hr->rem_set()->card_set_group()->clear_card_set();
   }
 
+  // Empty regions are not set Free at this point, but we need to specifically
+  // handle free region's epoch. Use is_empty() here.
+  if (!hr->is_empty()) {
+    _g1h->set_next_heap_region_alloc_epoch(hr->hrm_index());
+  } else {
+    _g1h->reset_heap_region_alloc_epoch(hr->hrm_index());
+  }
   hr->rem_set()->clear();
   hr->clear_both_card_tables();
   _g1h->concurrent_mark()->reset_region_marking_state(hr);

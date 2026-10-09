@@ -96,8 +96,7 @@ public:
   }
 
   size_t occupied() {
-    assert(has_card_set_group(), "pre-condition");
-    return card_set()->occupied();
+    return has_card_set_group() ? card_set()->occupied() : 0;
   }
 
   static void initialize(MemRegion reserved);

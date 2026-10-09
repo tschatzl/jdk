@@ -34,7 +34,6 @@
 #include "gc/g1/g1CollectionSet.inline.hpp"
 #include "gc/g1/g1CollectorState.inline.hpp"
 #include "gc/g1/g1ConcurrentRefine.hpp"
-#include "gc/g1/g1ConcurrentRefineSweepTask.hpp"
 #include "gc/g1/g1GCParPhaseTimesTracker.hpp"
 #include "gc/g1/g1GCPhaseTimes.hpp"
 #include "gc/g1/g1HeapRegion.inline.hpp"
@@ -1253,67 +1252,6 @@ void G1RemSet::print_coarsen_stats() {
 
     G1CardSet::print_coarsen_stats(&ls);
   }
-}
-
-inline void check_card_ptr(CardTable::CardValue* card_ptr, G1CardTable* ct) {
-#ifdef ASSERT
-  G1CollectedHeap* g1h = G1CollectedHeap::heap();
-  assert(g1h->is_in(ct->addr_for(card_ptr)),
-         "Card at " PTR_FORMAT " index %zu representing heap at " PTR_FORMAT " (%u) must be in committed heap",
-         p2i(card_ptr),
-         ct->index_for(ct->addr_for(card_ptr)),
-         p2i(ct->addr_for(card_ptr)),
-         g1h->addr_to_region(ct->addr_for(card_ptr)));
-#endif
-}
-
-G1RemSet::RefineResult G1RemSet::refine_card_concurrently(CardValue* const card_ptr) {
-  assert(!_g1h->is_stw_gc_active(), "Only call concurrently");
-  G1CardTable* ct = _g1h->refinement_table();
-  check_card_ptr(card_ptr, ct);
-
-  // That card is already known to contain a reference to the collection set. Skip
-  // further processing.
-  if (*card_ptr == G1CardTable::g1_to_cset_card) {
-    return AlreadyToCSet;
-  }
-
-  // Construct the MemRegion representing the card.
-  HeapWord* start = ct->addr_for(card_ptr);
-  // And find the region containing it.
-  G1HeapRegion* r = _g1h->heap_region_containing(start);
-  // This reload of the top is safe even though it happens after the full
-  // fence, because top is stable for old and unfiltered humongous
-  // regions, so it must return the same value as the previous load when
-  // cleaning the card. Also cleaning the card and refinement of the card
-  // cannot span across safepoint, so we don't need to worry about top being
-  // changed during safepoint.
-  HeapWord* scan_limit = r->top();
-  assert(scan_limit > start, "sanity region %u (%s) scan_limit " PTR_FORMAT " start " PTR_FORMAT, r->hrm_index(), r->get_short_type_str(), p2i(scan_limit), p2i(start));
-
-  // Don't use addr_for(card_ptr + 1) which can ask for
-  // a card beyond the heap.
-  HeapWord* end = start + G1CardTable::card_size_in_words();
-  MemRegion dirty_region(start, MIN2(scan_limit, end));
-  assert(!dirty_region.is_empty(), "sanity");
-
-  G1ConcurrentRefineOopClosure conc_refine_cl(_g1h);
-  if (r->oops_on_memregion_seq_iterate_careful<false>(dirty_region, &conc_refine_cl) != nullptr) {
-    if (conc_refine_cl.has_ref_to_cset()) {
-      return HasRefToCSet;
-    } else if (conc_refine_cl.has_ref_to_old()) {
-      return HasRefToOld;
-    } else {
-      return NoCrossRegion;
-    }
-  }
-  // If unable to process the card then we encountered an unparsable
-  // part of the heap (e.g. a partially allocated object, so only
-  // temporarily a problem) while processing a stale card.  Despite
-  // the card being stale, we can't simply ignore it, because we've
-  // already marked the card as cleaned, so taken responsibility for
-  // ensuring the card gets scanned.
-  return CouldNotParse;
 }
 
 void G1RemSet::print_periodic_summary_info(const char* header, uint period_count, bool show_thread_times) {

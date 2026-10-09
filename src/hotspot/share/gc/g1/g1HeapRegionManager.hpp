@@ -179,6 +179,8 @@ public:
   // Return the G1HeapRegion at the given index, null if the index
   // is for an unavailable region.
   inline G1HeapRegion* at_or_null(uint index) const;
+  // Return the G1HeapRegion at the given index without any checks for an unavailable region.
+  inline G1HeapRegion* at_or_null_unsafe(uint index) const;
 
   // Returns whether the given region is available for allocation.
   inline bool is_available(uint region) const;
