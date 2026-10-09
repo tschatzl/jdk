@@ -107,6 +107,11 @@ inline size_t G1CollectedHeap::clamp_plab_size(size_t value) const {
 
 // Inline functions for G1CollectedHeap
 
+inline void G1CollectedHeap::set_next_heap_region_alloc_epoch(uint region) {
+  const uintx alloc_epoch = _cur_heap_region_alloc_epoch.load_relaxed() + 1;
+  _heap_region_alloc_epochs[region].store_relaxed(alloc_epoch);
+}
+
 // Return the region with the given index. It assumes the index is valid.
 inline G1HeapRegion* G1CollectedHeap::region_at(uint index) const { return _hrm.at(index); }
 
@@ -134,7 +139,6 @@ inline uint G1CollectedHeap::addr_to_region(const void* addr) const {
 inline HeapWord* G1CollectedHeap::bottom_addr_for_region(uint index) const {
   return _hrm.reserved().start() + index * G1HeapRegion::GrainWords;
 }
-
 
 inline G1HeapRegion* G1CollectedHeap::heap_region_containing(const void* addr) const {
   uint const region_idx = addr_to_region(addr);

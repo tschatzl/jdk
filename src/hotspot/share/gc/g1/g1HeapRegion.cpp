@@ -138,6 +138,7 @@ void G1HeapRegion::hr_clear(bool clear_space) {
   _garbage_bytes.store_relaxed(0);
   _incoming_refs = 0;
 
+  G1CollectedHeap::heap()->reset_heap_region_alloc_epoch(_hrm_index);
   if (clear_space) clear(SpaceDecorator::Mangle);
 }
 

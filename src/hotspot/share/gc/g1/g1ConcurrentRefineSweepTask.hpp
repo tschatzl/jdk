@@ -37,6 +37,8 @@ class G1ConcurrentRefineSweepTask : public WorkerTask {
   uint _max_workers;
   Atomic<bool> _sweep_completed;
 
+  uintx _seen_heap_region_alloc_epoch;
+
 public:
 
   G1ConcurrentRefineSweepTask(G1CardTableClaimTable* scan_state, G1ConcurrentRefineStats* stats, uint max_workers);

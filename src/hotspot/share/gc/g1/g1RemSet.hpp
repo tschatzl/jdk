@@ -115,19 +115,6 @@ public:
                                           G1GCPhaseTimes::GCParPhases scan_phase,
                                           G1GCPhaseTimes::GCParPhases objcopy_phase);
 
-  enum RefineResult {
-      HasRefToCSet,          // The (dirty) card has a reference to the collection set.
-      AlreadyToCSet,         // The card is already one marked as having a reference to the collection set.
-      HasRefToOld,           // The dirty card contains references to other old regions (not the collection set).
-      NoCrossRegion,         // There is no interesting reference in the card any more. The mutator changed all
-                             // references to such after dirtying the card.
-      CouldNotParse          // The card is unparsable, need to retry later.
-  };
-  // Refine the region corresponding to "card_ptr". Must be called after
-  // being filtered by clean_card_before_refine(), and after proper
-  // fence/synchronization.
-  RefineResult refine_card_concurrently(CardValue* const card_ptr);
-
   // Print accumulated summary info from the start of the VM.
   void print_summary_info();
 

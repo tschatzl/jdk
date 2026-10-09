@@ -351,9 +351,11 @@ G1CollectedHeap::humongous_obj_allocate_initialize_regions(G1HeapRegion* first_h
   for (uint i = first; i <= last; ++i) {
     G1HeapRegion *hr = region_at(i);
     _humongous_set.add(hr);
+    set_next_heap_region_alloc_epoch(i);
     G1HeapRegionPrinter::alloc(hr);
   }
 
+  _cur_heap_region_alloc_epoch.release_store(_cur_heap_region_alloc_epoch.load_relaxed() + 1);
   return new_obj;
 }
 
@@ -620,6 +622,7 @@ void G1CollectedHeap::dealloc_archive_regions(MemRegion range) {
     _old_set.remove(r);
     r->set_free();
     r->set_top(r->bottom());
+    // call hr_clear()?
     if (num_shrunk_regions < max_num_regions_to_shrink) {
       _hrm.shrink_at(r->hrm_index(), 1);
       num_shrunk_regions++;
@@ -1312,6 +1315,8 @@ G1CollectedHeap::G1CollectedHeap() :
   _verifier(nullptr),
   _summary_bytes_used(0),
   _bytes_used_during_gc(0),
+  _heap_region_alloc_epochs(nullptr),
+  _cur_heap_region_alloc_epoch(0),
   _survivor_evac_stats("Young", YoungPLABSize, PLABWeight),
   _old_evac_stats("Old", OldPLABSize, PLABWeight),
   _monitoring_support(nullptr),
@@ -1556,6 +1561,11 @@ jint G1CollectedHeap::initialize() {
     size_t granularity = G1HeapRegion::GrainBytes;
 
     _region_attr.initialize(reserved(), granularity);
+  }
+
+  _heap_region_alloc_epochs = NEW_C_HEAP_ARRAY(Atomic<uintx>, max_num_regions(), mtGC);
+  for (uint i = 0; i < max_num_regions(); i++) {
+    _heap_region_alloc_epochs[i].store_relaxed(UnsynchronizedRegionEpoch);
   }
 
   _workers = new WorkerThreads("GC Thread", ParallelGCThreads);
@@ -3132,6 +3142,7 @@ G1HeapRegion* G1CollectedHeap::new_mutator_alloc_region(size_t word_size,
 
       collection_set()->add_eden_region(new_alloc_region);
       G1HeapRegionPrinter::alloc(new_alloc_region);
+      set_next_heap_region_alloc_epoch(new_alloc_region->hrm_index());
       return new_alloc_region;
     }
   }
@@ -3204,6 +3215,7 @@ G1HeapRegion* G1CollectedHeap::new_gc_alloc_region(size_t word_size, G1HeapRegio
     _cm->notify_new_region(new_alloc_region);
 
     G1HeapRegionPrinter::alloc(new_alloc_region);
+    set_next_heap_region_alloc_epoch(new_alloc_region->hrm_index());
     return new_alloc_region;
   }
   return nullptr;

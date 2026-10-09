@@ -248,6 +248,20 @@ public:
   size_t bytes_used_during_gc() const { return _bytes_used_during_gc; }
 
 private:
+  const uintx UnsynchronizedRegionEpoch = max_uintx;
+  Atomic<uintx>* _heap_region_alloc_epochs;
+  Atomic<uintx> _cur_heap_region_alloc_epoch;
+
+public:
+  // FIXME: boundary checks, move to inline file.
+  uintx heap_region_alloc_epoch(uint region) const { return _heap_region_alloc_epochs[region].load_relaxed(); }
+  void reset_heap_region_alloc_epoch(uint region) { _heap_region_alloc_epochs[region].store_relaxed(UnsynchronizedRegionEpoch); }
+  inline void set_next_heap_region_alloc_epoch(uint region);
+  uintx cur_heap_region_alloc_epoch_acquire() {
+    return _cur_heap_region_alloc_epoch.load_acquire();
+  }
+
+private:
   // GC allocation statistics policy for survivors.
   G1EvacStats _survivor_evac_stats;
 
