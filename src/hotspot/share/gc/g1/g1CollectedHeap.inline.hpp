@@ -113,7 +113,7 @@ inline void G1CollectedHeap::reset_heap_region_alloc_epoch(uint region) {
 }
 
 inline void G1CollectedHeap::set_next_heap_region_alloc_epoch(uint region) {
-  precond(region_index < max_num_regions());
+  precond(region < max_num_regions());
   const uintx alloc_epoch = _heap_region_alloc_epoch.load_relaxed() + 1;
   _heap_region_alloc_epochs[region].store_relaxed(alloc_epoch);
 }
