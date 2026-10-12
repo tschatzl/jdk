@@ -355,7 +355,7 @@ G1CollectedHeap::humongous_obj_allocate_initialize_regions(G1HeapRegion* first_h
     G1HeapRegionPrinter::alloc(hr);
   }
 
-  _cur_heap_region_alloc_epoch.release_store(_cur_heap_region_alloc_epoch.load_relaxed() + 1);
+  increment_heap_region_alloc_epoch();
   return new_obj;
 }
 
@@ -578,6 +578,8 @@ HeapWord* G1CollectedHeap::alloc_archive_region(size_t word_size) {
 
     r->set_old();
     G1HeapRegionPrinter::alloc(r);
+
+    set_next_heap_region_alloc_epoch(r->hrm_index());
     _old_set.add(r);
   };
 
@@ -2519,6 +2521,8 @@ void G1CollectedHeap::gc_epilogue(bool full) {
                                             &_collection_set_candidates_card_set_stats);
 
   update_perf_counter_cpu_time();
+
+  increment_heap_region_alloc_epoch();
   _refinement_epoch++;
 }
 

@@ -248,7 +248,7 @@ public:
   size_t bytes_used_during_gc() const { return _bytes_used_during_gc; }
 
 private:
-  const uintx UnsynchronizedRegionEpoch = max_uintx;
+  static constexpr uintx UnsynchronizedRegionEpoch = max_uintx;
   Atomic<uintx>* _heap_region_alloc_epochs;
   Atomic<uintx> _cur_heap_region_alloc_epoch;
 
@@ -259,6 +259,9 @@ public:
   inline void set_next_heap_region_alloc_epoch(uint region);
   uintx cur_heap_region_alloc_epoch_acquire() {
     return _cur_heap_region_alloc_epoch.load_acquire();
+  }
+  void increment_heap_region_alloc_epoch() {
+    _cur_heap_region_alloc_epoch.release_store(_cur_heap_region_alloc_epoch.load_relaxed() + 1);
   }
 
 private:
