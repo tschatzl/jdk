@@ -67,7 +67,7 @@ class G1RefineRegionClosure : public G1HeapRegionClosure {
       HasRefToCSet,          // The (dirty) card has a reference to the collection set.
       AlreadyToCSet,         // The card is already one marked as having a reference to the collection set.
       HasRefToOld,           // The dirty card contains references to other old regions (not the collection set).
-      NoCrossRegion,         // There is no interesting reference in the card any more. The mutator changed all
+      NoInterestingRef,      // There is no interesting reference in the card any more. The mutator changed all
                              // references to such after dirtying the card.
       CouldNotParse          // The card is unparsable, need to retry later.
   };
@@ -109,9 +109,10 @@ class G1RefineRegionClosure : public G1HeapRegionClosure {
     G1ConcurrentRefineOopClosure conc_refine_cl(g1h, _seen_heap_region_alloc_epoch);
     bool humongous_not_initialized =
       r->oops_on_memregion_seq_iterate_careful<false>(dirty_region, &conc_refine_cl) == nullptr;
-    if (conc_refine_cl.has_ref_to_cset()) {
+    G1ConcurrentRefineOopClosure::DoOopResult result = conc_refine_cl.do_oop_result();
+    if (result == G1ConcurrentRefineOopClosure::HasRefToCSet) {
       return HasRefToCSet;
-    } else if (humongous_not_initialized || conc_refine_cl.has_ref_unparsable()) {
+    } else if (humongous_not_initialized || result == G1ConcurrentRefineOopClosure::Defer) {
       // If unable to process the card then we encountered an unparsable
       // part of the heap (e.g. a partially allocated object, so only
       // temporarily a problem) while processing a stale card.  Despite
@@ -119,10 +120,11 @@ class G1RefineRegionClosure : public G1HeapRegionClosure {
       // already marked the card as cleaned, so taken responsibility for
       // ensuring the card gets scanned.
       return CouldNotParse;
-    } else if (conc_refine_cl.has_ref_to_old()) {
+    } else if (result == G1ConcurrentRefineOopClosure::HasRefToOld) {
       return HasRefToOld;
     } else {
-      return NoCrossRegion;
+      precond(result == G1ConcurrentRefineOopClosure::HasNoInterestingRef);
+      return NoInterestingRef;
     }
   }
 
@@ -142,7 +144,7 @@ class G1RefineRegionClosure : public G1HeapRegionClosure {
         _per_worker_refine_data._cards_already_refer_to_cset++;
         break;
       }
-      case NoCrossRegion: {
+      case NoInterestingRef: {
         _per_worker_refine_data._cards_no_cross_region++;
         break;
       }
@@ -168,11 +170,10 @@ public:
   bool _completed;
   G1LocalRefineStats _per_worker_refine_data;
 
-  G1RefineRegionClosure(G1CardTableClaimTable* scan_state,
-                        uintx seen_heap_region_alloc_epoch) :
+  G1RefineRegionClosure(G1CardTableClaimTable* scan_state) :
     G1HeapRegionClosure(),
     _scan_state(scan_state),
-    _seen_heap_region_alloc_epoch(seen_heap_region_alloc_epoch),
+    _seen_heap_region_alloc_epoch(G1CollectedHeap::heap()->heap_region_alloc_epoch_acquire()),
     _completed(true),
     _per_worker_refine_data() { }
 
@@ -244,14 +245,13 @@ G1ConcurrentRefineSweepTask::G1ConcurrentRefineSweepTask(G1CardTableClaimTable* 
   _scan_state(scan_state),
   _stats(stats),
   _max_workers(max_workers),
-  _sweep_completed(true),
-  _seen_heap_region_alloc_epoch(G1CollectedHeap::heap()->cur_heap_region_alloc_epoch_acquire())
+  _sweep_completed(true)
 { }
 
 void G1ConcurrentRefineSweepTask::work(uint worker_id) {
   jlong start = os::elapsed_counter();
 
-  G1RefineRegionClosure sweep_cl(_scan_state, _seen_heap_region_alloc_epoch);
+  G1RefineRegionClosure sweep_cl(_scan_state);
   _scan_state->heap_region_iterate_from_worker_offset(&sweep_cl, worker_id, _max_workers);
 
   if (!sweep_cl._completed) {

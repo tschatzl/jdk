@@ -250,19 +250,14 @@ public:
 private:
   static constexpr uintx UnsynchronizedRegionEpoch = max_uintx;
   Atomic<uintx>* _heap_region_alloc_epochs;
-  Atomic<uintx> _cur_heap_region_alloc_epoch;
+  Atomic<uintx> _heap_region_alloc_epoch;
 
 public:
-  // FIXME: boundary checks, move to inline file.
-  uintx heap_region_alloc_epoch(uint region) const { return _heap_region_alloc_epochs[region].load_relaxed(); }
-  void reset_heap_region_alloc_epoch(uint region) { _heap_region_alloc_epochs[region].store_relaxed(UnsynchronizedRegionEpoch); }
+  inline void reset_heap_region_alloc_epoch(uint region);
   inline void set_next_heap_region_alloc_epoch(uint region);
-  uintx cur_heap_region_alloc_epoch_acquire() {
-    return _cur_heap_region_alloc_epoch.load_acquire();
-  }
-  void increment_heap_region_alloc_epoch() {
-    _cur_heap_region_alloc_epoch.release_store(_cur_heap_region_alloc_epoch.load_relaxed() + 1);
-  }
+  inline uintx heap_region_alloc_epoch_acquire();
+  inline void publish_next_heap_region_alloc_epoch();
+  inline bool is_region_metadata_accessible(uint region, uintx acquired_epoch);
 
 private:
   // GC allocation statistics policy for survivors.

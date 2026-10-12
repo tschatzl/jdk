@@ -210,22 +210,21 @@ class G1ConcurrentRefineOopClosure: public BasicOopIterateClosure {
 
   uintx _seen_heap_region_alloc_epoch;
 
-  bool _has_ref_to_cset;
-  bool _has_ref_to_old;
-  bool _has_ref_unparsable;
-
 public:
+  enum DoOopResult {
+    HasNoInterestingRef,
+    HasRefToCSet,
+    HasRefToOld,
+    Defer
+  } _result;
+
   G1ConcurrentRefineOopClosure(G1CollectedHeap* g1h, uintx seen_heap_region_alloc_epoch) :
     _g1h(g1h),
     _from_card_cache(),
     _seen_heap_region_alloc_epoch(seen_heap_region_alloc_epoch),
-    _has_ref_to_cset(false),
-    _has_ref_to_old(false),
-    _has_ref_unparsable(false) {}
+    _result(HasNoInterestingRef) {}
 
-  bool has_ref_to_cset() const { return _has_ref_to_cset; }
-  bool has_ref_to_old() const { return _has_ref_to_old; }
-  bool has_ref_unparsable() const { return _has_ref_unparsable; }
+  DoOopResult do_oop_result() const { return _result; }
 
   virtual ReferenceIterationMode reference_iteration_mode() { return DO_FIELDS; }
 

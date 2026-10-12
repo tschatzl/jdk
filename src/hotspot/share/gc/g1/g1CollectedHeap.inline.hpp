@@ -107,9 +107,30 @@ inline size_t G1CollectedHeap::clamp_plab_size(size_t value) const {
 
 // Inline functions for G1CollectedHeap
 
+inline void G1CollectedHeap::reset_heap_region_alloc_epoch(uint region) {
+  precond(region < max_num_regions());
+  _heap_region_alloc_epochs[region].store_relaxed(UnsynchronizedRegionEpoch);
+}
+
 inline void G1CollectedHeap::set_next_heap_region_alloc_epoch(uint region) {
-  const uintx alloc_epoch = _cur_heap_region_alloc_epoch.load_relaxed() + 1;
+  precond(region_index < max_num_regions());
+  const uintx alloc_epoch = _heap_region_alloc_epoch.load_relaxed() + 1;
   _heap_region_alloc_epochs[region].store_relaxed(alloc_epoch);
+}
+
+inline uintx G1CollectedHeap::heap_region_alloc_epoch_acquire() {
+  return _heap_region_alloc_epoch.load_acquire();
+}
+
+inline void G1CollectedHeap::publish_next_heap_region_alloc_epoch() {
+  _heap_region_alloc_epoch.release_store(_heap_region_alloc_epoch.load_relaxed() + 1);
+}
+
+inline bool G1CollectedHeap::is_region_metadata_accessible(uint region, uintx acquired_epoch) {
+  precond(region < max_num_regions());
+
+  uintx heap_region_alloc_epoch = _heap_region_alloc_epochs[region].load_relaxed();
+  return heap_region_alloc_epoch <= acquired_epoch;
 }
 
 // Return the region with the given index. It assumes the index is valid.

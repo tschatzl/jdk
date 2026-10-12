@@ -355,7 +355,7 @@ G1CollectedHeap::humongous_obj_allocate_initialize_regions(G1HeapRegion* first_h
     G1HeapRegionPrinter::alloc(hr);
   }
 
-  increment_heap_region_alloc_epoch();
+  publish_next_heap_region_alloc_epoch();
   return new_obj;
 }
 
@@ -1318,7 +1318,7 @@ G1CollectedHeap::G1CollectedHeap() :
   _summary_bytes_used(0),
   _bytes_used_during_gc(0),
   _heap_region_alloc_epochs(nullptr),
-  _cur_heap_region_alloc_epoch(0),
+  _heap_region_alloc_epoch(0),
   _survivor_evac_stats("Young", YoungPLABSize, PLABWeight),
   _old_evac_stats("Old", OldPLABSize, PLABWeight),
   _monitoring_support(nullptr),
@@ -2522,7 +2522,7 @@ void G1CollectedHeap::gc_epilogue(bool full) {
 
   update_perf_counter_cpu_time();
 
-  increment_heap_region_alloc_epoch();
+  publish_next_heap_region_alloc_epoch();
   _refinement_epoch++;
 }
 

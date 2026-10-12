@@ -128,7 +128,7 @@ inline static void check_obj_during_refinement(T* p, oop const obj) {
 template <class T>
 inline void G1ConcurrentRefineOopClosure::do_oop_work(T* p) {
   // Early out if we already found a to-young or unparsable reference.
-  if (_has_ref_to_cset || _has_ref_unparsable) {
+  if (_result == HasRefToCSet || _result == Defer) {
     return;
   }
 
@@ -153,15 +153,14 @@ inline void G1ConcurrentRefineOopClosure::do_oop_work(T* p) {
   }
 
   uint to_region_index = _g1h->addr_to_region(obj);
-  uintx cur_heap_region_alloc_epoch = _g1h->heap_region_alloc_epoch(to_region_index);
-  if (cur_heap_region_alloc_epoch > _seen_heap_region_alloc_epoch) {
-    _has_ref_unparsable = true;
+  if (!_g1h->is_region_metadata_accessible(to_region_index, _seen_heap_region_alloc_epoch)) {
+    _result = Defer;
     return;
   }
 
   G1HeapRegion* to_region = _g1h->region_at(to_region_index);
   if (to_region->is_young()) {
-    _has_ref_to_cset = true;
+    _result = HasRefToCSet;
     return;
   }
 
@@ -173,7 +172,7 @@ inline void G1ConcurrentRefineOopClosure::do_oop_work(T* p) {
 
     if (from->rem_set()->card_set_group() != to_rem_set->card_set_group()) {
       to_rem_set->add_reference(p, _from_card_cache);
-      _has_ref_to_old = true;
+      _result = HasRefToOld;
     }
   }
 }
@@ -282,11 +281,11 @@ void G1ParCopyClosure<barrier, should_mark>::do_oop_work(T* p) {
 G1RebuildRemSetClosure::G1RebuildRemSetClosure(G1CollectedHeap* g1h)
   : _g1h(g1h),
     _from_card_cache(),
-    _seen_heap_region_alloc_epoch(g1h->cur_heap_region_alloc_epoch_acquire()) { }
+    _seen_heap_region_alloc_epoch(g1h->heap_region_alloc_epoch_acquire()) { }
 
 void G1RebuildRemSetClosure::resume_after_yield() {
   _from_card_cache.reset();
-  _seen_heap_region_alloc_epoch = _g1h->cur_heap_region_alloc_epoch_acquire();
+  _seen_heap_region_alloc_epoch = _g1h->heap_region_alloc_epoch_acquire();
 }
 
 template <class T> void G1RebuildRemSetClosure::do_oop_work(T* p) {
@@ -299,15 +298,15 @@ template <class T> void G1RebuildRemSetClosure::do_oop_work(T* p) {
     return;
   }
 
-  uint to_index = _g1h->addr_to_region(obj);
-  if (_g1h->heap_region_alloc_epoch(to_index) > _seen_heap_region_alloc_epoch) {
+  uint to_region_index = _g1h->addr_to_region(obj);
+  if (!_g1h->is_region_metadata_accessible(to_region_index, _seen_heap_region_alloc_epoch)) {
     // It is not safe to access the remembered set. Conservatively dirty this card.
     // Maybe: try load_acquire once?
     *_g1h->card_table()->byte_for(p) = G1CardTable::dirty_card_val();
     return;
   }
 
-  G1HeapRegion* to = _g1h->region_at(to_index);
+  G1HeapRegion* to = _g1h->region_at(to_region_index);
   G1HeapRegionRemSet* rem_set = to->rem_set();
   if (rem_set->is_tracked()) {
     // References into young regions are only indicated by the card mark, which
