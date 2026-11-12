@@ -143,6 +143,7 @@ ClassLoaderData::ClassLoaderData(Handle h_class_loader, bool has_class_mirror_ho
   _metaspace_lock(new Mutex(Mutex::nosafepoint-2, "MetaspaceAllocation_lock")),
   _unloading(false), _has_class_mirror_holder(has_class_mirror_holder),
   _modified_oops(true),
+  _may_have_humongous_oops(false),
   // A non-strong hidden class loader data doesn't have anything to keep
   // it from being unloaded during parsing of the non-strong hidden class.
   // The null-class-loader should always be kept alive.

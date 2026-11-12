@@ -255,6 +255,11 @@ void G1ParCopyClosure<barrier, should_mark>::do_oop_work(T* p) {
       do_cld_barrier(forwardee);
     }
   } else {
+    if (barrier == G1BarrierCLD) {
+      if (state.is_humongous()) {
+        _scanned_cld->set_may_have_humongous_oops();
+      }
+    }
     if (state.is_humongous_candidate()) {
       _g1h->set_humongous_is_live(obj);
     } else if ((barrier != G1BarrierNoOptRoots) && state.is_optional()) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -119,6 +119,7 @@ class ClassLoaderData : public CHeapObj<mtClass> {
 
   // Remembered sets support for the oops in the class loader data.
   bool _modified_oops;     // Card Table Equivalent
+  bool _may_have_humongous_oops;
 
   int _keep_alive_ref_count; // if this CLD should not be considered eligible for unloading.
                              // Used for non-strong hidden classes and the
@@ -197,6 +198,10 @@ private:
  public:
   void record_modified_oops()            { _modified_oops = true; }
   bool has_modified_oops()               { return _modified_oops; }
+
+  void clear_may_have_humongous_oops()        { _may_have_humongous_oops = false; }
+  void set_may_have_humongous_oops()          { _may_have_humongous_oops = true; }
+  bool may_have_humongous_oops() const        { return _may_have_humongous_oops; }
 
   oop holder_no_keepalive() const;
   // Resolving the holder keeps this CLD alive for the current GC cycle.
